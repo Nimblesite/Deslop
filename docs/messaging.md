@@ -66,133 +66,51 @@ Code and Cursor communities, agent-tooling roundups — where the reader already
 has the vocabulary and is searching for exactly that. It never moves to the
 front on the homepage.
 
-## What people actually search
+## What people search
 
-Everything in this section comes from Google Trends, pulled **4 August 2026**,
-worldwide. Trends reports interest relative to the peak *inside a single
-comparison set*, so only ratios drawn from the same set are meaningful. Never
-compare a number here against a number from a different set.
+Google Trends, worldwide, pulled 4 August and 11 November 2026. Trends scores
+terms only against the others in one comparison set, so never compare numbers
+across sets; the sets are listed under
+[Re-pulling the search data](#re-pulling-the-search-data).
 
-### The demand sits in the agent ecosystem, not the analysis vocabulary
-
-In one 12-month set, **`claude code` outranks `sonarqube` by roughly 29×**
-(40.9 vs 1.4 mean interest) and `mcp server` outranks it by roughly 6× (8.9).
-`claude code` more than tripled inside those twelve months (18.0 → 63.0 across
-the two halves).
-
-The people who need Deslop are not searching the language of static analysis.
-They are searching the names of the agents writing their code. Copy that reaches
-them names those agents and that protocol plainly.
-
-### “Duplicate code” is the right head term and a contested one
-
-Within one five-year set, `duplicate code` leads its whole family: about **7×**
-`code duplication` (16.2 vs 2.2) and roughly **50×** `code clone detection`
-(0.3). It also roughly **doubled** over those five years (10.4 → 22.0). It is
-the only phrase in the family with an audience.
-
-It is also ambiguous in a way that matters. The top related query for
-`duplicate code` — even filtered to the Programming category — is **“duplicate
-line in visual studio code.”** Those people want the keyboard shortcut for
-duplicating a line. Outside that category the related queries are “how to remove
-duplicate photos” and “how to remove duplicate contacts.”
-
-So: use `duplicate code`, and never leave it bare. Pair it with a detection verb
-and a scope noun — *find duplicate code **across a codebase***, *duplicate code
-**in a repository***, *repeated **functions** in **source code***. A headline
-that reads as an editor shortcut has failed even when it ranks.
-
-### The technical vocabulary has no audience
-
-Across those sets, `duplicate code detector` and `duplicate code checker` both
-sit at **0.0** mean interest. `copy paste detector` (0.6), `copy paste
-programming` (0.3), `find duplicate code` (1.0), and `remove duplicate code`
-(1.2) are all close enough to the floor to be worthless as headline terms. In
-the set they share, `sonarqube` alone runs about **53×** `remove duplicate
-code`.
-
-Nobody types the category name. They type a product name, or they type the
-symptom. Do not spend a title on “duplicate code detection tool.”
-
-### The growing vocabulary is adjacent, not exact
-
-Five-year growth, each term measured against its own earlier self:
-`code review tool` **15×** (1.0 → 15.0), `code smell` **2.6×** (6.1 → 15.9),
-`static analysis` **2.5×** (11.8 → 29.0), `refactoring` **+56%** (19.6 → 30.5).
-In one 12-month set, `code quality` (63.1) and `AI code review` (52.7) lead
-their set outright, and `AI code review` grew 36% inside the year.
-
-Duplicate code is a *symptom* term with a small, growing audience. Code quality
-and AI code review are the *category* terms with the large one. Use the category
-words in supporting prose and section headings; keep the symptom words in
-titles, where intent is sharpest.
-
-Caution on `code review tool`: its top related queries are “binance review” and
-“b2b prospecting tool.” It is a phrase for body copy, never a page title.
-
-### “Slop” is a meme, not a search term
-
-`AI slop` tripled in twelve months (5.3 → 16.1) — but every one of its top and
-rising related queries is culture, not tooling: “your ai slop bores me,” “what
-is ai slop,” “ai slop youtube,” “slop meaning.” Zero developer-tooling intent.
-
-Two consequences. The brand name cannot carry the search load; “Deslop” must
-always sit next to a plain description of what it does. And the existing rule
-against calling anyone's code “slop” now has evidence behind it: the word
-belongs to a cultural argument we are not having.
-
-Same caution for `vibe coding`, which runs about **4×** `duplicate code` in a
-shared 12-month set (35.8 vs 8.7). It is a large, current audience whose search
-intent is commentary, not tool acquisition. Write to it in blog posts and
-release notes. Do not build a product page on it.
-
-### Language and agent searches (pulled 11 November 2026)
-
-Worldwide, 12 months, via Playwright against the Trends explore page. Each line compares terms inside one set only.
-
-- **Agents still dwarf the category.** `claude code` 46 against `code quality` 7, `cursor ai` 6 and `ai code review` 5. In another set `mcp server` runs 45 against `duplicate code` 4; its top related queries are `github mcp server`, `claude mcp server` and `what is mcp server`.
-- **The symptom has adjacent company.** `duplicate code` 39, `refactoring` 43 and `code smell` 38 sit together; `find duplicate code` (1) and `remove duplicate code` (3) stay near the floor.
-- **Python and JavaScript carry the language demand.** `python linter` 43 against `go linter` 6, `typescript linter` 5, `rust linter` 3 and `c# linter` 1. `javascript static analysis` 29 and `python static analysis` 21 against `dart analyzer` 11, `c# static analysis` 3 and `rust static analysis` 2. Language-qualified duplicate searches (`duplicate code python`, `… c#`, `… javascript`) are all at or near 0. Name languages in the panel and JSON-LD; never build a title on a language-qualified duplicate phrase, and never call Deslop a linter.
-- **`AI slop` keeps rising** (14 → 16) on the same cultural queries, now with `no ai slop github` breaking out. The rule above stands.
+- **Agents dwarf the category.** `claude code` 46 against `code quality` 7 and
+  `cursor ai` 6; `mcp server` 45 against `duplicate code` 4. Name the agents and
+  the protocol plainly.
+- **`duplicate code` is the head term, and ambiguous.** It runs about 7×
+  `code duplication`, but its top related query is “duplicate line in visual
+  studio code.” Always give it a scope: *across a codebase*, *in source code*.
+- **Category names have no audience.** `duplicate code detector`, `duplicate
+  code checker`, `copy paste detector` and `find duplicate code` sit at or near
+  0. People type a product name or the symptom.
+- **Adjacent terms carry the volume.** `refactoring` 43, `duplicate code` 39 and
+  `code smell` 38 sit together; `code quality`, `static analysis` and `AI code
+  review` grow fastest.
+- **Python and JavaScript carry the language demand.** `python linter` 43
+  against `c# linter` 1; `javascript static analysis` 29 and `python static
+  analysis` 21 against `c# static analysis` 3.
+- **.NET developers search the platform, the review and the incumbent.**
+  `dotnet` 64 against `sonarqube` 22; `.net code quality` 32 and `c#
+  refactoring` 19 against `c# duplicate code` 6; `c# code review` 32 against
+  `c# analyzer` 8 and `c# code quality` 5; `sonarqube` 61 against `resharper` 8.
+  `roslyn analyzer` and `c# code analysis` sit near 0.
 
 ## Search language
 
-Given the above, use these and nothing else:
+- **Titles:** *duplicate code* with a scope, *duplicate functions* with *source
+  code*, *repeated code*.
+- **Headings, body and metadata:** VS Code, Claude Code, Cursor, GitHub Copilot,
+  MCP server; code quality, code review, static analysis, refactoring, code
+  smell; .NET, C# and F#; every supported language name, spelled exactly.
+- **At most once per page:** code clone detection, Type-2 clones, code
+  deduplication (always with source-code context).
+- **Never:** duplicate code detector, finder or checker, copy paste detector,
+  linter.
 
-**Head terms — earn the title tag.**
-
-- **duplicate code** — always qualified by scope (*across a codebase*, *in a
-  repository*, *in source code*)
-- **duplicate functions** — pair with *source code* so it is not read as
-  spreadsheet formulas
-- **repeated code**
-
-**Entity anchors — earn the subheadings and body copy.**
-
-- **VS Code**, **Claude Code**, **Cursor**, **MCP server**
-- **code quality**, **static analysis**, **refactoring**, **code smell**
-- the ten language names, used exactly
-
-**Technical synonyms — at most once per page, for readers who know the
-literature.**
-
-- code clone detection, Type-2 clones, code deduplication
-
-Pair “code deduplication” with programming-language or source-code context so it
-is not confused with storage deduplication.
-
-**Retired.** These appeared in earlier versions of this guide and are no longer
-supported by the data: *duplicate code detector*, *duplicate code finder*,
-*duplicate code checker*, *duplicate code detection tool*, *copy paste
-detector*.
-
-Do not paste keyword lists into prose. Google's
-[SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)
-calls “excessively repeating the same words over and over” a spam-policy
-violation, and says content people find compelling and useful “will likely
-influence your website's presence in search results more than any of the other
-suggestions.” One clear sentence that answers the query beats ten awkward
-variants.
+**Searched terms are mandatory; keyword soup is banned.** Every title,
+description, JSON-LD block and marketplace listing carries the searched terms
+that are true of Deslop. In visible copy each term earns its place in a
+sentence that tells the reader something: “find duplicate C# and F# code across
+a .NET solution” does; a comma list of synonyms does not.
 
 ## Entity clarity
 
@@ -215,11 +133,20 @@ one entity are worse than none.
 
 ## Language statement
 
-When space allows, use the full list exactly once:
+**Name the languages; never count them.** A count goes stale the moment a parser
+ships. The names are what people search, so they are mandatory in:
 
-> C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey.
+- page titles, meta descriptions and the homepage lead;
+- `SoftwareApplication` JSON-LD and marketplace keywords;
+- the first paragraph of the README and the VS Code extension listing;
+- the homepage language panel, each with its icon.
 
-When space is tight, name a few languages and link to the full list. Never state a language count: it goes stale the moment a parser ships. Osprey's syntax flavors count as one language family; the [Osprey guide](../site/src/docs/osprey.md) states their verification boundaries. Do not imply support for every language. Java and C++ are roadmap languages, not shipping languages.
+The full list: C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#,
+Go and Osprey. Where space is tight, lead with the most searched (Python,
+JavaScript, TypeScript, C#, Go, Rust) and end with “and more,” linked to the
+full list. Osprey's syntax flavors are one language family; the
+[Osprey guide](../site/src/docs/osprey.md) states their verification
+boundaries. Java and C++ are roadmap languages, not shipping ones.
 
 ## The agent message
 
@@ -356,14 +283,16 @@ The sets behind the numbers above, all worldwide, all categories:
 | 5 years | static analysis · code smell · code review tool · dry principle · copy paste programming |
 | 12 months | code quality · AI code review · vibe coding · AI slop · technical debt |
 | 12 months | claude code · mcp server · sonarqube · cursor rules · ai code quality |
-| 12 months | duplicate code · vibe coding · AI slop |
 | 12 months | duplicate code · jscpd · sonarqube duplicate code · dry principle · refactoring |
 | 12 months | duplicate code · find duplicate code · duplicate code finder · remove duplicate code · code smell |
 | 12 months | duplicate code · duplicate code python · duplicate code c# · duplicate code javascript · duplicate code vscode |
 | 12 months | python linter · rust linter · typescript linter · go linter · c# linter |
 | 12 months | python static analysis · c# static analysis · rust static analysis · javascript static analysis · dart analyzer |
 | 12 months | code quality · code quality tool · ai code review · claude code · cursor ai |
-| 12 months | duplicate code · duplicate lines · vscode extension · mcp server · ai slop |
+| 12 months | c# code analysis · roslyn analyzer · resharper · sonarqube · dotnet format |
+| 12 months | sonarqube · roslyn analyzer · c# refactoring · c# duplicate code · dotnet |
+| 12 months | .net code quality · c# refactoring · c# code smell · c# duplicate code · visual studio code cleanup |
+| 12 months | c# static code analysis · c# clean code · c# code review · c# code quality · c# analyzer |
 
 Related queries were pulled per term, both all-categories and inside the
 Programming category. The `/website-audit` skill covers the procedure.

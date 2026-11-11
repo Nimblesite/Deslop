@@ -1,8 +1,8 @@
 # Deslop
 
-Live duplicate-code analysis inside your IDE. Inline warnings as you type,
-worst-offender view, and a live channel your AI agent can consult before it
-copy-pastes.
+Find duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. Deslop ranks what to remove
+first, warns in the editor as you type, and tells Claude Code, Cursor and GitHub
+Copilot when similar code already exists.
 
 [Install for VS Code](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) ·
 [Add to GitHub Actions](https://deslop.live/docs/github-action/) ·

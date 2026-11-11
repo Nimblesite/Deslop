@@ -1,6 +1,6 @@
 # Deslop for VS Code
 
-**The reference client for the Deslop live duplicate-code analysis server.** A long-running LSP + MCP process sits in your workspace and feeds duplicate-code signals — live, on every keystroke — to your editor *and* to whichever AI coding agent is driving it (Claude Code, Cursor, Copilot, Continue, Codex).
+**Find duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey, live in VS Code.** A long-running LSP + MCP process sits in your workspace and feeds duplicate-code signals — live, on every keystroke — to your editor *and* to whichever AI coding agent is driving it (Claude Code, Cursor, Copilot, Continue, Codex).
 
 Clone detectors such as PMD CPD, jscpd, SonarLint, and the JetBrains inspections report duplication on CI, on save, or in a panel you open on purpose. Deslop surfaces duplicates **inline, next to your cursor, as you type**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
 
