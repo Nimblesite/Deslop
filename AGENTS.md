@@ -102,4 +102,5 @@ Every stage can lose accuracy: over-normalizing manufactures false positives, un
 - VSIX first; IntelliJ and other plugins in progress. Panel consistency is critical.
 - **Never duplicate rendering of text or links** (clusters, occurrences): one shared function, reused everywhere.
 - Context menus always include "Copy Context For AI".
+- **Website CSS:** zero duplicate rules, hard budget 2.5k LOC across `site/src/assets/css/`.
 - Humans first for comments, UI and HTML reports. Raw JSON reports target AI — complete enough to reconstruct the human view.

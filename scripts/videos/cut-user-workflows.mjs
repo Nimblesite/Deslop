@@ -40,8 +40,8 @@ function cameraTrack(scene, source) {
 
 function cameraMoves(scene, track, video, commands, sourceSeconds, speed) {
   const original = { deepest: CAMERA.deepest, tighten: CAMERA.tighten };
-  const comparison = ['review-compare', 'review-pair', 'review-edited-compare', 'osprey-compare'].includes(scene.shot);
-  const terminal = scene.shot.startsWith('agent-') || ['action-limit', 'action-changes', 'config-override', 'config-limit', 'osprey-config'].includes(scene.shot);
+  const comparison = ['review-compare', 'review-pair', 'review-edited-compare', 'osprey-compare', 'python-compare'].includes(scene.shot);
+  const terminal = scene.shot.startsWith('agent-') || ['action-limit', 'action-changes', 'config-override', 'config-limit', 'osprey-config', 'python-dedupe'].includes(scene.shot);
   try {
     CAMERA.tighten = 1.05;
     CAMERA.deepest = comparison ? 1.12 : terminal ? 1.15 : 1.3;

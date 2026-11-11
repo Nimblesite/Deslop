@@ -14,6 +14,8 @@ const representativeRoutes = [
   "/zh/blog/live-mcp-lsp-duplicate-code-prevention/",
   "/releases/",
   "/zh/releases/",
+  "/python/",
+  "/zh/python/",
 ];
 
 // Every English blog post appears in the feed; the Chinese translations do not.

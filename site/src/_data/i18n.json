@@ -58,7 +58,8 @@
       "openVsx": "Open VSX Registry",
       "discord": "Discord",
       "rss": "RSS",
-      "githubAction": "GitHub Action"
+      "githubAction": "GitHub Action",
+      "python": "Duplicate Python code"
     },
     "editors": {
       "eyebrow": "Install",
@@ -176,7 +177,8 @@
       "openVsx": "Open VSX 扩展库",
       "discord": "Discord",
       "rss": "RSS",
-      "githubAction": "GitHub Action"
+      "githubAction": "GitHub Action",
+      "python": "Python 重复代码"
     },
     "editors": {
       "eyebrow": "安装",

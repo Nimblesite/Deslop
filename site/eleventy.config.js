@@ -40,6 +40,11 @@ export default function (eleventyConfig) {
       .replaceAll("&", "\\u0026")
   );
 
+  // [SITE-PYTHON-LANDING] FAQPage entities from the same question list the page renders.
+  eleventyConfig.addFilter("faqEntities", (items) =>
+    items.map(({ q, a }) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } }))
+  );
+
   eleventyConfig.addFilter("videoDuration", (time) => {
     const [minutes, seconds] = time.split(":").map(Number);
     return `PT${minutes * 60 + seconds}S`;

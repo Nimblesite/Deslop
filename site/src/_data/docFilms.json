@@ -348,5 +348,40 @@
       "zh": "通过 Deslop MCP 的 find-similar 工具查找工作区中可复用的代码，并在修改后测试和复查。"
     },
     "captionCueCount": 27
+  },
+  "python-click": {
+    "title": "Remove duplicate Python code from Click in VS Code",
+    "duration": "1:13",
+    "transcript": [
+      {
+        "title": "Click, open in VS Code",
+        "seconds": 0,
+        "stamp": "0:00",
+        "text": "This is Click, the Python library behind thousands of command-line tools, open in VS Code with Deslop installed. Deslop has already read every Python file in the library and ranked the duplicate code it found. The worst copies sit at the top of this list, and the warning under this method says it exists more than once."
+      },
+      {
+        "title": "Compare two exceptions",
+        "seconds": 20,
+        "stamp": "0:20",
+        "text": "Near the top, Deslop pairs two exception classes: No Such Option and No Such Command. Compare puts them side by side. The constructor, the default message and the close-match suggestions are the same code. The only change is that option became command, all the way through."
+      },
+      {
+        "title": "Three identical methods",
+        "seconds": 40,
+        "stamp": "0:40",
+        "text": "This finding is exact. The Bash, Z shell and PowerShell completion classes each define the same get completion args method, line for line. I follow each file link to read the copies in place before I change anything."
+      },
+      {
+        "title": "Remove the copies",
+        "seconds": 56,
+        "stamp": "0:56",
+        "text": "The other two classes can reuse the Bash method directly, so I replace both copies with one line each and save. Deslop scans again straight away and the finding is gone. Then I run the shell completion tests from Click, and all fifty eight still pass."
+      }
+    ],
+    "description": {
+      "en": "Deslop finds real duplicate code in Click's Python source, compares the copies side by side, and removes one with a two-line refactor while Click's tests still pass.",
+      "zh": "Deslop 在 Click 的 Python 源码中找到真实的重复代码，并排比较副本，再用两行重构删除其中一处，Click 的测试依然通过。"
+    },
+    "captionCueCount": 29
   }
 }

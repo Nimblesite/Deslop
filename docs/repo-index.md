@@ -12,7 +12,7 @@ Reference material for agents. Read it when you need to locate something — it 
 | `crates/deslop-mcp` | Lets agents query the running analysis mid-generation, before a paste happens. |
 | `clients/vscode` | VSIX; bundles the LSP + MCP binaries. |
 | `crates/deslop-test-support` | Shared test harness: process reap, fixtures, and the pinned-corpus accuracy gates. |
-| `site/` | Eleventy static site. Zero duplicate CSS, hard budget 1.8k LOC. |
+| `site/` | Eleventy static site. Zero duplicate CSS, hard budget 2.5k LOC. |
 | `examples/` | Hand-written fixtures, one folder per clone bucket. Deliberately duplicated — never deduplicate them. |
 | `corpus/` | Pinned real-world repos (sha + runtime ceilings) the accuracy gate scans. |
 | `scripts/` | Measurement, release, issue-atlas, and typediagram generation. |

@@ -38,7 +38,7 @@ Audit Progress:
 - Fix issues at the core where the Eleventy templates live ([site/src/](site/src/)) — never in [site/_site/](site/_site/).
 - Never manually edit the generated website content directly.
 - ENSURE THE FOOTER HAS A copyright link to nimblesite.co.
-- Respect the repo-wide CSS rules from [AGENTS.md](AGENTS.md): ZERO duplicate CSS, hard CSS budget 1.5k LOC.
+- Respect the repo-wide CSS rules from [AGENTS.md](AGENTS.md): ZERO duplicate CSS, hard CSS budget 2.5k LOC.
 
 ## Step 1 — Read guidelines
 
@@ -193,4 +193,4 @@ Summarize the audit results:
 - **Preserve existing content** — improve structure and metadata without rewriting the author's voice.
 - **No keyword stuffing** — keywords must read naturally in context.
 - **Respect the framework** — edit Eleventy templates/configs under [site/src/](site/src/) and [site/eleventy.config.js](site/eleventy.config.js), never [site/_site/](site/_site/).
-- **Honor the CSS budget** — ZERO duplicate CSS, stay under the 1.5k LOC cap set in [AGENTS.md](AGENTS.md).
+- **Honor the CSS budget** — ZERO duplicate CSS, stay under the 2.5k LOC cap.

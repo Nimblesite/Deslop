@@ -68,7 +68,7 @@ front on the homepage.
 
 ## What people search
 
-Google Trends, worldwide, pulled 4 August and 11 November 2026. Trends scores
+Google Trends, worldwide, pulled 4 August and 11 November 2026 (Python sets 11 November). Trends scores
 terms only against the others in one comparison set, so never compare numbers
 across sets; the sets are listed under
 [Re-pulling the search data](#re-pulling-the-search-data).
@@ -93,6 +93,15 @@ across sets; the sets are listed under
   refactoring` 19 against `c# duplicate code` 6; `c# code review` 32 against
   `c# analyzer` 8 and `c# code quality` 5; `sonarqube` 61 against `resharper` 8.
   `roslyn analyzer` and `c# code analysis` sit near 0.
+
+- **Python developers search review, practice and their tools, not
+  duplication.** `python code review` 39 against `python code quality` 7,
+  `python clean code` 5, `python refactoring` 2 and `python duplicate code` 1;
+  `python best practices` 29, `python vscode` 24 and `python code review` 19
+  against `dry principle` 5 and `pylint` 4; `pylint` 2.5 against `flake8` 1.7
+  and `python linter` 1.2; `python copilot` 58 against `python design patterns`
+  10 and `python duplicate code` 4. The Python page ([SITE-PYTHON-LANDING])
+  leads with *duplicate Python code* and works the rest into its body.
 
 ## Search language
 
@@ -306,6 +315,10 @@ The sets behind the numbers above, all worldwide, all categories:
 | 12 months | sonarqube · roslyn analyzer · c# refactoring · c# duplicate code · dotnet |
 | 12 months | .net code quality · c# refactoring · c# code smell · c# duplicate code · visual studio code cleanup |
 | 12 months | c# static code analysis · c# clean code · c# code review · c# code quality · c# analyzer |
+| 12 months | python duplicate code · python refactoring · python code quality · python clean code · python code review |
+| 12 months | ruff · pylint · flake8 · python linter · python static analysis |
+| 12 months | python vscode · python best practices · python code review · dry principle · pylint |
+| 12 months | refactor python code · python design patterns · python duplicate code · python code smells · python copilot |
 
 Related queries were pulled per term, both all-categories and inside the
 Programming category. The `/website-audit` skill covers the procedure.
