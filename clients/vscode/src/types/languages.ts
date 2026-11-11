@@ -5,29 +5,13 @@
 // `<select>` and grouping surface to derive from this registry instead
 // of hand-listing values.
 
+import registry from "./languageRegistry.json";
+
 const JAVASCRIPT_LANGUAGE_ID = "javascript";
 const FSHARP_LANGUAGE_ID = "fsharp";
 
-const EXTENSION_LANGUAGE: Record<string, string> = {
-  osp: "osprey",
-  ospml: "osprey",
-  cs: "csharp",
-  rs: "rust",
-  py: "python",
-  dart: "dart",
-  js: JAVASCRIPT_LANGUAGE_ID,
-  mjs: JAVASCRIPT_LANGUAGE_ID,
-  cjs: JAVASCRIPT_LANGUAGE_ID,
-  jsx: JAVASCRIPT_LANGUAGE_ID,
-  ts: "typescript",
-  tsx: "tsx",
-  fs: FSHARP_LANGUAGE_ID,
-  fsx: FSHARP_LANGUAGE_ID,
-  php: "php",
-  go: "go",
-  c: "c",
-  h: "c",
-};
+/** File extension → language id, shared with the website's language panel. */
+const EXTENSION_LANGUAGE: Record<string, string> = registry.extensions;
 
 /** Every source extension the registry resolves, without the leading dot,
  * in registry order. Derived from the one extension map so activation
@@ -49,20 +33,7 @@ export function languageFamily(language: string): string {
   return ["osprey", "osprey-ml", "osprey-python"].includes(language) ? "osprey" : language;
 }
 
-const LANGUAGE_DISPLAY: Record<string, string> = {
-  osprey: "Osprey",
-  csharp: "C#",
-  rust: "Rust",
-  python: "Python",
-  dart: "Dart",
-  javascript: "JavaScript",
-  typescript: "TypeScript",
-  tsx: "TSX",
-  fsharp: "F#",
-  php: "PHP",
-  go: "Go",
-  c: "C",
-};
+const LANGUAGE_DISPLAY: Record<string, string> = registry.display;
 
 /** Human display name for a language id used in group headings and
  * filter options. */

@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
 title: "Find Duplicate Code in C, C#, Rust, Python and More | Deslop"
-description: "Find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey and more. Deslop ranks what to remove first and tells coding agents when similar code exists — live in VS Code."
+description: "Find duplicate code across C, C#, Rust, Python, TypeScript, Go, Osprey and more. Deslop ranks what to remove first and tells Claude Code and Cursor when similar code exists."
 ---
 
 {% block head %}
@@ -12,6 +12,7 @@ description: "Find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey
   "name": "Deslop",
   "applicationCategory": "DeveloperApplication",
   "applicationSubCategory": "Static Code Analysis",
+  "keywords": "duplicate code, duplicate functions, repeated code, code quality, static analysis, refactoring, code smell, code clone detection, Claude Code, Cursor, MCP server, VS Code, C, C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, Go, Osprey",
   "operatingSystem": "macOS, Linux, Windows",
   "url": "https://deslop.live",
   "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live",
@@ -77,6 +78,8 @@ description: "Find duplicate code in C, C#, Rust, Python, TypeScript, Go, Osprey
       </li>
     </ol>
   </section>
+
+  {% include "partials/languages.njk" %}
 
   {% include "partials/testimonials.njk" %}
 

@@ -90,6 +90,31 @@
       "moreAssets": "more",
       "viewRelease": "View release",
       "empty": "Release metadata was unavailable during this build. GitHub remains the source of truth."
+    },
+    "languages": {
+      "eyebrow": "Languages",
+      "title": "Find duplicate code in C#, Python, Rust, TypeScript, Go and more.",
+      "lede": "Duplicate code is the same logic written more than once, even when names and literals differ. Deslop parses every file into a syntax tree, so it still finds the copy after every variable is renamed. It also tells Claude Code, Cursor and other coding agents when similar code already exists, before they write another copy.",
+      "matchTitle": "Two functions, one duplicate",
+      "steps": {
+        "parse": {
+          "name": "Parse",
+          "text": "Each file becomes a syntax tree."
+        },
+        "normalize": {
+          "name": "Normalize",
+          "text": "Names and literals are erased."
+        },
+        "match": {
+          "name": "Match",
+          "text": "Same shape, same fingerprint."
+        },
+        "rank": {
+          "name": "Rank",
+          "text": "Biggest duplicates first."
+        }
+      },
+      "result": "Deslop reports both functions as one cluster of two nearly identical copies."
     }
   },
   "zh": {
@@ -183,6 +208,31 @@
       "moreAssets": "更多",
       "viewRelease": "查看发布",
       "empty": "本次构建无法获取发布元数据。GitHub 仍是发布信息的权威来源。"
+    },
+    "languages": {
+      "eyebrow": "语言",
+      "title": "在 C#、Python、Rust、TypeScript、Go 等语言中查找重复代码。",
+      "lede": "重复代码是指同一逻辑被写了不止一次，即使名称和字面量不同。Deslop 把每个文件解析成语法树，所以即使每个变量都改了名，也能找到副本。它还会在 Claude Code、Cursor 等编码智能体写出另一个副本之前，告诉它们已有相似代码。",
+      "matchTitle": "两个函数，一处重复",
+      "steps": {
+        "parse": {
+          "name": "解析",
+          "text": "每个文件变成一棵语法树。"
+        },
+        "normalize": {
+          "name": "归一化",
+          "text": "抹去名称与字面量。"
+        },
+        "match": {
+          "name": "匹配",
+          "text": "形状相同，指纹相同。"
+        },
+        "rank": {
+          "name": "排序",
+          "text": "最大的重复排在最前。"
+        }
+      },
+      "result": "Deslop 将这两个函数报告为一个簇：两个几乎相同的副本。"
     }
   }
 }

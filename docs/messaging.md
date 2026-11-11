@@ -146,6 +146,15 @@ shared 12-month set (35.8 vs 8.7). It is a large, current audience whose search
 intent is commentary, not tool acquisition. Write to it in blog posts and
 release notes. Do not build a product page on it.
 
+### Language and agent searches (pulled 11 November 2026)
+
+Worldwide, 12 months, via Playwright against the Trends explore page. Each line compares terms inside one set only.
+
+- **Agents still dwarf the category.** `claude code` 46 against `code quality` 7, `cursor ai` 6 and `ai code review` 5. In another set `mcp server` runs 45 against `duplicate code` 4; its top related queries are `github mcp server`, `claude mcp server` and `what is mcp server`.
+- **The symptom has adjacent company.** `duplicate code` 39, `refactoring` 43 and `code smell` 38 sit together; `find duplicate code` (1) and `remove duplicate code` (3) stay near the floor.
+- **Python and JavaScript carry the language demand.** `python linter` 43 against `go linter` 6, `typescript linter` 5, `rust linter` 3 and `c# linter` 1. `javascript static analysis` 29 and `python static analysis` 21 against `dart analyzer` 11, `c# static analysis` 3 and `rust static analysis` 2. Language-qualified duplicate searches (`duplicate code python`, `… c#`, `… javascript`) are all at or near 0. Name languages in the panel and JSON-LD; never build a title on a language-qualified duplicate phrase, and never call Deslop a linter.
+- **`AI slop` keeps rising** (14 → 16) on the same cultural queries, now with `no ai slop github` breaking out. The rule above stands.
+
 ## Search language
 
 Given the above, use these and nothing else:
@@ -348,6 +357,13 @@ The sets behind the numbers above, all worldwide, all categories:
 | 12 months | code quality · AI code review · vibe coding · AI slop · technical debt |
 | 12 months | claude code · mcp server · sonarqube · cursor rules · ai code quality |
 | 12 months | duplicate code · vibe coding · AI slop |
+| 12 months | duplicate code · jscpd · sonarqube duplicate code · dry principle · refactoring |
+| 12 months | duplicate code · find duplicate code · duplicate code finder · remove duplicate code · code smell |
+| 12 months | duplicate code · duplicate code python · duplicate code c# · duplicate code javascript · duplicate code vscode |
+| 12 months | python linter · rust linter · typescript linter · go linter · c# linter |
+| 12 months | python static analysis · c# static analysis · rust static analysis · javascript static analysis · dart analyzer |
+| 12 months | code quality · code quality tool · ai code review · claude code · cursor ai |
+| 12 months | duplicate code · duplicate lines · vscode extension · mcp server · ai slop |
 
 Related queries were pulled per term, both all-categories and inside the
 Programming category. The `/website-audit` skill covers the procedure.

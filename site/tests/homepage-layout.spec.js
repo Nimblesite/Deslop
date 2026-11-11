@@ -21,12 +21,49 @@ test("introduction and narrated demo share one compact hero", async ({ page }) =
     const bounds = await page.evaluate(() => {
       const hero = document.querySelector('.hero').getBoundingClientRect();
       const video = document.querySelector('.hero video').getBoundingClientRect();
-      const next = document.querySelector('.testimonials').getBoundingClientRect();
+      const next = document.querySelector('.hero + section').getBoundingClientRect();
       return {height:hero.height, videoBottom:video.bottom, gap:next.top-hero.bottom};
     });
     expect(bounds.height).toBeLessThan(MAX_HERO_HEIGHT);
     expect(bounds.videoBottom).toBeLessThan(1080);
     expect(bounds.gap).toBeLessThanOrEqual(MAX_NEXT_SECTION_GAP);
+  }
+});
+
+// [SITE-HOME-LANGUAGES] Every shipped language, its extensions and icon, plus a worked duplicate.
+const LANGUAGE_TILES = [
+  ["Osprey", ".osp .ospml"], ["C#", ".cs"], ["Rust", ".rs"], ["Python", ".py"], ["Dart", ".dart"],
+  ["JavaScript", ".js .mjs .cjs .jsx"], ["TypeScript", ".ts"], ["TSX", ".tsx"], ["F#", ".fs .fsx"],
+  ["PHP", ".php"], ["Go", ".go"], ["C", ".c .h"],
+];
+const MIN_ICON_PX = 32;
+const LANGUAGE_PANEL = {
+  "/": { title: "Find duplicate code in C#, Python, Rust, TypeScript, Go and more.", steps: ["Parse", "Normalize", "Match", "Rank"], result: "Deslop reports both functions as one cluster of two nearly identical copies.", keyword: "duplicate code" },
+  "/zh/": { title: "在 C#、Python、Rust、TypeScript、Go 等语言中查找重复代码。", steps: ["解析", "归一化", "匹配", "排序"], result: "Deslop 将这两个函数报告为一个簇：两个几乎相同的副本。", keyword: "重复代码" },
+};
+
+test("homepage lists every supported language with its icon and a worked duplicate", async ({ page }) => {
+  for (const [route, panel] of Object.entries(LANGUAGE_PANEL)) {
+    await page.goto(route);
+    const section = page.locator("#languages");
+    await expect(section.locator("h2")).toHaveText(panel.title);
+    const tiles = section.locator(".lang-tile");
+    await expect(tiles).toHaveCount(LANGUAGE_TILES.length);
+    for (const [index, [name, extensions]] of LANGUAGE_TILES.entries()) {
+      const tile = tiles.nth(index);
+      await expect(tile.locator(".lang-tile__name")).toHaveText(name);
+      await expect(tile.locator(".lang-tile__ext")).toHaveText(extensions);
+      const icon = await tile.locator(".lang-tile__icon svg").boundingBox();
+      expect(icon.width, name).toBeGreaterThanOrEqual(MIN_ICON_PX);
+      expect(await tile.locator(".lang-tile__icon svg :is(path, image)").count(), name).toBeGreaterThan(0);
+    }
+    await expect(section.locator(".match__file")).toHaveText(["orders.py", "invoices.py"]);
+    await expect(section.locator(".match__step strong")).toHaveText(panel.steps);
+    await expect(section.locator(".match__result")).toHaveText(panel.result);
+    const keywords = await page.evaluate(() => [...document.querySelectorAll('script[type="application/ld+json"]')]
+      .map(script => JSON.parse(script.textContent)).find(data => data["@type"] === "SoftwareApplication").keywords);
+    expect(keywords).toContain(panel.keyword);
+    for (const [name] of LANGUAGE_TILES.filter(([name]) => name !== "TSX")) expect(keywords, name).toContain(name);
   }
 });
 
