@@ -70,6 +70,11 @@
           "text": "AI Agents",
           "i18nKey": "footer.aiIntegration",
           "url": "/docs/ai-integration/"
+        },
+        {
+          "text": "Duplicate Python code",
+          "i18nKey": "footer.python",
+          "url": "/python/"
         }
       ]
     },

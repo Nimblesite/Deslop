@@ -1,0 +1,202 @@
+{
+  "en": {
+    "title": "Find Duplicate Python Code in VS Code | Deslop",
+    "description": "Find duplicate Python code in VS Code. Deslop ranks repeated functions and copy-pasted classes worst-first, so refactoring and code review start where it pays.",
+    "eyebrow": "Duplicate code detection for Python",
+    "headline": "Find duplicate Python code",
+    "headlineEm": "before it multiplies.",
+    "lede": "Deslop finds repeated functions, copy-pasted classes and renamed copies across your whole Python codebase, ranks the worst duplicate code first, and flags new copies in VS Code as you type.",
+    "install": "Install free for VS Code",
+    "installNote": "Opens VS Code and installs the extension. Free, open source, and your code never leaves your machine.",
+    "watch": "Watch it on real code",
+    "marketplace": "No VS Code yet? View the extension on the Marketplace",
+    "cardLabel": "A renamed copy Deslop found in Click",
+    "cardKind": "Same code, renamed",
+    "cardFoot": "Only option became command. Every other token matches.",
+    "filmEyebrow": "Real footage, real repository",
+    "filmTitle": "Watch Deslop clean up duplicate code in Click",
+    "filmLede": "Click is the Python library behind thousands of command-line tools, and one of the best-kept codebases on GitHub. This film is real, unstaged footage of Deslop in VS Code on Click's source at commit 8b19813, zoomed and sped up only to keep it short. It finds real clones, compares them side by side, then removes one with a two-line refactor while Click's own tests keep passing.",
+    "clonesEyebrow": "Found in Click",
+    "clonesTitle": "Three kinds of duplicate code, all from one well-run Python project",
+    "clonesLede": "Every mature Python codebase collects copies: a method pasted into a sibling class, an exception cloned and renamed, a decorator overload written twice. None of these is a bug. Each is a place where the next fix has to be made more than once.",
+    "clones": [
+      {
+        "kind": "Identical",
+        "title": "One method, written three times",
+        "code": "def get_completion_args(self) -> tuple[list[str], str]:",
+        "where": "src/click/shell_completion.py · lines 432, 454 and 530",
+        "text": "The Bash, Zsh and PowerShell completion classes each define the same get_completion_args method, line for line. In the film, Zsh and PowerShell reuse the Bash method instead, and 58 shell-completion tests still pass."
+      },
+      {
+        "kind": "Renamed",
+        "title": "Two exceptions, one shape",
+        "code": "class NoSuchOption(UsageError):\nclass NoSuchCommand(UsageError):",
+        "where": "src/click/exceptions.py · lines 232 to 301",
+        "text": "NoSuchOption and NoSuchCommand share a constructor, a default message and the close-match suggestions. A text diff sees dozens of changed lines; Deslop sees one consistent rename."
+      },
+      {
+        "kind": "Nearly identical",
+        "title": "Decorator overloads, side by side",
+        "code": "@t.overload\ndef command(name: _AnyCallable) -> Command: ...",
+        "where": "src/click/decorators.py · lines 133 to 165 and 258 to 290",
+        "text": "The typing overloads for the command and group decorators are the same block with Command swapped for Group. Worth knowing before a change to one leaves the other behind."
+      }
+    ],
+    "lintEyebrow": "Beyond the linter",
+    "lintTitle": "Why your Python linter misses most copies",
+    "lintParagraphs": [
+      "Pylint, Flake8 and Ruff are essential for Python code quality: they check style, imports and likely bugs. Duplication is a different question, because it is about how two pieces of code relate, not whether either one is wrong.",
+      "Pylint's <a href=\"https://pylint.readthedocs.io/en/stable/user_guide/messages/refactor/duplicate-code.html\">duplicate-code check (R0801)</a> compares lines of text, so it finds verbatim copies and loses them once a variable is renamed. Deslop parses Python with tree-sitter and compares the syntax, so option_name and command_name still line up. Keep your linter; add Deslop for the copies it cannot see."
+    ],
+    "stepsEyebrow": "How it fits",
+    "stepsTitle": "From install to your first refactor in a minute",
+    "steps": [
+      {
+        "title": "Install and open your project",
+        "text": "Deslop scans the Python files in your workspace on its own. There is nothing to configure, and the Top Offenders view lists every cluster of duplicate code, worst first."
+      },
+      {
+        "title": "Compare the copies",
+        "text": "Open a finding to see every copy with its file and line, then compare any two in the VS Code diff editor before you decide what to merge."
+      },
+      {
+        "title": "Refactor with live feedback",
+        "text": "Deslop rescans as you edit. Remove a copy and the finding disappears; paste one and the warning appears before code review ever sees it."
+      },
+      {
+        "title": "Keep your AI coding agent honest",
+        "text": "The same live analysis runs as an MCP server, so Claude Code, Cursor and GitHub Copilot can ask whether similar Python already exists before writing more."
+      }
+    ],
+    "faqTitle": "Questions Python developers ask",
+    "faq": [
+      {
+        "q": "How do I find duplicate code in a Python project?",
+        "a": "Install Deslop for VS Code and open the project. It parses every .py file, matches functions, methods and blocks that repeat the same logic even after renaming, and lists the clusters worst first in the Top Offenders view. The same engine runs as a CLI and a GitHub Action for CI."
+      },
+      {
+        "q": "Does Deslop replace Pylint, Ruff or Flake8?",
+        "a": "No. Use them for style, imports and likely bugs. Deslop does one job they do not: finding the same logic written more than once across files, including copies where names and literals changed."
+      },
+      {
+        "q": "Does my code leave my machine?",
+        "a": "No. Deslop runs locally inside VS Code. It needs no account and sends your source code nowhere."
+      },
+      {
+        "q": "Does it work with GitHub Copilot, Claude Code and Cursor?",
+        "a": "Yes. Deslop includes an MCP server that coding agents can ask before they write new code, so they reuse an existing function instead of generating a near-duplicate."
+      },
+      {
+        "q": "Which other languages does it support?",
+        "a": "Alongside Python: C, C#, Rust, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey, in the same extension."
+      },
+      {
+        "q": "Is Deslop free?",
+        "a": "Yes. Deslop is open source under the MIT licence, and the VS Code extension is free on the Visual Studio Marketplace."
+      }
+    ],
+    "closingTitle": "Your Python codebase has copies. See them in a minute.",
+    "closingText": "One click installs Deslop in VS Code. Open a project and the worst duplicate code is already at the top of the list.",
+    "learnMore": "Read the documentation"
+  },
+  "zh": {
+    "title": "在 VS Code 中查找重复的 Python 代码 | Deslop",
+    "description": "在 VS Code 中查找重复的 Python 代码。Deslop 按影响大小排列重复函数和复制粘贴的类，让重构和代码审查从最值得处理的地方开始。",
+    "eyebrow": "Python 重复代码检测",
+    "headline": "查找重复的 Python 代码",
+    "headlineEm": "在它继续扩散之前。",
+    "lede": "Deslop 在整个 Python 代码库中查找重复函数、复制粘贴的类和改名后的副本，把最严重的重复代码排在最前面，并在你输入时于 VS Code 中标出新的副本。",
+    "install": "免费安装到 VS Code",
+    "installNote": "打开 VS Code 并安装扩展。免费、开源，代码不会离开你的电脑。",
+    "watch": "观看真实代码演示",
+    "marketplace": "还没有 VS Code？在 Marketplace 查看扩展",
+    "cardLabel": "Deslop 在 Click 中发现的改名副本",
+    "cardKind": "同一段代码，换了名字",
+    "cardFoot": "只有 option 变成了 command，其余每个词元都一致。",
+    "filmEyebrow": "真实录像，真实仓库",
+    "filmTitle": "观看 Deslop 清理 Click 中的重复代码",
+    "filmLede": "Click 是成千上万个命令行工具背后的 Python 库，也是 GitHub 上维护得最好的代码库之一。这段视频是 Deslop 在 VS Code 中运行于 Click 源码（提交 8b19813）的真实录像，未经摆拍，仅为简短而缩放和加速：它找到真实的克隆，并排比较，然后用两行重构删除其中一处，而 Click 自己的测试依然全部通过。",
+    "clonesEyebrow": "在 Click 中发现",
+    "clonesTitle": "三种重复代码，全部来自一个维护良好的 Python 项目",
+    "clonesLede": "每个成熟的 Python 代码库都会积累副本：粘贴到兄弟类里的方法、复制后改名的异常、写了两遍的装饰器重载。这些都不是缺陷，但每一处都意味着下一次修复要做不止一次。",
+    "clones": [
+      {
+        "kind": "完全相同",
+        "title": "一个方法，写了三遍",
+        "code": "def get_completion_args(self) -> tuple[list[str], str]:",
+        "where": "src/click/shell_completion.py · 第 432、454、530 行",
+        "text": "Bash、Zsh 和 PowerShell 补全类各自逐行定义了同一个 get_completion_args 方法。视频中，Zsh 和 PowerShell 改为复用 Bash 的方法，58 个 shell 补全测试依然通过。"
+      },
+      {
+        "kind": "改名副本",
+        "title": "两个异常，同一个结构",
+        "code": "class NoSuchOption(UsageError):\nclass NoSuchCommand(UsageError):",
+        "where": "src/click/exceptions.py · 第 232 至 301 行",
+        "text": "NoSuchOption 和 NoSuchCommand 共用同样的构造函数、默认消息和相近匹配建议。文本 diff 看到几十行改动，Deslop 看到的是一次一致的改名。"
+      },
+      {
+        "kind": "几乎相同",
+        "title": "并排的装饰器重载",
+        "code": "@t.overload\ndef command(name: _AnyCallable) -> Command: ...",
+        "where": "src/click/decorators.py · 第 133 至 165 行与第 258 至 290 行",
+        "text": "command 和 group 装饰器的类型重载是同一段代码，只是把 Command 换成了 Group。修改其中一处之前，最好知道另一处的存在。"
+      }
+    ],
+    "lintEyebrow": "超越 linter",
+    "lintTitle": "为什么 Python linter 会漏掉大多数副本",
+    "lintParagraphs": [
+      "Pylint、Flake8 和 Ruff 是保证 Python 代码质量的必备工具：它们检查风格、导入和潜在缺陷。重复是另一个问题，它关注的是两段代码之间的关系，而不是其中某一段是否有错。",
+      "Pylint 的<a href=\"https://pylint.readthedocs.io/en/stable/user_guide/messages/refactor/duplicate-code.html\">重复代码检查（R0801）</a>按文本行比较，能找到逐字相同的副本，但变量一改名就找不到了。Deslop 用 tree-sitter 解析 Python 并比较语法结构，所以 option_name 和 command_name 依然能对上。保留你的 linter，再加上 Deslop 找出它看不到的副本。"
+    ],
+    "stepsEyebrow": "如何融入工作流",
+    "stepsTitle": "从安装到第一次重构，只需一分钟",
+    "steps": [
+      {
+        "title": "安装并打开项目",
+        "text": "Deslop 会自动扫描工作区中的 Python 文件，无需任何配置。Top Offenders 视图按严重程度列出每一组重复代码。"
+      },
+      {
+        "title": "比较副本",
+        "text": "打开一条结果即可看到每个副本的文件和行号，再在 VS Code 的 diff 编辑器中比较任意两处，然后决定如何合并。"
+      },
+      {
+        "title": "边重构边获得反馈",
+        "text": "Deslop 会在你编辑时重新扫描。删除一个副本，结果随即消失；粘贴一个副本，警告会在代码审查之前出现。"
+      },
+      {
+        "title": "让 AI 编程助手不再重复",
+        "text": "同样的实时分析也以 MCP 服务器运行，Claude Code、Cursor 和 GitHub Copilot 可以在编写新代码前询问是否已有相似的 Python 代码。"
+      }
+    ],
+    "faqTitle": "Python 开发者常见问题",
+    "faq": [
+      {
+        "q": "如何在 Python 项目中查找重复代码？",
+        "a": "在 VS Code 中安装 Deslop 并打开项目。它会解析每个 .py 文件，匹配即使改了名字也在重复同一逻辑的函数、方法和代码块，并在 Top Offenders 视图中按严重程度列出。同一引擎也可作为 CLI 和 GitHub Action 在 CI 中运行。"
+      },
+      {
+        "q": "Deslop 会取代 Pylint、Ruff 或 Flake8 吗？",
+        "a": "不会。继续用它们检查风格、导入和潜在缺陷。Deslop 做的是它们不做的事：找出跨文件重复编写的同一逻辑，包括名称和字面量已改变的副本。"
+      },
+      {
+        "q": "我的代码会离开我的电脑吗？",
+        "a": "不会。Deslop 在 VS Code 中本地运行，无需账号，也不会把源代码发送到任何地方。"
+      },
+      {
+        "q": "它能与 GitHub Copilot、Claude Code 和 Cursor 配合使用吗？",
+        "a": "可以。Deslop 内置 MCP 服务器，编程助手可以在编写新代码前查询，从而复用已有函数，而不是生成一个近似副本。"
+      },
+      {
+        "q": "它还支持哪些语言？",
+        "a": "除 Python 外，同一个扩展还支持 C、C#、Rust、Dart、JavaScript、TypeScript/TSX、PHP、F#、Go 和 Osprey。"
+      },
+      {
+        "q": "Deslop 免费吗？",
+        "a": "免费。Deslop 以 MIT 许可证开源，VS Code 扩展可在 Visual Studio Marketplace 免费获取。"
+      }
+    ],
+    "closingTitle": "你的 Python 代码库里有副本。一分钟就能看到。",
+    "closingText": "一次点击即可在 VS Code 中安装 Deslop。打开项目，最严重的重复代码已经排在列表顶部。",
+    "learnMore": "阅读文档"
+  }
+}

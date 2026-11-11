@@ -5,5 +5,6 @@ export const FILMS=JSON.parse(fs.readFileSync(new URL('../../src/_data/docFilms.
 export function filmRoute(slug) {
   if (slug === 'osprey') return '/blog/osprey-first-class/';
   if (slug === 'getting-started') return '/docs/';
+  if (slug === 'python-click') return '/python/';
   return `/docs/${slug}/`;
 }

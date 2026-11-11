@@ -1,0 +1,88 @@
+WEBVTT
+
+00:00.300 --> 00:02.727
+This is Click, the Python library behind
+
+00:02.727 --> 00:05.153
+thousands of command-line tools, open in VS
+
+00:05.153 --> 00:07.580
+Code with Deslop installed. Deslop has already
+
+00:07.580 --> 00:10.007
+read every Python file in the library
+
+00:10.007 --> 00:12.433
+and ranked the duplicate code it found.
+
+00:12.433 --> 00:14.860
+The worst copies sit at the top
+
+00:14.860 --> 00:17.287
+of this list, and the warning under
+
+00:17.287 --> 00:19.713
+this method says it exists more than
+
+00:19.713 --> 00:20.060
+once.
+
+00:20.860 --> 00:23.745
+Near the top, Deslop pairs two exception
+
+00:23.745 --> 00:26.630
+classes: No Such Option and No Such
+
+00:26.630 --> 00:29.516
+Command. Compare puts them side by side.
+
+00:29.516 --> 00:32.401
+The constructor, the default message and the
+
+00:32.401 --> 00:35.286
+close-match suggestions are the same code. The
+
+00:35.286 --> 00:38.171
+only change is that option became command,
+
+00:38.171 --> 00:39.820
+all the way through.
+
+00:40.620 --> 00:43.346
+This finding is exact. The Bash, Z
+
+00:43.346 --> 00:46.073
+shell and PowerShell completion classes each define
+
+00:46.073 --> 00:48.799
+the same get completion args method, line
+
+00:48.799 --> 00:51.525
+for line. I follow each file link
+
+00:51.525 --> 00:54.252
+to read the copies in place before
+
+00:54.252 --> 00:55.420
+I change anything.
+
+00:56.220 --> 00:58.570
+The other two classes can reuse the
+
+00:58.570 --> 01:00.919
+Bash method directly, so I replace both
+
+01:00.919 --> 01:03.269
+copies with one line each and save.
+
+01:03.269 --> 01:05.618
+Deslop scans again straight away and the
+
+01:05.618 --> 01:07.968
+finding is gone. Then I run the
+
+01:07.968 --> 01:10.317
+shell completion tests from Click, and all
+
+01:10.317 --> 01:11.660
+fifty eight still pass.

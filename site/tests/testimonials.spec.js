@@ -29,7 +29,7 @@ const MERGED_PULL_REQUESTS = [
 
 const HOME_ROUTE = { en: "/", zh: "/zh/" };
 // [SITE-HOME-VIDEO] The introduction and actual product demo share one hero.
-const SECTION_ORDER = ["hero", "testimonials", "editors", "community"];
+const SECTION_ORDER = ["hero", "langs", "testimonials", "editors", "community"];
 const SECTION_HEADING = { en: "Findings that ship.", zh: "可以直接合并的发现。" };
 const SECTION_EYEBROW = { en: "Field report", zh: "实地反馈" };
 

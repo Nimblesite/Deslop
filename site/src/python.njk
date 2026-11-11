@@ -1,0 +1,12 @@
+---
+layout: layouts/base.njk
+permalink: /python/
+ogImage: /assets/img/python-og.png
+ogImageAlt: Deslop in VS Code comparing two real duplicate Python classes from Click
+eleventyComputed:
+  title: "{{ pythonLanding.en.title }}"
+  description: "{{ pythonLanding.en.description }}"
+---
+
+{% block head %}<link rel="stylesheet" href="/assets/css/python.css">{% endblock %}
+{% include "partials/python-landing.njk" %}

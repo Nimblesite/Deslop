@@ -1,0 +1,42 @@
+{#- [SITE-HOME-LANGUAGES] Supported languages and how a match is made, shared
+    by the en (/) and zh (/zh/) home pages. Languages, extensions and icons
+    come from _data/languages.js; copy comes from i18n.json (languages.*). -#}
+{% set currentLang = lang | default('en') %}
+<section class="langs" id="languages" aria-labelledby="langs-title">
+  <div class="langs__head">
+    <div class="eyebrow-chip"><span>{{ "languages.eyebrow" | t(currentLang) }}</span></div>
+    <h2 class="langs__title" id="langs-title">{{ "languages.title" | t(currentLang) }}</h2>
+    <p class="langs__lede">{{ "languages.lede" | t(currentLang) }}</p>
+  </div>
+  <ul class="langs__grid">
+    {% for language in languages %}
+    <li class="lang-tile" data-language="{{ language.id }}">
+      <span class="lang-tile__icon">{{ language.icon | safe }}</span>
+      <strong class="lang-tile__name">{{ language.name }}</strong>
+      <span class="lang-tile__ext">{{ language.extensions | join(" ") }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <figure class="match">
+    <figcaption class="match__title">{{ "languages.matchTitle" | t(currentLang) }}</figcaption>
+    <div class="match__copies">
+      <pre class="match__code"><span class="match__file">orders.py</span>def order_total(orders, tax_rate):
+    subtotal = sum(order.price * order.quantity for order in orders)
+    discount = subtotal * 0.1 if subtotal > 100 else 0
+    return round((subtotal - discount) * (1 + tax_rate), 2)</pre>
+      <pre class="match__code"><span class="match__file">invoices.py</span>def invoice_total(lines, vat):
+    net = sum(line.cost * line.units for line in lines)
+    rebate = net * 0.2 if net > 500 else 0
+    return round((net - rebate) * (1 + vat), 2)</pre>
+    </div>
+    <ol class="match__steps">
+      {% for step in ["parse", "normalize", "match", "rank"] %}
+      <li class="match__step">
+        <strong>{{ ("languages.steps." + step + ".name") | t(currentLang) }}</strong>
+        <span>{{ ("languages.steps." + step + ".text") | t(currentLang) }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="match__result">{{ "languages.result" | t(currentLang) }}</p>
+  </figure>
+</section>

@@ -1,7 +1,7 @@
 {
   "name": "deslop-live",
   "displayName": "Deslop.live",
-  "description": "Live duplicate-code analysis inside VS Code \u2014 the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
+  "description": "Find duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. Ranks what to remove first, warns as you type, and tells your coding agent when similar code already exists.",
   "version": "0.0.0-dev",
   "publisher": "nimblesite",
   "license": "MIT",
@@ -20,10 +20,14 @@
     "Other"
   ],
   "keywords": [
+    "duplicate code",
     "duplication",
     "clone detection",
     "refactoring",
     "code quality",
+    "code review",
+    "mcp",
+    "dotnet",
     "DRY",
     "csharp",
     "rust",

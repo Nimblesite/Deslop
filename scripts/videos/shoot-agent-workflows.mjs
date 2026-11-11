@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { sleep, typeText } from '../../../Videos/factory/film/browser.mjs';
-import { runCommand } from '../../../SharpLsp/src/website/tools/video/kit/editor.mjs';
 import { cueLog, record } from '../../../SharpLsp/src/website/tools/video/kit/camera.mjs';
+import { openTerminal } from './film-workbench.mjs';
 import { pointAt, ringClick } from '../../../SharpLsp/src/website/tools/video/kit/overlay.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
@@ -84,10 +84,7 @@ async function take(name, prompt, tool) {
 }
 
 try {
-  await runCommand(page, 'Terminal: Create New Terminal');
-  const panel = await page.locator('.part.panel').boundingBox();
-  if (panel.height < 600) await runCommand(page, 'View: Toggle Maximized Panel');
-  await page.locator('.terminal-wrapper').last().click();
+  await openTerminal(page);
   const command = `pi -a --model ${model} --thinking low --session-dir '${sessions}' --no-skills --no-context-files --no-extensions -e builtin:mcp --tools 'read,mcp__deslop__*'`;
   await typeText(page, command, 1);
   await page.keyboard.press('Enter');

@@ -3,12 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { launchEditor, sleep, typeText } from '../../../Videos/factory/film/browser.mjs';
-import { cueLog, record } from '../../../SharpLsp/src/website/tools/video/kit/camera.mjs';
-import { runCommand as factoryRunCommand } from '../../../SharpLsp/src/website/tools/video/kit/editor.mjs';
+import { typeText } from '../../../Videos/factory/film/browser.mjs';
+import { cueLog } from '../../../SharpLsp/src/website/tools/video/kit/camera.mjs';
 import { typeAt } from '../../../SharpLsp/src/website/tools/video/kit/workbench.mjs';
-import { pointAt, ringClick } from '../../../SharpLsp/src/website/tools/video/kit/overlay.mjs';
+import { closeTerminal as closeEditorTerminal, compareToCanonical, filmEditor, finishShoot, focusWorkbench as focusEditor, hold, occurrenceRows, openFile, openFinding, point as pointOn, runCommand, tap as tapOn, take as takeShot, terminal as runInTerminal } from './film-workbench.mjs';
 const root = path.resolve(import.meta.dirname, '../..');
 const videos = path.resolve(root, '../Videos');
 const work = path.join(root, 'target/docs-tutorial');
@@ -23,39 +21,12 @@ fs.mkdirSync(path.join(workspace, '.github/workflows'), { recursive: true });
 for (const file of saved ? [] : ['.deslop.toml', '.github/workflows/deslop.yml']) fs.writeFileSync(path.join(workspace, file), '');
 const originals = Object.fromEntries(['Eta.cs', 'Zeta.cs'].map(file => [file, fs.readFileSync(path.join(videos, 'projects/deslop/videos/live-demo/workspace', file), 'utf8')]));
 for (const args of saved ? [] : [['init', '-q'], ['add', '.'], ['-c', 'user.name=Demo', '-c', 'user.email=demo@example.test', 'commit', '-qm', 'Start with the example project']]) execFileSync('git', args, { cwd: workspace });
-const require = createRequire(path.join(videos, 'package.json'));
-const connection = saved ? await require('playwright').chromium.connectOverCDP(process.env.DESLOP_TUTORIAL_CDP) : null;
-const connectedPage = connection?.contexts().flatMap(context => context.pages())[0];
-const editor = saved ? { page: connectedPage, cdp: await connectedPage.context().newCDPSession(connectedPage), root: saved.profile } : await launchEditor({ workspace, extensions: [path.join(root, 'clients/vscode/deslop-live-darwin-arm64.vsix')],
-  width: 1600, height: 900, scale: 2, settings: { 'workbench.activityBar.location': 'default',
-    'workbench.statusBar.visible': true, 'window.commandCenter': true, 'editor.fontSize': 20, 'editor.lineHeight': 28,
-    'editor.autoIndent': 'none', 'editor.autoClosingBrackets': 'never', 'editor.autoClosingQuotes': 'never',
-    'editor.formatOnType': false, 'editor.wordWrap': 'on', 'terminal.integrated.fontSize': 21 } });
+const editor = await filmEditor(work, workspace, saved && process.env.DESLOP_TUTORIAL_CDP);
 const { page, cdp } = editor;
-const extension = fs.readdirSync(path.join(editor.root, 'x')).find(name => name.startsWith('nimblesite.deslop-live-'));
-const binaries = path.join(editor.root, 'x', extension, 'bin/darwin-arm64');
-fs.writeFileSync(path.join(work, 'session.json'), JSON.stringify({ workspace, profile: editor.root, binaries }, null, 2));
-const settingsFile = path.join(editor.root, 'u/User/settings.json');
-const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-settings['terminal.integrated.env.osx'] = { PATH: `${binaries}:${process.env.PATH}` };
-fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 const cues = cueLog(clips);
-const webview = page.frameLocator('.webview-overlay-content[style*="visibility: visible"] > iframe.webview').frameLocator('#active-frame');
-const rows = () => webview.locator('.occurrence-row');
-const tap = (locator, label) => ringClick(page, cues, locator, label);
-const hold = (milliseconds = 2000) => sleep(milliseconds);
-async function focusWorkbench() {
-  await page.locator('.command-center .command-center-center').click();
-  await page.keyboard.press('Escape');
-}
-async function openFile(page, file) {
-  await page.locator('.command-center .command-center-center').click();
-  const input = page.locator('.quick-input-widget input');
-  await input.waitFor({ state: 'visible' });
-  await input.fill(file);
-  await hold(500); await page.keyboard.press('Enter'); await hold(700);
-}
-async function runCommand(page, command) { await focusWorkbench(); await factoryRunCommand(page, command); }
+const rows = () => occurrenceRows(page);
+const tap = (locator, label) => tapOn(page, cues, locator, label);
+const focusWorkbench = () => focusEditor(page);
 async function take(name, action) {
   const requested = process.argv[2];
   if (requested === 'editor' && name.startsWith('action-')) return;
@@ -63,17 +34,9 @@ async function take(name, action) {
   const commands = ['action-limit', 'action-changes', 'config-override', 'config-limit', 'osprey-config'];
   if (requested === 'commands' && !commands.includes(name)) return;
   if (requested && requested !== 'commands' && requested !== 'editor' && requested !== 'final' && !name.startsWith(requested)) return;
-  if (fs.existsSync(path.join(clips, name + '.mp4')) && !process.env.DESLOP_TUTORIAL_FORCE) return;
-  process.stdout.write(`Recording ${name}\n`);
-  try {
-    await record({ page, cdp, cues, frames: path.join(work, 'frames'), clips }, name, action);
-  } catch (error) {
-    for (const suffix of ['.mp4', '.track.json', '.cues.json']) fs.rmSync(path.join(clips, name + suffix), { force: true });
-    throw error;
-  }
-  process.stdout.write(`Recorded ${name}\n`);
+  await takeShot({ page, cdp, cues, frames: path.join(work, 'frames'), clips }, name, action);
 }
-async function point(x, y) { await pointAt(page, { x, y }); }
+const point = (x, y) => pointOn(page, x, y);
 async function edit(file, text, typed = false) {
   await openFile(page, file);
   await page.locator('.editor-group-container.active .monaco-editor').first().click({ position: { x: 250, y: 75 } });
@@ -93,14 +56,10 @@ async function edit(file, text, typed = false) {
   await point(760, 260);
   assert.equal(fs.readFileSync(path.join(workspace, file), 'utf8'), text, `Editor did not save the intended ${file}`);
 }
-async function finding() {
-  await runCommand(page, 'Deslop: Open Worst Cluster');
-  await rows().nth(1).waitFor({ timeout: 30000 });
-}
+const finding = () => openFinding(page, cues);
 async function compare() {
   await finding();
-  await tap(rows().nth(1).getByRole('button', { name: 'Compare To Canonical' }), 'Compare the two copies');
-  await page.locator('.monaco-diff-editor').first().waitFor();
+  await compareToCanonical(page, cues, 'Compare the two copies');
   await point(960, 300); await hold(2400);
   await page.mouse.wheel(0, 150); await point(650, 430); await hold(2000);
 }
@@ -112,28 +71,8 @@ async function sourceFiles() {
   await tap(rows().nth(1).locator('.text-action'), 'Open the second source file');
   await point(820, 420); await hold(2500);
 }
-async function terminal(command, expected) {
-  await runCommand(page, 'Terminal: Create New Terminal');
-  const panel = await page.locator('.part.panel').boundingBox();
-  if (panel.height < 600) await runCommand(page, 'View: Toggle Maximized Panel');
-  await page.locator('.terminal-wrapper').last().click();
-  await hold(400);
-  await point(650, 350);
-  await typeText(page, command, 25); await page.keyboard.press('Enter');
-  await hold(2000); await point(850, 550);
-  const deadline = Date.now() + 30000;
-  while (Date.now() < deadline) {
-    const text = execFileSync('tesseract', ['stdin', 'stdout', '--psm', '6'], { input: await page.screenshot(), encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
-    const normalized = value => value.toLowerCase().split(/\s+/).join('').replace(/exitstatus:[qo@]/g, 'exitstatus:0');
-    if (normalized(text).includes(normalized(expected))) { await hold(3000); return; }
-    await hold(500);
-  }
-  throw new Error(`The terminal did not visibly show ${expected}`);
-}
-async function closeTerminal() {
-  if (await page.locator('.terminal-wrapper').count()) await runCommand(page, 'Terminal: Kill the Active Terminal Instance');
-  if (await page.locator('.part.panel').isVisible()) await runCommand(page, 'View: Toggle Panel Visibility');
-}
+const terminal = (command, expected) => runInTerminal(page, command, expected);
+const closeTerminal = () => closeEditorTerminal(page);
 const workflow = version => `name: Deslop\non: [push, pull_request]\n\njobs:\n  repeated-code:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: Nimblesite/Deslop@${version}\n        with:\n          no-fail-over: "true"\n          upload-artifact: "false"\n`;
 if (['action-limit', 'commands'].includes(process.argv[2])) fs.writeFileSync(path.join(workspace, '.github/workflows/deslop.yml'), workflow('v0.41.0'));
 try {
@@ -249,8 +188,7 @@ try {
   });
   await take('osprey-compare', async () => {
     await ospreyFinding('osprey-identical/alpha.osp');
-    await tap(rows().nth(1).getByRole('button', { name: 'Compare To Canonical' }), 'Compare the Osprey files');
-    await page.locator('.monaco-diff-editor').first().waitFor();
+    await compareToCanonical(page, cues, 'Compare the Osprey files');
     await point(700, 280); await hold(3000); await point(1080, 440); await hold(3000);
   });
   await take('osprey-python', async () => {
@@ -265,7 +203,6 @@ try {
   await closeTerminal();
   process.stdout.write('User workflows recorded\n');
 } finally {
-  await cdp.detach();
-  fs.rmSync(path.join(work, 'frames'), { recursive: true, force: true });
+  await finishShoot(cdp, work);
 }
 process.exit(0);
