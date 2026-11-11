@@ -96,21 +96,34 @@ across sets; the sets are listed under
 
 ## Search language
 
-- **Titles:** *duplicate code* with a scope, *duplicate functions* with *source
-  code*, *repeated code*.
-- **Headings, body and metadata:** VS Code, Claude Code, Cursor, GitHub Copilot,
-  MCP server; code quality, code review, static analysis, refactoring, code
-  smell; .NET, C# and F#; every supported language name, spelled exactly.
-- **At most once per page:** code clone detection, Type-2 clones, code
-  deduplication (always with source-code context).
-- **Never:** duplicate code detector, finder or checker, copy paste detector,
-  linter.
+**Searched terms are mandatory, everywhere.** Copy that never uses the words
+people type is invisible to them, however good it is. Every page, post, listing
+and release note works the searched terms that are true of Deslop into its
+titles, headings, opening paragraph, body, link text and image alt text, and
+into every description, JSON-LD block and marketplace listing.
 
-**Searched terms are mandatory; keyword soup is banned.** Every title,
-description, JSON-LD block and marketplace listing carries the searched terms
-that are true of Deslop. In visible copy each term earns its place in a
-sentence that tells the reader something: “find duplicate C# and F# code across
-a .NET solution” does; a comma list of synonyms does not.
+- **Titles and headings:** *duplicate code* with a scope, *duplicate functions*
+  with *source code*, *repeated code*, the agent names and the language names.
+- **Body and metadata:** VS Code, Claude Code, Cursor, GitHub Copilot, MCP
+  server; code quality, code review, AI code review, static analysis,
+  refactoring, code smell, technical debt; .NET, C# and F#; every supported
+  language name, spelled exactly.
+- **Technical synonyms, for readers who know the literature:** code clone
+  detection, Type-2 clones, code deduplication (with source-code context, so it
+  is not read as storage deduplication).
+- **Comparisons, never self-description:** linter, SonarQube, ReSharper, jscpd.
+  Say what Deslop adds to the tools people already search for; never call it
+  one of them.
+- **Not worth a title:** duplicate code detector, finder or checker, copy paste
+  detector. Nobody searches them; they may still appear in body copy where they
+  read naturally.
+
+Weave the terms in; don't stack them. A searched term belongs wherever a reader
+would expect that word: “find duplicate C# and F# code across a .NET solution
+before it reaches code review” carries five searched terms and still tells the
+reader exactly what happens. Keyword soup is the failure mode, not keywords: a
+comma list of synonyms in visible prose, the same phrase repeated with nothing
+new to say, or a term that isn't true of Deslop.
 
 ## Entity clarity
 
