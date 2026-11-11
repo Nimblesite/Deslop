@@ -1,73 +1,73 @@
 WEBVTT
 
-00:00.300 --> 00:02.702
+00:00.300 --> 00:02.783
 I open the Extensions view and find
 
-00:02.702 --> 00:05.104
+00:02.783 --> 00:05.267
 Deslop. This is the extension that adds
 
-00:05.104 --> 00:07.506
+00:05.267 --> 00:07.750
 the duplicate-code panel to VS Code. With
 
-00:07.506 --> 00:09.908
+00:07.750 --> 00:10.234
 it installed, I open this small project
 
-00:09.908 --> 00:12.311
+00:10.234 --> 00:12.717
 so we can review one finding from
 
-00:12.311 --> 00:13.340
+00:12.717 --> 00:13.781
 beginning to end.
 
-00:14.140 --> 00:16.433
+00:14.581 --> 00:16.815
 The Deslop panel lists the repeated code
 
-00:16.433 --> 00:18.727
+00:16.815 --> 00:19.049
 it found in this project. I click
 
-00:18.727 --> 00:21.020
+00:19.049 --> 00:21.282
 one finding to open its details. The
 
-00:21.020 --> 00:23.313
+00:21.282 --> 00:23.516
 file links tell me where the copies
 
-00:23.313 --> 00:25.607
+00:23.516 --> 00:25.750
 live, so I can go straight to
 
-00:25.607 --> 00:27.900
+00:25.750 --> 00:27.984
 the code instead of searching through folders.
 
-00:28.700 --> 00:31.104
+00:28.784 --> 00:31.043
 I open the first file, then the
 
-00:31.104 --> 00:33.508
+00:31.043 --> 00:33.303
 second one. Deslop takes me to the
 
-00:33.508 --> 00:35.912
+00:33.303 --> 00:35.562
 relevant lines in each file. I read
 
-00:35.912 --> 00:38.316
+00:35.562 --> 00:37.822
 the code around the highlighted section too,
 
-00:38.316 --> 00:40.720
+00:37.822 --> 00:40.081
 because two similar pieces of code may
 
-00:40.720 --> 00:42.780
+00:40.081 --> 00:42.018
 still be used in different ways.
 
-00:43.580 --> 00:45.820
+00:42.818 --> 00:44.920
 I use Compare to put the two
 
-00:45.820 --> 00:48.060
+00:44.920 --> 00:47.022
 copies side by side. Now I can
 
-00:48.060 --> 00:50.300
+00:47.022 --> 00:49.124
 see what stayed the same and what
 
-00:50.300 --> 00:52.540
+00:49.124 --> 00:51.226
 changed. This gives me a useful starting
 
-00:52.540 --> 00:54.780
+00:51.226 --> 00:53.328
 point for a cleanup, while I still
 
-00:54.780 --> 00:56.700
+00:53.328 --> 00:55.130
 decide which behavior the project needs.

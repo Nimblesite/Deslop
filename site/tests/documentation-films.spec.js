@@ -1,5 +1,5 @@
 import {expect,test} from '@playwright/test';
-import {FILMS,filmRoute} from './helpers/doc-films.js';
+import {AI_AGENTS_FILMS,FILMS,filmRoute} from './helpers/doc-films.js';
 const WIDTHS=[320,390,768,1440];
 const HEIGHT=900;
 const SEEK_SECONDS=20;
@@ -7,8 +7,8 @@ const EXPECTED_CHAPTERS=4;
 const PROBED_WIDTHS=[390,1440];
 // [DOC-FILMS-DELIVERY] Actual delivered media, tracks and responsive controls.
 
-async function assertPlayerAttributes(page,film) {
-  const video=page.locator('.doc-film video');
+async function assertPlayerAttributes(page,slug,film) {
+  const video=page.locator(`.doc-film[data-film="${slug}"] video`);
   await expect(video).toHaveCount(1);
   await expect(video).toHaveAttribute('aria-label',film.title);
   await expect(video).toHaveAttribute('controls','');
@@ -49,8 +49,8 @@ async function seekAndAssert(video) {
   expect(await video.evaluate(v=>v.error)).toBeNull();
 }
 
-async function assertTranscript(page,film) {
-  const transcript=page.locator('.doc-film-transcript');
+async function assertTranscript(page,slug,film) {
+  const transcript=page.locator(`.doc-film-transcript[data-film="${slug}"]`);
   await transcript.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(transcript.locator('section')).toHaveCount(EXPECTED_CHAPTERS);
@@ -76,8 +76,8 @@ test('getting started fits the reading column without prose CSS', async ({page})
 });
 
 // [DOC-FILMS-DELIVERY] Search crawlers get the same video and poster as the player.
-async function assertVideoMetadata(page, video, film, locale) {
-  const json = await page.locator('.doc-film script[type="application/ld+json"]').textContent();
+async function assertVideoMetadata(page, slug, video, film, locale) {
+  const json = await page.locator(`.doc-film[data-film="${slug}"] script[type="application/ld+json"]`).textContent();
   const [minutes, seconds] = film.duration.split(':').map(Number);
   const origin = 'https://deslop.live';
   expect(JSON.parse(json)).toMatchObject({
@@ -95,7 +95,7 @@ async function assertVideoMetadata(page, video, film, locale) {
 for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh']) {
   test(`${locale || "en"} ${slug}: responsive player and playable delivery`,async({page},testInfo)=>{
     await page.goto(locale+filmRoute(slug));
-    const video=await assertPlayerAttributes(page,film);
+    const video=await assertPlayerAttributes(page,slug,film);
     for(const width of WIDTHS) {
       await assertGeometry(page,video,width);
       if(!PROBED_WIDTHS.includes(width)) continue;
@@ -104,11 +104,27 @@ for(const [slug,film] of Object.entries(FILMS)) for(const locale of ['', '/zh'])
       await pauseAndHideTracks(video,film);
       await seekAndAssert(video);
     }
-    await assertVideoMetadata(page,video,film,locale);
-    await assertTranscript(page,film);
+    await assertVideoMetadata(page,slug,video,film,locale);
+    await assertTranscript(page,slug,film);
     await assertDownloadLink(video,slug);
   });
 }
+
+// [DOC-FILMS-DELIVERY] For AI addresses agents, so its film plays second on AI Agents.
+test('For AI carries no film and AI Agents plays its own film then the agent-review film', async ({page}) => {
+  for (const locale of ['', '/zh']) {
+    await page.goto(`${locale}/docs/for-ai/`);
+    await expect(page.locator('.doc-film video')).toHaveCount(0);
+    await expect(page.locator('.doc-film-transcript')).toHaveCount(0);
+    await page.goto(`${locale}/docs/ai-integration/`);
+    await expect(page.locator('.doc-film')).toHaveCount(AI_AGENTS_FILMS.length);
+    for (const [index, slug] of AI_AGENTS_FILMS.entries()) {
+      await expect(page.locator('.doc-film').nth(index)).toHaveAttribute('data-film', slug);
+      await expect(page.locator('.doc-film video').nth(index)).toHaveAttribute('aria-label', FILMS[slug].title);
+      await expect(page.locator('.doc-film-transcript').nth(index)).toHaveAttribute('data-film', slug);
+    }
+  }
+});
 
 // [DOC-FILMS-DELIVERY] Language launch coverage belongs in the blog.
 test('retired Osprey docs open the localized launch film', async ({page}) => {

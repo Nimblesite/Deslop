@@ -14,8 +14,10 @@ playback, pause, seeking, captions, poster loading and responsive placement.
 
 ## [DOC-FILMS-DELIVERY] Documentation films
 
-Nine documentation topics and the Osprey launch post have concise narrated films,
-shared by their English and Chinese pages. The former Osprey docs URLs redirect
+Eight documentation topics and the Osprey launch post have concise narrated films,
+shared by their English and Chinese pages. For AI is written for agents, so it
+carries no film; its agent-review film plays second on AI Agents, after that
+page's own film. Every film shares one local Kokoro narrator. The former Osprey docs URLs redirect
 to the corresponding launch posts. The shared player fits the reading column
 even if the prose stylesheet is stale or unavailable. English narration and
 captions are explicitly labelled.
@@ -27,7 +29,9 @@ immediately instead of freezing while it decodes back to a distant keyframe.
 `site/tests/documentation-films-playback-speed.spec.js` reads each delivery's
 own sync-sample table, so the check needs no decoder and runs on every platform.
 
-Production lives in Videos under `projects/deslop/videos/docs-*`. SharpLsp's
+Production lives entirely in Videos under `projects/deslop/videos/` (scripts,
+plan and reports in `doc-series/`); this repository holds only the finished
+deliveries and their catalog. SharpLsp's
 capture and automatic camera modules record the real packaged extension and
 Deslop commands. Shared Videos sound and delivery modules supply narration,
 score, captions and encoding. The installer rejects stale scripts or invalid
@@ -37,7 +41,7 @@ documented steps; delivered MP4s are never patched directly.
 
 `site/tests/documentation-films.spec.js` exercises each catalog entry on both
 language routes, including responsive geometry, playback, seeking, captions,
-chapters and transcript expansion. `scripts/videos/check-doc-films.mjs --complete`
+chapters and transcript expansion. Videos' `doc-series/scripts/check-doc-films.mjs --complete`
 requires all ten films to have imported deliveries and verification receipts.
 
 ## [DOC-FILMS-MOTION] Recorded user workflows
@@ -96,4 +100,4 @@ Everything it shows is real. The hero pairs two constructors copied verbatim fro
 
 ## [DOC-FILMS-PYTHON] Python film on a real repository
 
-The Python film is recorded by `scripts/videos/shoot-python-film.mjs` on Click at the registered corpus commit, with tests, docs and examples excluded so the findings are library code. It opens on Python source, compares `NoSuchOption` with `NoSuchCommand`, visits the three identical `get_completion_args` methods, then replaces the Zsh and PowerShell copies with `get_completion_args = BashComplete.get_completion_args` and runs Click's shell-completion tests until the terminal shows `58 passed`. The script refuses any other commit. It shares its editor moves with the documentation films through `scripts/videos/film-workbench.mjs`, and is cut and installed like them ([DOC-FILMS-DELIVERY]).
+The Python film is recorded by Videos' `doc-series/scripts/shoot-python-film.mjs` on Click at the registered corpus commit, with tests, docs and examples excluded so the findings are library code. It opens on Python source, compares `NoSuchOption` with `NoSuchCommand`, visits the three identical `get_completion_args` methods, then replaces the Zsh and PowerShell copies with `get_completion_args = BashComplete.get_completion_args` and runs Click's shell-completion tests until the terminal shows `58 passed`. The script refuses any other commit. It shares its editor moves with the documentation films through Videos' `doc-series/scripts/film-workbench.mjs`, and is cut and installed like them ([DOC-FILMS-DELIVERY]).

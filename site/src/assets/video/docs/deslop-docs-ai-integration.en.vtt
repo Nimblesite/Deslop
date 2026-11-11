@@ -1,82 +1,82 @@
 WEBVTT
 
-00:00.300 --> 00:02.761
+00:00.300 --> 00:02.604
 Before asking my coding agent to write
 
-00:02.761 --> 00:05.223
+00:02.604 --> 00:04.907
 another helper, I ask it to check
 
-00:05.223 --> 00:07.684
+00:04.907 --> 00:07.211
 the project first. Here I am using
 
-00:07.684 --> 00:10.146
+00:07.211 --> 00:09.514
 pi with the Deslop connection enabled. I
 
-00:10.146 --> 00:12.607
+00:09.514 --> 00:11.818
 give it the existing file so the
 
-00:12.607 --> 00:15.068
+00:11.818 --> 00:14.121
 request is about the code I actually
 
-00:15.068 --> 00:15.420
+00:14.121 --> 00:14.450
 have.
 
-00:16.220 --> 00:18.525
+00:15.250 --> 00:17.634
 The agent reads the file and calls
 
-00:18.525 --> 00:20.830
+00:17.634 --> 00:20.018
 Deslop to look for similar code. This
 
-00:20.830 --> 00:23.135
+00:20.018 --> 00:22.401
 is a real tool call against the
 
-00:23.135 --> 00:25.440
+00:22.401 --> 00:24.785
 open project. I can see the request
 
-00:25.440 --> 00:27.746
+00:24.785 --> 00:27.168
 and the returned result in the conversation,
 
-00:27.746 --> 00:30.051
+00:27.168 --> 00:29.552
 instead of relying on the agent to
 
-00:30.051 --> 00:30.380
+00:29.552 --> 00:29.893
 guess.
 
-00:31.180 --> 00:33.840
+00:30.693 --> 00:33.249
 Deslop returns two matching files, and pi
 
-00:33.840 --> 00:36.500
+00:33.249 --> 00:35.806
 points me to them. That gives me
 
-00:36.500 --> 00:39.160
+00:35.806 --> 00:38.363
 an existing implementation to review before I
 
-00:39.160 --> 00:41.820
+00:38.363 --> 00:40.920
 create another copy. I read the file
 
-00:41.820 --> 00:44.480
+00:40.920 --> 00:43.477
 names and the reported locations, then check
 
-00:44.480 --> 00:47.140
+00:43.477 --> 00:46.034
 the source rather than stopping at the
 
-00:47.140 --> 00:47.900
+00:46.034 --> 00:46.764
 agent's summary.
 
-00:48.700 --> 00:51.186
+00:47.564 --> 00:50.004
 I open the matching files side by
 
-00:51.186 --> 00:53.672
+00:50.004 --> 00:52.445
 side in Deslop. Now I can check
 
-00:53.672 --> 00:56.158
+00:52.445 --> 00:54.885
 the code and its differences myself. The
 
-00:56.158 --> 00:58.643
+00:54.885 --> 00:57.325
 agent helped me find a possible reuse;
 
-00:58.643 --> 01:01.129
+00:57.325 --> 00:59.765
 I still decide whether that implementation fits
 
-01:01.129 --> 01:03.260
+00:59.765 --> 01:01.857
 the change I want to make.

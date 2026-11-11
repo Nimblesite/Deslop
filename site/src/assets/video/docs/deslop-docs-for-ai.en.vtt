@@ -1,82 +1,82 @@
 WEBVTT
 
-00:00.300 --> 00:02.595
+00:00.300 --> 00:02.588
 I ask pi to check the repeated
 
-00:02.595 --> 00:04.889
+00:02.588 --> 00:04.877
 code in this project before making a
 
-00:04.889 --> 00:07.184
+00:04.877 --> 00:07.165
 change. It calls Deslop and brings the
 
-00:07.184 --> 00:09.479
+00:07.165 --> 00:09.454
 result into the conversation. I start with
 
-00:09.479 --> 00:11.773
+00:09.454 --> 00:11.742
 one finding so the review stays small
 
-00:11.773 --> 00:13.740
+00:11.742 --> 00:13.704
 enough to understand and act on.
 
-00:14.540 --> 00:16.780
+00:14.504 --> 00:16.788
 I ask the agent for the files
 
-00:16.780 --> 00:19.020
+00:16.788 --> 00:19.072
 behind that finding. The reply shows where
 
-00:19.020 --> 00:21.260
+00:19.072 --> 00:21.356
 the repeated code lives and how many
 
-00:21.260 --> 00:23.500
+00:21.356 --> 00:23.639
 copies were found. I use those locations
 
-00:23.500 --> 00:25.740
+00:23.639 --> 00:25.923
 to guide the next step, rather than
 
-00:25.740 --> 00:27.980
+00:25.923 --> 00:28.207
 asking for a broad rewrite of the
 
-00:27.980 --> 00:28.300
+00:28.207 --> 00:28.534
 project.
 
-00:29.100 --> 00:31.731
+00:29.334 --> 00:31.812
 Before adding another helper, I ask pi
 
-00:31.731 --> 00:34.361
+00:31.812 --> 00:34.291
 to read the existing file and search
 
-00:34.361 --> 00:36.992
+00:34.291 --> 00:36.770
 for similar code. Deslop returns the matching
 
-00:36.992 --> 00:39.623
+00:36.770 --> 00:39.249
 files. This is the useful moment to
 
-00:39.623 --> 00:42.253
+00:39.249 --> 00:41.728
 spot something I can reuse, while there
 
-00:42.253 --> 00:44.884
+00:41.728 --> 00:44.206
 is still time to avoid writing another
 
-00:44.884 --> 00:45.260
+00:44.206 --> 00:44.561
 copy.
 
-00:46.060 --> 00:48.756
+00:45.361 --> 00:47.832
 I finish by opening the source comparison
 
-00:48.756 --> 00:51.452
+00:47.832 --> 00:50.304
 in the editor. I check that the
 
-00:51.452 --> 00:54.147
+00:50.304 --> 00:52.775
 proposed reuse preserves the behavior I need.
 
-00:54.147 --> 00:56.843
+00:52.775 --> 00:55.247
 After a focused change, I run the
 
-00:56.843 --> 00:59.539
+00:55.247 --> 00:57.719
 project's tests and review Deslop again instead
 
-00:59.539 --> 01:02.235
+00:57.719 --> 01:00.190
 of assuming the agent's first answer is
 
-01:02.235 --> 01:02.620
+01:00.190 --> 01:00.543
 enough.

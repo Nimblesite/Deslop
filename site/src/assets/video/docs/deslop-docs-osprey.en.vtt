@@ -1,76 +1,76 @@
 WEBVTT
 
-00:00.300 --> 00:02.511
+00:00.300 --> 00:02.569
 Here is an Osprey project. I open
 
-00:02.511 --> 00:04.723
+00:02.569 --> 00:04.838
 one of its files, then click a
 
-00:04.723 --> 00:06.934
+00:04.838 --> 00:07.107
 finding in the Deslop sidebar. The file
 
-00:06.934 --> 00:09.145
+00:07.107 --> 00:09.377
 links lead to the repeated code. I
 
-00:09.145 --> 00:11.356
+00:09.377 --> 00:11.646
 can review those copies in the same
 
-00:11.356 --> 00:12.620
+00:11.646 --> 00:12.942
 way as other languages.
 
-00:13.420 --> 00:15.884
+00:13.742 --> 00:16.214
 I compare the two Osprey files side
 
-00:15.884 --> 00:18.348
+00:16.214 --> 00:18.685
 by side. I can see the repeated
 
-00:18.348 --> 00:20.812
+00:18.685 --> 00:21.156
 calculation and check any differences before I
 
-00:20.812 --> 00:23.276
+00:21.156 --> 00:23.627
 edit it. The useful result is the
 
-00:23.276 --> 00:25.740
+00:23.627 --> 00:26.099
 source comparison in front of me, with
 
-00:25.740 --> 00:27.500
+00:26.099 --> 00:27.864
 both copies available to inspect.
 
-00:28.300 --> 00:30.805
+00:28.664 --> 00:31.311
 This Osprey file uses Python-looking syntax. Its
 
-00:30.805 --> 00:33.311
+00:31.311 --> 00:33.958
 leading comment tells Deslop how to read
 
-00:33.311 --> 00:35.816
+00:33.958 --> 00:36.605
 it. I open the file and its
 
-00:35.816 --> 00:38.321
+00:36.605 --> 00:39.252
 finding to check that it is treated
 
-00:38.321 --> 00:40.826
+00:39.252 --> 00:41.899
 as Osprey, while ordinary Python files keep
 
-00:40.826 --> 00:41.900
+00:41.899 --> 00:43.033
 their usual identity.
 
-00:42.700 --> 00:45.169
+00:43.833 --> 00:46.269
 I open the Osprey project file and
 
-00:45.169 --> 00:47.638
+00:46.269 --> 00:48.705
 list the Python-looking source files that belong
 
-00:47.638 --> 00:50.107
+00:48.705 --> 00:51.141
 to it. After saving the setting, I
 
-00:50.107 --> 00:52.576
+00:51.141 --> 00:53.577
 run Deslop on the project and inspect
 
-00:52.576 --> 00:55.045
+00:53.577 --> 00:56.013
 the result. That makes the choice visible
 
-00:55.045 --> 00:57.515
+00:56.013 --> 00:58.449
 in the project instead of leaving it
 
-00:57.515 --> 00:58.220
+00:58.449 --> 00:59.145
 to guesswork.

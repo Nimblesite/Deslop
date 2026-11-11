@@ -1,76 +1,76 @@
 WEBVTT
 
-00:00.300 --> 00:02.456
+00:00.300 --> 00:02.461
 I create the Deslop settings file at
 
-00:02.456 --> 00:04.612
+00:02.461 --> 00:04.622
 the root of this project. Keeping it
 
-00:04.612 --> 00:06.768
+00:04.622 --> 00:06.783
 with the code gives the team the
 
-00:06.768 --> 00:08.924
+00:06.783 --> 00:08.944
 same starting point. I save the file
 
-00:08.924 --> 00:11.080
+00:08.944 --> 00:11.106
 here, then use the sidebar to check
 
-00:11.080 --> 00:12.620
+00:11.106 --> 00:12.649
 the effect of my changes.
 
-00:13.420 --> 00:15.595
+00:13.449 --> 00:15.757
 I add the archive folder to the
 
-00:15.595 --> 00:17.770
+00:15.757 --> 00:18.065
 exclusions and save the file. Those files
 
-00:17.770 --> 00:19.945
+00:18.065 --> 00:20.373
 are skipped when Deslop checks the project.
 
-00:19.945 --> 00:22.120
+00:20.373 --> 00:22.681
 Hiding a reported file is a different
 
-00:22.120 --> 00:24.294
+00:22.681 --> 00:24.989
 choice: it changes what I see in
 
-00:24.294 --> 00:26.469
+00:24.989 --> 00:27.297
 the results while the file is still
 
-00:26.469 --> 00:26.780
+00:27.297 --> 00:27.627
 checked.
 
-00:27.580 --> 00:29.506
+00:28.427 --> 00:30.737
 For a single run, I can choose
 
-00:29.506 --> 00:31.432
+00:30.737 --> 00:33.047
 a different limit on the command line.
 
-00:31.432 --> 00:33.358
+00:33.047 --> 00:35.356
 Here I ask Deslop to report without
 
-00:33.358 --> 00:35.283
+00:35.356 --> 00:37.666
 failing because of repeated code. This changes
 
-00:35.283 --> 00:37.209
+00:37.666 --> 00:39.976
 the check for this run, without rewriting
 
-00:37.209 --> 00:38.860
+00:39.976 --> 00:41.956
 the settings the team has saved.
 
-00:39.660 --> 00:42.023
+00:42.756 --> 00:45.070
 Now I set a five-percent limit as
 
-00:42.023 --> 00:44.386
+00:45.070 --> 00:47.384
 an example and run the check again.
 
-00:44.386 --> 00:46.749
+00:47.384 --> 00:49.697
 This project is over that limit, so
 
-00:46.749 --> 00:49.112
+00:49.697 --> 00:52.011
 the command fails and still writes its
 
-00:49.112 --> 00:51.475
+00:52.011 --> 00:54.324
 report. I inspect the result to see
 
-00:51.475 --> 00:53.500
+00:54.324 --> 00:56.307
 which repeated code caused the failure.

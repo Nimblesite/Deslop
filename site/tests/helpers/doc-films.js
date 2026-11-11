@@ -6,5 +6,9 @@ export function filmRoute(slug) {
   if (slug === 'osprey') return '/blog/osprey-first-class/';
   if (slug === 'getting-started') return '/docs/';
   if (slug === 'python-click') return '/python/';
+  if (slug === 'for-ai') return '/docs/ai-integration/';
   return `/docs/${slug}/`;
 }
+
+/** The AI Agents page plays its own film, then the agent-review film For AI used to carry. */
+export const AI_AGENTS_FILMS = ['ai-integration', 'for-ai'];
