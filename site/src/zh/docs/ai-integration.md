@@ -120,6 +120,10 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 
 当 MCP 不可用时 —— CI、冷缓存审计，或没有 MCP 客户端的智能体 —— 循环会降级到 `deslop` CLI，它运行完全相同的流水线，产出完全相同的 JSON。增量缓存默认开启，因此编辑后的重新运行只会重新解析发生变化的文件。逐步的回退方案见[面向 AI](/zh/docs/for-ai/#cli-fallback)。
 
+{# [DOC-FILMS-COVERAGE] A second film: the agent loop on a real finding. #}
+{% set docFilm = "for-ai" %}
+{% include "partials/doc-film.njk" %}
+
 ## Deslop 刻意不做的事
 
 - 它不会重写你的代码。Deslop 负责发现、排名、比较与预防重复；提取由你决定。

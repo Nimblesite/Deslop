@@ -15,13 +15,17 @@ const expected={
   'config-create':['threshold'], 'config-exclude':['archive','reference'], 'config-override':['exit status: 0'], 'config-limit':['exit status: 3'],
   'osprey-finding':['beta.osp'], 'osprey-compare':['alpha.osp','beta.osp'], 'osprey-python':['osprey'], 'osprey-config':['osprey-python-project','exit status: 0'],
   'agent-duplicates':['deslop/duplicates','Eta.cs','Zeta.cs'], 'agent-details':['Eta.cs','Zeta.cs'],
+  'python-open':['shell_completion.py','Identical code'], 'python-compare':['exceptions.py:268','NoSuchCommand','Nearly identical code'], 'python-identical':['shell_completion.py','PowerShell','format_completion'], 'python-dedupe':['58 passed'],
   'agent-ask':['find-similar','Eta.cs'], 'agent-search':['find-similar','Eta.cs'], 'agent-results':['Eta.cs','Zeta.cs'],
 };
+const STEPS_PER_FILM=4;
+const DEFAULT_FRACTIONS=[0.2,0.55,0.9];
+const SAMPLE_FRACTIONS={'action-changes':[0.04,0.2,0.55,0.9]};
 const run=(program,args,input)=>execFileSync(program,args,{input, maxBuffer:16*1024*1024,stdio:['pipe','pipe','ignore']});
-const normalize=text=>text.toLowerCase().replace(/\bv[dqo@](?=\.\d+\.)/g,'v0').replace(/exit\s*status:\s*(?:@|q|o|\(\))/g,'exit status: 0').replaceAll(/[^a-z0-9]/g,'');
+const normalize=text=>text.toLowerCase().replace(/\bv[dqo@](?=\.\d+\.)/g,'v0').replace(/(?<=\bv0\.\d+\.)[dqo@]/g,'0').replace(/exit\s*status:\s*(?:@|q|o|\(\))/g,'exit status: 0').replaceAll(/[^a-z0-9]/g,'');
 function inspect(media,scene,cache) {
-  const fractions=scene.shot==='action-changes' ? [0.04,0.2,0.55,0.9] : [0.2,0.55,0.9];
-  const terminal=['action-limit','action-changes','config-override','config-limit','osprey-config'].includes(scene.shot);
+  const fractions=SAMPLE_FRACTIONS[scene.shot] ?? DEFAULT_FRACTIONS;
+  const terminal=['action-limit','action-changes','config-override','config-limit','osprey-config','python-dedupe'].includes(scene.shot);
   const crop=terminal ? 'crop=iw:ih*0.91:0:0' : 'crop=iw:ih*0.82:0:0';
   const text=cache.data[scene.shot] ?? fractions.map(fraction=>{
     const time=scene.start+(scene.end-scene.start)*fraction;
@@ -58,7 +62,7 @@ for(const slug of requested.length ? requested : Object.keys(catalog)) {
   process.stdout.write(`Verified finished application frames: ${slug}\n`);
 }
 const speech=JSON.parse(fs.readFileSync(path.join(videos,'doc-series/narration/check.json'),'utf8'));
-assert.equal(speech.length,40);
+assert.equal(speech.length,Object.keys(catalog).length*STEPS_PER_FILM);
 assert.ok(speech.every(row=>row.word_match>=0.85));
-const report=['# Finished workflow verification [DOC-FILMS-MOTION]','','All checks below read the encoded website MP4s. OCR excludes captions and samples at least three frames from each step. Editor checks also exclude the step-label band; terminal checks retain the result lines and require explicit exit-status values absent from the labels. These content checks supplement visual review; they do not measure editing quality.','','| Film | Recorded step | Visible application content |','| --- | --- | --- |',...rows,'','## Real agent evidence','','The saved pi session contains four successful Deslop MCP results: duplicates, finding details and two similarity requests. Every result identifies Eta.cs and Zeta.cs at lines 1–19, with exactly two copies.','','## Narration','','Independent local Whisper transcription checked all 40 Qwen3-TTS Aiden speech files against the current scripts.','','| Film | Step | Word-sequence match |','| --- | ---: | ---: |',...speech.map(row=>`| ${row.film} | ${row.step} | ${(row.word_match*100).toFixed(1)}% |`),'','Regenerate with `node scripts/videos/verify-user-workflows.mjs`.',''].join('\n');
+const report=['# Finished workflow verification [DOC-FILMS-MOTION]','','All checks below read the encoded website MP4s. OCR excludes captions and samples at least three frames from each step. Editor checks also exclude the step-label band; terminal checks retain the result lines and require explicit exit-status values absent from the labels. These content checks supplement visual review; they do not measure editing quality.','','| Film | Recorded step | Visible application content |','| --- | --- | --- |',...rows,'','## Real agent evidence','','The saved pi session contains four successful Deslop MCP results: duplicates, finding details and two similarity requests. Every result identifies Eta.cs and Zeta.cs at lines 1–19, with exactly two copies.','','## Narration','','Independent local Whisper transcription checked all ${speech.length} Kokoro-82M speech files against the current scripts.','','| Film | Step | Word-sequence match |','| --- | ---: | ---: |',...speech.map(row=>`| ${row.film} | ${row.step} | ${(row.word_match*100).toFixed(1)}% |`),'','Regenerate with `node scripts/videos/verify-user-workflows.mjs`.',''].join('\n');
 if (!requested.length) fs.writeFileSync(path.join(root,'reports/videos/workflow-verification.md'),report);

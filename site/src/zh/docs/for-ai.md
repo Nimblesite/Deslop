@@ -1,6 +1,5 @@
 ---
 layout: layouts/docs.njk
-docFilm: for-ai
 title: 面向 AI — 编码智能体如何用 Deslop 阻止重复代码
 description: 面向编码智能体的操作说明：找到 Deslop 二进制；写代码前调用 find-similar；MCP 异常时改用 CLI；复用缓存；先从完全相同的克隆开始去重。
 eleventyNavigation:
@@ -12,8 +11,6 @@ lang: zh
 ---
 
 # 面向 AI
-
-{% include "partials/doc-film.njk" %}
 
 ## 在新代码库开始工作
 

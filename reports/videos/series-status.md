@@ -4,15 +4,15 @@
 
 | Page | Delivery | Duration | LFS rule |
 | --- | --- | --- | --- |
-| accuracy-transparency.md | Imported | 0:59 | Yes |
-| ai-integration.md | Imported | 1:04 | Yes |
-| configuration.md | Imported | 0:55 | Yes |
-| for-ai.md | Imported | 1:04 | Yes |
+| accuracy-transparency.md | Imported | 1:00 | Yes |
+| ai-integration.md | Imported | 1:03 | Yes |
+| configuration.md | Imported | 0:58 | Yes |
 | github-action.md | Imported | 0:56 | Yes |
-| how-it-works.md | Imported | 0:57 | Yes |
-| index.md | Imported | 0:58 | Yes |
-| research-background.md | Imported | 1:00 | Yes |
-| vscode-cluster-panel.md | Imported | 1:08 | Yes |
-| blog/osprey-first-class.md | Imported | 0:59 | Yes |
+| how-it-works.md | Imported | 1:00 | Yes |
+| index.md | Imported | 0:56 | Yes |
+| research-background.md | Imported | 0:59 | Yes |
+| vscode-cluster-panel.md | Imported | 1:00 | Yes |
+| ai-integration.md (second film) | Imported | 1:02 | Yes |
+| blog/osprey-first-class.md | Imported | 1:00 | Yes |
 
 This inventory does not replace browser playback, source review or finished-frame inspection.

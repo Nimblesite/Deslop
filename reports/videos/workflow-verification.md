@@ -44,6 +44,10 @@ All checks below read the encoded website MP4s. OCR excludes captions and sample
 | for-ai | agent-details | Eta.cs, Zeta.cs |
 | for-ai | agent-search | find-similar, Eta.cs |
 | for-ai | review-pair | Tally, step |
+| python-click | python-open | shell_completion.py, Identical code |
+| python-click | python-compare | exceptions.py:268, NoSuchCommand, Nearly identical code |
+| python-click | python-identical | shell_completion.py, PowerShell, format_completion |
+| python-click | python-dedupe | 58 passed |
 
 ## Real agent evidence
 
@@ -51,49 +55,53 @@ The saved pi session contains four successful Deslop MCP results: duplicates, fi
 
 ## Narration
 
-Independent local Whisper transcription checked all 40 Qwen3-TTS Aiden speech files against the current scripts.
+Independent local Whisper transcription checked all ${speech.length} Kokoro-82M speech files against the current scripts.
 
 | Film | Step | Word-sequence match |
 | --- | ---: | ---: |
-| github-action | 1 | 100.0% |
-| github-action | 2 | 100.0% |
-| github-action | 3 | 94.1% |
-| github-action | 4 | 98.8% |
+| github-action | 1 | 97.4% |
+| github-action | 2 | 97.4% |
+| github-action | 3 | 96.5% |
+| github-action | 4 | 97.6% |
 | getting-started | 1 | 97.4% |
-| getting-started | 2 | 100.0% |
+| getting-started | 2 | 93.0% |
 | getting-started | 3 | 97.6% |
-| getting-started | 4 | 97.5% |
-| vscode-cluster-panel | 1 | 93.7% |
-| vscode-cluster-panel | 2 | 100.0% |
+| getting-started | 4 | 100.0% |
+| vscode-cluster-panel | 1 | 96.2% |
+| vscode-cluster-panel | 2 | 97.4% |
 | vscode-cluster-panel | 3 | 100.0% |
-| vscode-cluster-panel | 4 | 98.8% |
-| how-it-works | 1 | 100.0% |
+| vscode-cluster-panel | 4 | 100.0% |
+| how-it-works | 1 | 97.5% |
 | how-it-works | 2 | 100.0% |
 | how-it-works | 3 | 100.0% |
-| how-it-works | 4 | 100.0% |
+| how-it-works | 4 | 97.6% |
 | research-background | 1 | 100.0% |
 | research-background | 2 | 100.0% |
 | research-background | 3 | 100.0% |
 | research-background | 4 | 100.0% |
-| accuracy-transparency | 1 | 97.6% |
+| accuracy-transparency | 1 | 95.1% |
 | accuracy-transparency | 2 | 100.0% |
-| accuracy-transparency | 3 | 97.6% |
+| accuracy-transparency | 3 | 100.0% |
 | accuracy-transparency | 4 | 100.0% |
 | configuration | 1 | 97.5% |
-| configuration | 2 | 100.0% |
+| configuration | 2 | 97.7% |
 | configuration | 3 | 97.6% |
 | configuration | 4 | 96.4% |
 | ai-integration | 1 | 97.7% |
-| ai-integration | 2 | 97.7% |
-| ai-integration | 3 | 93.3% |
+| ai-integration | 2 | 96.6% |
+| ai-integration | 3 | 96.6% |
 | ai-integration | 4 | 97.6% |
-| for-ai | 1 | 100.0% |
-| for-ai | 2 | 100.0% |
-| for-ai | 3 | 100.0% |
-| for-ai | 4 | 93.3% |
-| osprey | 1 | 97.4% |
+| for-ai | 1 | 97.6% |
+| for-ai | 2 | 97.7% |
+| for-ai | 3 | 97.7% |
+| for-ai | 4 | 95.6% |
+| osprey | 1 | 96.2% |
 | osprey | 2 | 100.0% |
-| osprey | 3 | 96.2% |
+| osprey | 3 | 93.7% |
 | osprey | 4 | 97.8% |
+| python-click | 1 | 96.6% |
+| python-click | 2 | 97.9% |
+| python-click | 3 | 90.4% |
+| python-click | 4 | 94.5% |
 
 Regenerate with `node scripts/videos/verify-user-workflows.mjs`.

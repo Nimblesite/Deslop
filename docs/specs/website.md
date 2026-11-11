@@ -14,8 +14,10 @@ playback, pause, seeking, captions, poster loading and responsive placement.
 
 ## [DOC-FILMS-DELIVERY] Documentation films
 
-Nine documentation topics and the Osprey launch post have concise narrated films,
-shared by their English and Chinese pages. The former Osprey docs URLs redirect
+Eight documentation topics and the Osprey launch post have concise narrated films,
+shared by their English and Chinese pages. For AI is written for agents, so it
+carries no film; its agent-review film plays second on AI Agents, after that
+page's own film. Every film shares one local Kokoro narrator. The former Osprey docs URLs redirect
 to the corresponding launch posts. The shared player fits the reading column
 even if the prose stylesheet is stale or unavailable. English narration and
 captions are explicitly labelled.

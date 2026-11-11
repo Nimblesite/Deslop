@@ -119,6 +119,10 @@ The headline workflow is reactive, not batch:
 
 When MCP fails, the agent first reads an existing JSON report and checks its version, paths, and freshness. If none is usable, it runs the matching bundled `deslop` CLI to generate `.deslop/deslop-report.json`. Persisted caching is enabled by default unless repository configuration disables it, so subsequent scans reuse unchanged parse results. A snapshot cannot answer an unwritten-snippet query. The full startup and recovery procedure is on [For AI](/docs/for-ai/).
 
+{# [DOC-FILMS-COVERAGE] A second film: the agent loop on a real finding. #}
+{% set docFilm = "for-ai" %}
+{% include "partials/doc-film.njk" %}
+
 ## What Deslop deliberately does not do
 
 - It does not rewrite your code. Deslop finds, ranks, compares, and prevents duplication; extraction is your call.

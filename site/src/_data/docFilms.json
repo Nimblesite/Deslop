@@ -1,7 +1,7 @@
 {
   "getting-started": {
     "title": "Find duplicate code in VS Code",
-    "duration": "0:58",
+    "duration": "0:56",
     "transcript": [
       {
         "title": "Open Deslop in VS Code",
@@ -23,8 +23,8 @@
       },
       {
         "title": "Compare before editing",
-        "seconds": 43,
-        "stamp": "0:43",
+        "seconds": 42,
+        "stamp": "0:42",
         "text": "I use Compare to put the two copies side by side. Now I can see what stayed the same and what changed. This gives me a useful starting point for a cleanup, while I still decide which behavior the project needs."
       }
     ],
@@ -36,7 +36,7 @@
   },
   "configuration": {
     "title": "Configure duplicate code detection with .deslop.toml",
-    "duration": "0:55",
+    "duration": "0:58",
     "transcript": [
       {
         "title": "Create the project settings",
@@ -52,14 +52,14 @@
       },
       {
         "title": "Override one run",
-        "seconds": 27,
-        "stamp": "0:27",
+        "seconds": 28,
+        "stamp": "0:28",
         "text": "For a single run, I can choose a different limit on the command line. Here I ask Deslop to report without failing because of repeated code. This changes the check for this run, without rewriting the settings the team has saved."
       },
       {
         "title": "Set a limit and inspect the result",
-        "seconds": 39,
-        "stamp": "0:39",
+        "seconds": 42,
+        "stamp": "0:42",
         "text": "Now I set a five-percent limit as an example and run the check again. This project is over that limit, so the command fails and still writes its report. I inspect the result to see which repeated code caused the failure."
       }
     ],
@@ -71,7 +71,7 @@
   },
   "ai-integration": {
     "title": "Connect a coding agent to the Deslop MCP server",
-    "duration": "1:04",
+    "duration": "1:03",
     "transcript": [
       {
         "title": "Ask the agent before writing",
@@ -81,20 +81,20 @@
       },
       {
         "title": "Let the agent check Deslop",
-        "seconds": 16,
-        "stamp": "0:16",
+        "seconds": 15,
+        "stamp": "0:15",
         "text": "The agent reads the file and calls Deslop to look for similar code. This is a real tool call against the open project. I can see the request and the returned result in the conversation, instead of relying on the agent to guess."
       },
       {
         "title": "Review the returned files",
-        "seconds": 31,
-        "stamp": "0:31",
+        "seconds": 30,
+        "stamp": "0:30",
         "text": "Deslop returns two matching files, and pi points me to them. That gives me an existing implementation to review before I create another copy. I read the file names and the reported locations, then check the source rather than stopping at the agent's summary."
       },
       {
         "title": "Check the source yourself",
-        "seconds": 48,
-        "stamp": "0:48",
+        "seconds": 47,
+        "stamp": "0:47",
         "text": "I open the matching files side by side in Deslop. Now I can check the code and its differences myself. The agent helped me find a possible reuse; I still decide whether that implementation fits the change I want to make."
       }
     ],
@@ -106,7 +106,7 @@
   },
   "how-it-works": {
     "title": "How Deslop finds copied and similar code",
-    "duration": "0:57",
+    "duration": "1:00",
     "transcript": [
       {
         "title": "Find a copy worth reviewing",
@@ -122,14 +122,14 @@
       },
       {
         "title": "Read the surrounding code",
-        "seconds": 28,
-        "stamp": "0:28",
+        "seconds": 30,
+        "stamp": "0:30",
         "text": "I visit each original file and look beyond the highlighted lines. The surrounding code tells me how the calculation is used. This is where I decide whether one shared helper would make sense, or whether the two copies should stay separate."
       },
       {
         "title": "Watch the result update",
-        "seconds": 42,
-        "stamp": "0:42",
+        "seconds": 44,
+        "stamp": "0:44",
         "text": "I make an edit in the source file and save it. Deslop checks the changed project and refreshes the finding in the editor. I can compare again straight away, which keeps the review connected to the code I am actually working on."
       }
     ],
@@ -141,7 +141,7 @@
   },
   "osprey": {
     "title": "Find duplicate code in Osprey",
-    "duration": "0:59",
+    "duration": "1:00",
     "transcript": [
       {
         "title": "Open an Osprey finding",
@@ -163,8 +163,8 @@
       },
       {
         "title": "Save the project selection",
-        "seconds": 42,
-        "stamp": "0:42",
+        "seconds": 43,
+        "stamp": "0:43",
         "text": "I open the Osprey project file and list the Python-looking source files that belong to it. After saving the setting, I run Deslop on the project and inspect the result. That makes the choice visible in the project instead of leaving it to guesswork."
       }
     ],
@@ -186,8 +186,8 @@
       },
       {
         "title": "Choose the version",
-        "seconds": 13,
-        "stamp": "0:13",
+        "seconds": 14,
+        "stamp": "0:14",
         "text": "Here I choose the released version of Deslop that this workflow will use. I keep the version written in the file, so another release cannot silently change the check. The settings are saved alongside the rest of the project."
       },
       {
@@ -198,8 +198,8 @@
       },
       {
         "title": "Check the changed code",
-        "seconds": 42,
-        "stamp": "0:42",
+        "seconds": 41,
+        "stamp": "0:41",
         "text": "For a check on new code, I save my changes to a file and select only the added lines. Deslop still looks through the project for matching copies. I read the result to see which new code caused the check to fail."
       }
     ],
@@ -211,7 +211,7 @@
   },
   "vscode-cluster-panel": {
     "title": "Compare duplicate code side by side in VS Code",
-    "duration": "1:08",
+    "duration": "1:00",
     "transcript": [
       {
         "title": "Find the repeated code",
@@ -221,20 +221,20 @@
       },
       {
         "title": "Compare with the first copy",
-        "seconds": 21,
-        "stamp": "0:21",
+        "seconds": 15,
+        "stamp": "0:15",
         "text": "I click the comparison button beside the second copy. Deslop opens both files together, with their differences highlighted. I can read the same section on each side and check whether the differences matter before I change either file."
       },
       {
         "title": "Choose two files to compare",
-        "seconds": 36,
-        "stamp": "0:36",
+        "seconds": 30,
+        "stamp": "0:30",
         "text": "When I want a different pair, I select one copy first, then choose Compare with Selected on the other. The editor opens those two files together. I can repeat this for another pair when a finding contains several copies."
       },
       {
         "title": "Check the file totals",
-        "seconds": 53,
-        "stamp": "0:53",
+        "seconds": 44,
+        "stamp": "0:44",
         "text": "Back in the sidebar, I expand Duplication to see the project and file totals. The file rows help me choose where to investigate next. I open a file from that list, then return to its finding to review the actual repeated code."
       }
     ],
@@ -246,7 +246,7 @@
   },
   "accuracy-transparency": {
     "title": "How to read code duplication percentages",
-    "duration": "0:59",
+    "duration": "1:00",
     "transcript": [
       {
         "title": "Read the project total",
@@ -256,20 +256,20 @@
       },
       {
         "title": "Follow the file counts",
-        "seconds": 16,
-        "stamp": "0:16",
+        "seconds": 15,
+        "stamp": "0:15",
         "text": "I open the file rows behind that total and inspect the highlighted code. This lets me connect the number to real source lines. When I review a result, I want to understand which files were checked and what work was counted."
       },
       {
         "title": "Check the actual copies",
-        "seconds": 30,
-        "stamp": "0:30",
+        "seconds": 29,
+        "stamp": "0:29",
         "text": "Next I put the reported copies side by side. I check that they really repeat the same work and look at their differences. This is the evidence I use to decide what deserves attention, rather than treating a percentage as a verdict."
       },
       {
         "title": "See what an exclusion changes",
-        "seconds": 43,
-        "stamp": "0:43",
+        "seconds": 44,
+        "stamp": "0:44",
         "text": "I exclude a folder in the settings file and save it. The sidebar updates because those files are no longer part of the analysis. Before comparing two results, I check settings like this so I know that both runs measured the same files."
       }
     ],
@@ -281,7 +281,7 @@
   },
   "research-background": {
     "title": "Types of duplicate code and how to detect them",
-    "duration": "1:00",
+    "duration": "0:59",
     "transcript": [
       {
         "title": "Start with two copies",
@@ -291,8 +291,8 @@
       },
       {
         "title": "Change one copy",
-        "seconds": 15,
-        "stamp": "0:15",
+        "seconds": 14,
+        "stamp": "0:14",
         "text": "I change one of the copies and save it. The other file has not changed with it. That is the maintenance problem repeated code can create: a fix in one place does not automatically reach the other places that need it."
       },
       {
@@ -316,7 +316,7 @@
   },
   "for-ai": {
     "title": "Find similar code before writing with an AI coding agent",
-    "duration": "1:04",
+    "duration": "1:02",
     "transcript": [
       {
         "title": "Ask what is repeated",
@@ -338,8 +338,8 @@
       },
       {
         "title": "Review before accepting a change",
-        "seconds": 46,
-        "stamp": "0:46",
+        "seconds": 45,
+        "stamp": "0:45",
         "text": "I finish by opening the source comparison in the editor. I check that the proposed reuse preserves the behavior I need. After a focused change, I run the project's tests and review Deslop again instead of assuming the agent's first answer is enough."
       }
     ],
@@ -361,8 +361,8 @@
       },
       {
         "title": "Compare two exceptions",
-        "seconds": 20,
-        "stamp": "0:20",
+        "seconds": 21,
+        "stamp": "0:21",
         "text": "Near the top, Deslop pairs two exception classes: No Such Option and No Such Command. Compare puts them side by side. The constructor, the default message and the close-match suggestions are the same code. The only change is that option became command, all the way through."
       },
       {
@@ -373,8 +373,8 @@
       },
       {
         "title": "Remove the copies",
-        "seconds": 56,
-        "stamp": "0:56",
+        "seconds": 55,
+        "stamp": "0:55",
         "text": "The other two classes can reuse the Bash method directly, so I replace both copies with one line each and save. Deslop scans again straight away and the finding is gone. Then I run the shell completion tests from Click, and all fifty eight still pass."
       }
     ],

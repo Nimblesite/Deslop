@@ -6,10 +6,12 @@ const root=path.resolve(import.meta.dirname,'../..');
 const pages=path.join(root,'site/src/docs');
 const catalog=JSON.parse(fs.readFileSync(path.join(root,'site/src/_data/docFilms.json'),'utf8'));
 const suffixes=['.mp4','-poster.jpg','.en.vtt','.chapters.vtt'];
-const docFilms=fs.readdirSync(pages).filter(name=>name.endsWith('.md')).sort().map(name=>({
+// For AI addresses agents and carries no film; its film plays second on AI Agents.
+const FILMLESS_PAGES=new Set(['for-ai.md']);
+const docFilms=fs.readdirSync(pages).filter(name=>name.endsWith('.md')&&!FILMLESS_PAGES.has(name)).sort().map(name=>({
   name, slug:name==='index.md'?'getting-started':name.slice(0,-3),
 }));
-const destinations=[...docFilms,{name:'blog/osprey-first-class.md',slug:'osprey'}];
+const destinations=[...docFilms,{name:'ai-integration.md (second film)',slug:'for-ai'},{name:'blog/osprey-first-class.md',slug:'osprey'}];
 const rows=destinations.map(({name,slug})=>{
   const prefix=`site/src/assets/video/docs/deslop-docs-${slug}`;
   const present=suffixes.every(suffix=>fs.existsSync(path.join(root,prefix+suffix)));

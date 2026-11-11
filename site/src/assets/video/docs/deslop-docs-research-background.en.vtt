@@ -1,79 +1,79 @@
 WEBVTT
 
-00:00.300 --> 00:02.899
+00:00.300 --> 00:02.708
 Here are two files that repeat the
 
-00:02.899 --> 00:05.498
+00:02.708 --> 00:05.117
 same calculation. I open both to see
 
-00:05.498 --> 00:08.097
+00:05.117 --> 00:07.525
 where that repeated work lives. The practical
 
-00:08.097 --> 00:10.696
+00:07.525 --> 00:09.934
 question is simple: when this behavior needs
 
-00:10.696 --> 00:13.295
+00:09.934 --> 00:12.342
 a fix, will someone remember to update
 
-00:13.295 --> 00:14.780
+00:12.342 --> 00:13.718
 every copy of it?
 
-00:15.580 --> 00:17.642
+00:14.518 --> 00:16.756
 I change one of the copies and
 
-00:17.642 --> 00:19.705
+00:16.756 --> 00:18.994
 save it. The other file has not
 
-00:19.705 --> 00:21.767
+00:18.994 --> 00:21.231
 changed with it. That is the maintenance
 
-00:21.767 --> 00:23.830
+00:21.231 --> 00:23.469
 problem repeated code can create: a fix
 
-00:23.830 --> 00:25.892
+00:23.469 --> 00:25.707
 in one place does not automatically reach
 
-00:25.892 --> 00:27.660
+00:25.707 --> 00:27.624
 the other places that need it.
 
-00:28.460 --> 00:30.661
+00:28.424 --> 00:30.639
 I compare the files again to see
 
-00:30.661 --> 00:32.862
+00:30.639 --> 00:32.853
 the difference I just introduced. This view
 
-00:32.862 --> 00:35.063
+00:32.853 --> 00:35.067
 gives me something concrete to review with
 
-00:35.063 --> 00:37.264
+00:35.067 --> 00:37.281
 the team. I can point to the
 
-00:37.264 --> 00:39.465
+00:37.281 --> 00:39.495
 changed line, check its purpose, and decide
 
-00:39.465 --> 00:41.666
+00:39.495 --> 00:41.709
 whether the other copy needs the same
 
-00:41.666 --> 00:41.980
+00:41.709 --> 00:42.025
 change.
 
-00:42.780 --> 00:45.402
+00:42.825 --> 00:45.208
 A finding does not mean I should
 
-00:45.402 --> 00:48.024
+00:45.208 --> 00:47.591
 delete a copy automatically. I inspect both
 
-00:48.024 --> 00:50.645
+00:47.591 --> 00:49.975
 versions and the places that use them.
 
-00:50.645 --> 00:53.267
+00:49.975 --> 00:52.358
 If a shared implementation makes the code
 
-00:53.267 --> 00:55.889
+00:52.358 --> 00:54.741
 easier to maintain, I can make that
 
-00:55.889 --> 00:58.511
+00:54.741 --> 00:57.124
 change and test the behavior I intend
 
-00:58.511 --> 00:59.260
+00:57.124 --> 00:57.805
 to keep.

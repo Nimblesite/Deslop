@@ -1,76 +1,76 @@
 WEBVTT
 
-00:00.300 --> 00:02.922
+00:00.300 --> 00:02.833
 I expand the Duplication section to read
 
-00:02.922 --> 00:05.545
+00:02.833 --> 00:05.366
 the project total. Deslop shows how many
 
-00:05.545 --> 00:08.167
+00:05.366 --> 00:07.899
 lines it analysed and how many it
 
-00:08.167 --> 00:10.790
+00:07.899 --> 00:10.432
 found in repeated code. The percentage describes
 
-00:10.790 --> 00:13.412
+00:10.432 --> 00:12.965
 those files; it does not tell me
 
-00:13.412 --> 00:15.660
+00:12.965 --> 00:15.136
 that a cleanup is automatically safe.
 
-00:16.460 --> 00:18.673
+00:15.936 --> 00:18.191
 I open the file rows behind that
 
-00:18.673 --> 00:20.885
+00:18.191 --> 00:20.446
 total and inspect the highlighted code. This
 
-00:20.885 --> 00:23.098
+00:20.446 --> 00:22.700
 lets me connect the number to real
 
-00:23.098 --> 00:25.311
+00:22.700 --> 00:24.955
 source lines. When I review a result,
 
-00:25.311 --> 00:27.523
+00:24.955 --> 00:27.210
 I want to understand which files were
 
-00:27.523 --> 00:29.420
+00:27.210 --> 00:29.142
 checked and what work was counted.
 
-00:30.220 --> 00:32.353
+00:29.942 --> 00:32.245
 Next I put the reported copies side
 
-00:32.353 --> 00:34.487
+00:32.245 --> 00:34.548
 by side. I check that they really
 
-00:34.487 --> 00:36.620
+00:34.548 --> 00:36.851
 repeat the same work and look at
 
-00:36.620 --> 00:38.753
+00:36.851 --> 00:39.154
 their differences. This is the evidence I
 
-00:38.753 --> 00:40.887
+00:39.154 --> 00:41.457
 use to decide what deserves attention, rather
 
-00:40.887 --> 00:43.020
+00:41.457 --> 00:43.760
 than treating a percentage as a verdict.
 
-00:43.820 --> 00:46.125
+00:44.560 --> 00:46.928
 I exclude a folder in the settings
 
-00:46.125 --> 00:48.430
+00:46.928 --> 00:49.297
 file and save it. The sidebar updates
 
-00:48.430 --> 00:50.735
+00:49.297 --> 00:51.665
 because those files are no longer part
 
-00:50.735 --> 00:53.040
+00:51.665 --> 00:54.034
 of the analysis. Before comparing two results,
 
-00:53.040 --> 00:55.346
+00:54.034 --> 00:56.403
 I check settings like this so I
 
-00:55.346 --> 00:57.651
+00:56.403 --> 00:58.771
 know that both runs measured the same
 
-00:57.651 --> 00:57.980
+00:58.771 --> 00:59.110
 files.

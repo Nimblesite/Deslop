@@ -1,73 +1,73 @@
 WEBVTT
 
-00:00.300 --> 00:02.582
+00:00.300 --> 00:02.643
 Deslop looks through the project and brings
 
-00:02.582 --> 00:04.864
+00:02.643 --> 00:04.985
 possible copies into the sidebar. I open
 
-00:04.864 --> 00:07.146
+00:04.985 --> 00:07.328
 one of those findings here. Instead of
 
-00:07.146 --> 00:09.428
+00:07.328 --> 00:09.671
 taking a number on trust, I can
 
-00:09.428 --> 00:11.710
+00:09.671 --> 00:12.014
 follow its file links and inspect the
 
-00:11.710 --> 00:13.340
+00:12.014 --> 00:13.687
 exact code that was reported.
 
-00:14.140 --> 00:16.353
+00:14.487 --> 00:16.951
 These two files use different names, but
 
-00:16.353 --> 00:18.567
+00:16.951 --> 00:19.415
 the calculation is the same. I open
 
-00:18.567 --> 00:20.780
+00:19.415 --> 00:21.879
 the comparison to see that directly. Renaming
 
-00:20.780 --> 00:22.993
+00:21.879 --> 00:24.343
 a class or a variable has not
 
-00:22.993 --> 00:25.207
+00:24.343 --> 00:26.807
 made the repeated work disappear, and the
 
-00:25.207 --> 00:27.420
+00:26.807 --> 00:29.271
 side-by-side view makes that easy to check.
 
-00:28.220 --> 00:30.597
+00:30.071 --> 00:32.455
 I visit each original file and look
 
-00:30.597 --> 00:32.973
+00:32.455 --> 00:34.840
 beyond the highlighted lines. The surrounding code
 
-00:32.973 --> 00:35.350
+00:34.840 --> 00:37.224
 tells me how the calculation is used.
 
-00:35.350 --> 00:37.726
+00:37.224 --> 00:39.609
 This is where I decide whether one
 
-00:37.726 --> 00:40.103
+00:39.609 --> 00:41.994
 shared helper would make sense, or whether
 
-00:40.103 --> 00:42.140
+00:41.994 --> 00:44.037
 the two copies should stay separate.
 
-00:42.940 --> 00:45.020
+00:44.837 --> 00:47.146
 I make an edit in the source
 
-00:45.020 --> 00:47.100
+00:47.146 --> 00:49.455
 file and save it. Deslop checks the
 
-00:47.100 --> 00:49.180
+00:49.455 --> 00:51.764
 changed project and refreshes the finding in
 
-00:49.180 --> 00:51.260
+00:51.764 --> 00:54.072
 the editor. I can compare again straight
 
-00:51.260 --> 00:53.340
+00:54.072 --> 00:56.381
 away, which keeps the review connected to
 
-00:53.340 --> 00:55.420
+00:56.381 --> 00:58.690
 the code I am actually working on.
