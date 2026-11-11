@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { typeText } from '../../../Videos/factory/film/browser.mjs';
 import { cueLog } from '../../../SharpLsp/src/website/tools/video/kit/camera.mjs';
 import { typeAt } from '../../../SharpLsp/src/website/tools/video/kit/workbench.mjs';
-import { closeTerminal as closeEditorTerminal, filmEditor, focusWorkbench as focusEditor, hold, occurrenceRows, openFile, openFinding, point as pointOn, runCommand, tap as tapOn, take as takeShot, terminal as runInTerminal } from './film-workbench.mjs';
+import { closeTerminal as closeEditorTerminal, compareToCanonical, filmEditor, finishShoot, focusWorkbench as focusEditor, hold, occurrenceRows, openFile, openFinding, point as pointOn, runCommand, tap as tapOn, take as takeShot, terminal as runInTerminal } from './film-workbench.mjs';
 const root = path.resolve(import.meta.dirname, '../..');
 const videos = path.resolve(root, '../Videos');
 const work = path.join(root, 'target/docs-tutorial');
@@ -59,8 +59,7 @@ async function edit(file, text, typed = false) {
 const finding = () => openFinding(page, cues);
 async function compare() {
   await finding();
-  await tap(rows().nth(1).getByRole('button', { name: 'Compare To Canonical' }), 'Compare the two copies');
-  await page.locator('.monaco-diff-editor').first().waitFor();
+  await compareToCanonical(page, cues, 'Compare the two copies');
   await point(960, 300); await hold(2400);
   await page.mouse.wheel(0, 150); await point(650, 430); await hold(2000);
 }
@@ -189,8 +188,7 @@ try {
   });
   await take('osprey-compare', async () => {
     await ospreyFinding('osprey-identical/alpha.osp');
-    await tap(rows().nth(1).getByRole('button', { name: 'Compare To Canonical' }), 'Compare the Osprey files');
-    await page.locator('.monaco-diff-editor').first().waitFor();
+    await compareToCanonical(page, cues, 'Compare the Osprey files');
     await point(700, 280); await hold(3000); await point(1080, 440); await hold(3000);
   });
   await take('osprey-python', async () => {
@@ -205,7 +203,6 @@ try {
   await closeTerminal();
   process.stdout.write('User workflows recorded\n');
 } finally {
-  await cdp.detach();
-  fs.rmSync(path.join(work, 'frames'), { recursive: true, force: true });
+  await finishShoot(cdp, work);
 }
 process.exit(0);

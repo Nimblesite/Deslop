@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { cueLog } from '../../../SharpLsp/src/website/tools/video/kit/camera.mjs';
 import { goTo } from '../../../SharpLsp/src/website/tools/video/kit/workbench.mjs';
-import { closeTerminal, filmEditor, hold, occurrenceRows, openFile, openFinding, point, runCommand, tap, take, terminal } from './film-workbench.mjs';
+import { closeTerminal, compareToCanonical, filmEditor, finishShoot, hold, occurrenceRows, openFile, openFinding, point, runCommand, tap, take, terminal } from './film-workbench.mjs';
 const root = path.resolve(import.meta.dirname, '../..');
 const work = path.join(root, 'target/python-film');
 const clips = path.resolve(root, '../Videos/projects/deslop/captures/docs-tutorial');
@@ -84,8 +84,7 @@ try {
   await take(shoot, 'python-compare', async () => {
     await openFinding(page, cues, offender('exceptions.py'), 'Open the exceptions finding');
     await point(page, 700, 420); await hold(2500);
-    await tap(page, cues, rows().nth(1).getByRole('button', { name: 'Compare To Canonical' }), 'Compare the two classes');
-    await page.locator('.monaco-diff-editor').first().waitFor();
+    await compareToCanonical(page, cues, 'Compare the two classes');
     await point(page, 960, 320); await hold(3500);
     await page.mouse.wheel(0, 260); await point(page, 700, 460); await hold(3500);
   });
@@ -108,7 +107,6 @@ try {
   assert.equal(edited.split(`${ALIAS}\n\n    def format_completion`).length - 1, COPIES.length, 'both copies became the alias, each followed by a blank line');
   process.stdout.write('Python film recorded\n');
 } finally {
-  await cdp.detach();
-  fs.rmSync(path.join(work, 'frames'), { recursive: true, force: true });
+  await finishShoot(cdp, work);
 }
 process.exit(0);

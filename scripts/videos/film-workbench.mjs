@@ -79,12 +79,17 @@ export async function take(shoot, name, action) {
   process.stdout.write(`Recorded ${name}\n`);
 }
 
-/** Types `command` into a maximised terminal and waits until OCR reads `expected` on screen. */
-export async function terminal(page, command, expected) {
+/** Opens a new terminal, maximised so its output is readable on film, and focuses it. */
+export async function openTerminal(page) {
   await runCommand(page, 'Terminal: Create New Terminal');
   const panel = await page.locator('.part.panel').boundingBox();
   if (panel.height < MIN_TERMINAL_HEIGHT) await runCommand(page, 'View: Toggle Maximized Panel');
   await page.locator('.terminal-wrapper').last().click();
+}
+
+/** Types `command` into a maximised terminal and waits until OCR reads `expected` on screen. */
+export async function terminal(page, command, expected) {
+  await openTerminal(page);
   await hold(400);
   await point(page, 650, 350);
   await typeText(page, command, 25); await page.keyboard.press('Enter');
@@ -97,6 +102,18 @@ export async function terminal(page, command, expected) {
     await hold(500);
   }
   throw new Error(`The terminal did not visibly show ${expected}`);
+}
+
+/** Opens the diff of the second occurrence against the canonical one, from an open finding. */
+export async function compareToCanonical(page, cues, label) {
+  await tap(page, cues, occurrenceRows(page).nth(1).getByRole('button', { name: 'Compare To Canonical' }), label);
+  await page.locator('.monaco-diff-editor').first().waitFor();
+}
+
+/** Releases the recorded editor's debugging session and the shoot's scratch frames. */
+export async function finishShoot(cdp, work) {
+  await cdp.detach();
+  fs.rmSync(path.join(work, 'frames'), { recursive: true, force: true });
 }
 
 export async function closeTerminal(page) {
