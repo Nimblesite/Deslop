@@ -35,7 +35,7 @@ deliveries and their catalog. SharpLsp's
 capture and automatic camera modules record the real packaged extension and
 Deslop commands. Shared Videos sound and delivery modules supply narration,
 score, captions and encoding. The installer rejects stale scripts or invalid
-media. MP4 files use Git LFS; production intermediates are never published.
+media. The finished MP4s, posters, captions and chapter tracks use Git LFS.
 Every film must stay re-renderable from its preserved inputs with the
 documented steps; delivered MP4s are never patched directly.
 
