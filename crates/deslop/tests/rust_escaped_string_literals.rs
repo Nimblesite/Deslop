@@ -19,7 +19,7 @@ use serde_json::Value;
 
 use crate::common::{
     cluster_kind, cluster_spanning, cluster_touches, clusters, field, occurrences, run_report,
-    seeded_fixture_root, IDENTICAL_KIND, NEARLY_IDENTICAL_KIND,
+    seeded_fixture_root, IDENTICAL_KIND, LOOSELY_SIMILAR_KIND, NEARLY_IDENTICAL_KIND,
 };
 
 const FIXTURE: &str = "rust-escaped-string-literals";
@@ -33,6 +33,22 @@ const WITH_COPY_FILES: u64 = 4;
 const COPY_OCCURRENCES: usize = 2;
 const USAGE_NAME: &str = "const USAGE";
 const COPY_NAME: &str = "const HELP";
+
+/// The fixture contains excerpts from the Serde corpus pin 0db9b3b504bc
+/// (MIT or Apache-2.0). These are the reported spans on the reduced fixture.
+const SERDE_TOKEN_RUNS: &str = "rust-serde-token-runs";
+type TokenRun = (&'static str, u64, u64);
+const TAGGED_ENUM_RUNS: [TokenRun; 4] = [
+    ("test_annotations.rs", 89, 120),
+    ("test_annotations.rs", 130, 161),
+    ("test_enum_internally_tagged.rs", 44, 77),
+    ("test_enum_internally_tagged.rs", 122, 155),
+];
+const FLATTENED_ENUM_RUNS: [TokenRun; 3] = [
+    ("issue2565.rs", 37, 46),
+    ("test_annotations.rs", 34, 45),
+    ("test_annotations.rs", 70, 81),
+];
 
 /// Every cluster the report holds, named by its files, for failure messages.
 fn cluster_files(report: &Value) -> Vec<Vec<String>> {
@@ -118,4 +134,42 @@ fn a_copied_string_is_reported_without_the_unrelated_ones() -> Result<()> {
     );
     assert_unrelated_strings_stay_out(&report, "with a real copy present");
     Ok(())
+}
+
+/// [LANG-CAND-RUST-STRING-PARTS] String normalization must preserve token-run clones.
+#[test]
+fn serde_token_runs_keep_their_clone_membership_and_rank() -> Result<()> {
+    const TAGGED_RANK: u64 = 1;
+    const FLATTENED_RANK: u64 = 8;
+    let (_tmp, root) = seeded_fixture_root(SERDE_TOKEN_RUNS)?;
+    let report = run_report(&root, MIN_NODES)?;
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(FIXTURE_FILES)
+    );
+    assert_token_run_cluster(&report, &TAGGED_ENUM_RUNS, TAGGED_RANK)?;
+    assert_token_run_cluster(&report, &FLATTENED_ENUM_RUNS, FLATTENED_RANK)
+}
+
+fn assert_token_run_cluster(report: &Value, expected: &[TokenRun], rank: u64) -> Result<()> {
+    let cluster = clusters(report)
+        .iter()
+        .find(|cluster| expected.iter().all(|run| contains_token_run(cluster, *run)))
+        .with_context(|| format!("missing Serde token-run cluster with {expected:?}"))?;
+    assert_eq!(occurrences(cluster).len(), expected.len());
+    assert_eq!(
+        field(cluster, "occurrence_count").as_u64(),
+        Some(expected.len() as u64)
+    );
+    assert_eq!(cluster_kind(cluster), LOOSELY_SIMILAR_KIND);
+    assert_eq!(field(cluster, "rank").as_u64(), Some(rank));
+    Ok(())
+}
+
+fn contains_token_run(cluster: &Value, (path, start, end): TokenRun) -> bool {
+    occurrences(cluster).iter().any(|occurrence| {
+        field(occurrence, "path").as_str() == Some(path)
+            && field(occurrence, "start_line").as_u64() == Some(start)
+            && field(occurrence, "end_line").as_u64() == Some(end)
+    })
 }

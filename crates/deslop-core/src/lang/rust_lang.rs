@@ -378,21 +378,22 @@ fn is_identifier_kind(raw: &str) -> bool {
     )
 }
 
-/// Rust literal leaves, collapsed so constant edits do not perturb
-/// fingerprints. A string's `string_content` and `escape_sequence` parts
-/// are literal leaves too ([LANG-CAND-RUST-STRING-PARTS]): left as
-/// structural kinds, two unrelated escape-heavy strings shared a long
-/// "structure" with no literal content for [FUSED-CONTENT-GATE] to read.
+/// Rust literal leaves, collapsed so constant edits do not perturb fingerprints.
 fn is_literal_kind(raw: &str) -> bool {
-    matches!(
-        raw,
-        "string_literal"
-            | "raw_string_literal"
-            | "string_content"
-            | "escape_sequence"
-            | "char_literal"
-            | "integer_literal"
-            | "float_literal"
-            | "boolean_literal"
-    )
+    match raw {
+        // [LANG-CAND-RUST-STRING-PARTS] Fail visibly until the normalization preserves Serde token runs.
+        #[allow(clippy::panic)]
+        "string_content" | "escape_sequence" => panic!(
+            "quarantined Rust string-part normalization: collapsing {raw} erased two judged Serde token-run clones"
+        ),
+        _ => matches!(
+            raw,
+            "string_literal"
+                | "raw_string_literal"
+                | "char_literal"
+                | "integer_literal"
+                | "float_literal"
+                | "boolean_literal"
+        ),
+    }
 }
