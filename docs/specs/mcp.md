@@ -217,6 +217,10 @@ One tool, three actions, replacing three plumbing tools:
 
 Content refreshes on every `resources/read` — always whatever the LSP's in-memory `latest_report` says right now.
 
+#### [MCP-RESOURCES-TEMPLATES] Template discovery
+
+Deslop serves two fixed resources. `resources/templates/list` returns `{ "resourceTemplates": [] }`, and the same connection can list and read both fixed resources.
+
 ### [MCP-IPC-CLIENT] IPC client (single source of truth)
 
 Every read tool issues exactly one JSON-RPC request over the LSP's IPC endpoint. The MCP holds **no on-disk cache** and **no in-memory `Report` cache** — caching layers are exactly what create the staleness window the IPC architecture exists to eliminate. Per-call cost is one local IPC round-trip (Unix socket, or TCP loopback per [LIVE-IPC-TCP]; sub-millisecond either way), bounded entirely by the LSP's `LiveService` lock contention. If the socket is missing or the LSP exits mid-call, every read returns `LspNotRunning`; the MCP does **not** fall back to a second pipeline. CI / one-shot audits are the `deslop` CLI's job, not the MCP's.

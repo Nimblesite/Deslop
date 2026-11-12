@@ -151,6 +151,8 @@ impl<B: McpBackend> McpServer<B> {
             ))),
             "tools/call" => self.handle_tool_call(&params, &id),
             "resources/list" => Ok(resources_list_payload()),
+            // [MCP-RESOURCES-TEMPLATES] Deslop exposes only fixed resources.
+            "resources/templates/list" => Ok(json!({ "resourceTemplates": [] })),
             "resources/read" => self.handle_resource_read(&params),
             other => Err(jsonrpc_error(
                 ErrorCode::MethodNotFound,

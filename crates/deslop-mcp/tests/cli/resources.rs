@@ -36,8 +36,24 @@ fn resource_text(child: &mut McpChild, uri: &str) -> Result<String> {
 }
 
 #[test]
-fn resources_list_returns_report_and_schema_uris() -> Result<()> {
+fn template_discovery_leaves_fixed_resources_listable_and_readable() -> Result<()> {
+    // [MCP-RESOURCES-TEMPLATES]
     let mut child = spawn_and_init()?;
+    let templates = child.request("resources/templates/list", &json!({}))?;
+    assert_eq!(
+        templates.get("result"),
+        Some(&json!({ "resourceTemplates": [] })),
+        "{templates}"
+    );
+    assert_fixed_resources_listed(&mut child)?;
+    let report: Value = serde_json::from_str(&resource_text(&mut child, REPORT_URI)?)?;
+    assert!(value_get(&report, CLUSTERS_POINTER)?.is_array());
+    assert!(resource_text(&mut child, SCHEMA_URI)?.len() > SCHEMA_DOC_MIN_CHARS);
+    let _ = child.finish();
+    Ok(())
+}
+
+fn assert_fixed_resources_listed(child: &mut McpChild) -> Result<()> {
     let response = child.request("resources/list", &json!({}))?;
     let resources_value = value_get(&response, "/result/resources")?;
     let resources = resources_value
@@ -60,6 +76,13 @@ fn resources_list_returns_report_and_schema_uris() -> Result<()> {
         uris.iter().any(|uri| uri == SCHEMA_URI),
         "schema uri missing: {uris:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn resources_list_returns_report_and_schema_uris() -> Result<()> {
+    let mut child = spawn_and_init()?;
+    assert_fixed_resources_listed(&mut child)?;
     let _ = child.finish();
     Ok(())
 }
