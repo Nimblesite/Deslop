@@ -280,6 +280,48 @@ fn exclude_pattern_is_scan_root_relative() -> Result<()> {
     Ok(())
 }
 
+// [EXCLUSION-CONFIG] A directory exclusion applies to nested files, even
+// when a later rule names one file inside the excluded directory.
+#[test]
+fn trailing_slash_patterns_apply_to_directory_contents() -> Result<()> {
+    const FILES: [(&str, &str); 2] = [("sample-data/deep", "Alpha.cs"), ("src", "Beta.cs")];
+    for config in [
+        "[defaults]\nexclude = [\"/sample-data/\", \"!/sample-data/deep/Alpha.cs\"]\n",
+        "[language.csharp]\nexclude = [\"/sample-data/\"]\n",
+    ] {
+        let tmp = tempfile::tempdir()?;
+        let _assertion = seeded_scan_command(tmp.path(), &FILES, Some(config))?
+            .assert()
+            .success();
+        let report = read_json_report(&outputs_under(tmp.path()).json)?;
+        assert_eq!(
+            field(&report, "files_analysed").as_u64(),
+            Some(1),
+            "{config}: {report}"
+        );
+        assert!(field(&report, "clusters")
+            .as_array()
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            report
+                .pointer("/metrics/per_file/0/path")
+                .and_then(Value::as_str)
+                .map(Path::new),
+            Some(Path::new("src/Beta.cs"))
+        );
+    }
+    let tmp = tempfile::tempdir()?;
+    let config = "[defaults]\nreport_hide = [\"/sample-data/\"]\n";
+    let _assertion = seeded_scan_command(tmp.path(), &FILES, Some(config))?
+        .assert()
+        .success();
+    let report = read_json_report(&outputs_under(tmp.path()).json)?;
+    assert_eq!(field(&report, "files_analysed").as_u64(), Some(2));
+    assert_eq!(hidden_flag_for(&report, "Alpha.cs"), Some(true));
+    assert_eq!(hidden_flag_for(&report, "Beta.cs"), Some(false));
+    Ok(())
+}
+
 // Implements [OUTPUT-DIR]: running without `--output` writes
 // `.deslop/deslop-report.{json,txt,html}` under the *scan root* — not
 // the working directory — so the CLI, LSP, and MCP all address one

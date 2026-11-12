@@ -24,7 +24,7 @@ report_hide = ["**/Migrations/**/*.cs"]
 report_hide = ["**/target/**"]
 ```
 
-**Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
+**Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root. A trailing slash matches a directory and applies to its contents. A file exception inside a matched directory only takes effect if the directory itself is reopened.
 
 **Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.
 

@@ -411,11 +411,22 @@ impl ExclusionConfig {
     }
 }
 
-/// Returns `true` when `matcher` classifies `path` as ignored (i.e., the
-/// pattern matched). Directories are matched as files here because we
-/// only ever feed per-file paths to [`ExclusionConfig::is_excluded`].
+/// Matches the file and its directories within the matcher root. A file
+/// exception cannot reopen an excluded parent directory ([EXCLUSION-CONFIG]).
 fn matches(matcher: &Gitignore, path: &Path) -> bool {
+    if matcher.is_empty() {
+        return false;
+    }
+    let root = matcher.path();
+    let parents = path.ancestors().skip(1).take_while(|parent| {
+        !parent.as_os_str().is_empty()
+            && *parent != root
+            && (!path.has_root() || parent.starts_with(root))
+    });
     matcher.matched(path, false).is_ignore()
+        || parents
+            .into_iter()
+            .any(|parent| matcher.matched(parent, true).is_ignore())
 }
 
 /// Compiles a list of glob patterns into an [`ignore::gitignore::Gitignore`]
