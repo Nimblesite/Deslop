@@ -12,7 +12,7 @@
 
 use std::{
     io::{self, BufRead, BufReader, Read, Write},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use serde_json::{json, Value};
@@ -26,7 +26,7 @@ use crate::{
         bounded_response_frame, jsonrpc_error, jsonrpc_error_response, jsonrpc_response_ok,
         ErrorCode, JsonRpcError, JsonRpcRequest, RequestId, JSONRPC_VERSION,
     },
-    resources::{read_resource, resources_list_payload},
+    resources::{read_resource, resources_list_payload, REPORT_URI},
     tools::{
         advertised_languages, dispatch_tool_call, request_id_fits_response_budget,
         tools_list_payload, wrap_tool_result, REQUEST_ID_BUDGET_MESSAGE,
@@ -76,8 +76,8 @@ impl<B: McpBackend> McpServer<B> {
         reader: R,
         writer: W,
     ) -> Result<(), ServerError> {
-        let sender: NotificationSender = Arc::new(Mutex::new(Box::new(writer)));
-        self.backend.set_notification_sender(Arc::clone(&sender));
+        let sender = NotificationSender::new(writer);
+        self.backend.set_notification_sender(sender.clone());
         let mut buffered = BufReader::new(reader);
         let mut line = String::new();
         loop {
@@ -106,7 +106,7 @@ impl<B: McpBackend> McpServer<B> {
                     None,
                     jsonrpc_error(ErrorCode::ParseError, parse_err.to_string()),
                 );
-                return write_json(sender, &error);
+                return write_json(sender, &error, None);
             }
         };
         if request.jsonrpc != JSONRPC_VERSION {
@@ -117,7 +117,7 @@ impl<B: McpBackend> McpServer<B> {
                     format!("unsupported jsonrpc version {:?}", request.jsonrpc),
                 ),
             );
-            return write_json(sender, &error);
+            return write_json(sender, &error, None);
         }
         request.id.clone().map_or_else(
             || {
@@ -138,10 +138,11 @@ impl<B: McpBackend> McpServer<B> {
         let method = request.method.as_str();
         if method == "tools/call" && !request_id_fits_response_budget(&id) {
             let error = jsonrpc_error(ErrorCode::InvalidRequest, REQUEST_ID_BUDGET_MESSAGE);
-            return write_json(sender, &jsonrpc_error_response(None, error));
+            return write_json(sender, &jsonrpc_error_response(None, error), None);
         }
         let params = request.params.clone().unwrap_or_else(|| json!({}));
         debug!(method = method, "mcp_request_received");
+        let mut subscription = None;
         let outcome = match method {
             "initialize" => Ok(Self::handle_initialize()),
             "initialized" | "notifications/initialized" | "ping" => Ok(json!({})),
@@ -154,23 +155,29 @@ impl<B: McpBackend> McpServer<B> {
             // [MCP-RESOURCES-TEMPLATES] Deslop exposes only fixed resources.
             "resources/templates/list" => Ok(json!({ "resourceTemplates": [] })),
             "resources/read" => self.handle_resource_read(&params),
+            // [MCP-RESOURCES-SUBSCRIPTIONS] Subscription state belongs to this connection.
+            "resources/subscribe" | "resources/unsubscribe" => {
+                report_subscription(&params).map(|()| {
+                    subscription = Some(method == "resources/subscribe");
+                    json!({})
+                })
+            }
             other => Err(jsonrpc_error(
                 ErrorCode::MethodNotFound,
                 format!("method {other:?} is not implemented"),
             )),
         };
         match outcome {
-            Ok(result) => write_json(sender, &jsonrpc_response_ok(id, result)),
-            Err(error) => write_json(sender, &jsonrpc_error_response(Some(id), error)),
+            Ok(result) => write_json(sender, &jsonrpc_response_ok(id, result), subscription),
+            Err(error) => write_json(sender, &jsonrpc_error_response(Some(id), error), None),
         }
     }
 
     /// Handles a notification (no `id`).
     ///
     /// `notifications/deslop/filesChanged` — carries `{ paths: [...] }`
-    /// and re-runs analysis. The backend pushes `notifications/resources/updated`
-    /// and `notifications/deslop/reportChanged` through its stored
-    /// [`NotificationSender`] after the analysis completes.
+    /// and re-runs analysis. The backend pushes the report change through
+    /// its stored [`NotificationSender`] after the analysis completes.
     fn handle_notification(&self, request: &JsonRpcRequest) {
         debug!(method = %request.method, "mcp_notification_received");
         if request.method == "notifications/deslop/filesChanged" {
@@ -242,18 +249,26 @@ impl<B: McpBackend> McpServer<B> {
     }
 }
 
+/// Validates the URI of the one resource that emits updates.
+fn report_subscription(params: &Value) -> Result<(), JsonRpcError> {
+    if params.get("uri").and_then(Value::as_str) == Some(REPORT_URI) {
+        return Ok(());
+    }
+    Err(jsonrpc_error(
+        ErrorCode::InvalidParams,
+        format!("resource subscriptions require the uri {REPORT_URI:?}"),
+    ))
+}
+
 /// Serialises `value` and writes it as one newline-terminated frame
 /// under the sender mutex so responses never interleave on the wire.
 fn write_json<T: serde::Serialize>(
     sender: &NotificationSender,
     value: &T,
+    subscription: Option<bool>,
 ) -> Result<(), ServerError> {
     let bytes = bounded_response_frame(value).map_err(|err| io_from_serde(&err))?;
-    let mut writer = sender
-        .lock()
-        .map_err(|_| ServerError::Io(io::Error::other("mcp stdout mutex poisoned")))?;
-    writer.write_all(&bytes)?;
-    writer.flush()?;
+    sender.write_response(&bytes, subscription)?;
     Ok(())
 }
 
