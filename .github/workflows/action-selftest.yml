@@ -146,6 +146,8 @@ jobs:
           path: examples/rust
           version: ${{ needs.contract.outputs.version }}
           fail-over: "100"
+          # Seed and warm are two jobs that must share one store. [ACTION-CACHE]
+          cache-scope: cache-selftest
           output: cache-seed-report
           artifact-name: deslop-cache-seed-report
 
@@ -175,6 +177,7 @@ jobs:
           path: examples/rust
           version: ${{ needs.contract.outputs.version }}
           fail-over: "100"
+          cache-scope: cache-selftest
           output: cache-warm-report
           upload-artifact: "false"
 

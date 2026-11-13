@@ -20,7 +20,7 @@ const action = readFileSync("action.yml", "utf8");
  * scanner that stops seeing steps fails loudly instead of silently declaring
  * an empty file clean.
  */
-const RUN_STEPS = 10;
+const RUN_STEPS = 11;
 
 check("action.yml declares the Marketplace-required metadata", () => {
   for (const field of ["name: Deslop.live", "description:", "author: Nimblesite", "using: composite"]) {
@@ -43,7 +43,7 @@ check("the Marketplace name is not the org-colliding bare product name", () => {
 check("every documented input is declared", () => {
   const inputs = [
     "path", "version", "fail-over", "no-fail-over", "min-nodes", "config", "diff",
-    "only-changed", "cache", "output", "nojson", "notext", "nohtml", "log-level",
+    "only-changed", "cache", "cache-scope", "output", "nojson", "notext", "nohtml", "log-level",
     "upload-artifact", "artifact-name",
   ];
   for (const input of inputs) assert.ok(action.includes(`\n  ${input}:`), `action.yml lost input ${input}`);
@@ -289,12 +289,23 @@ check("every nested action is pinned to a full-length commit SHA", () => {
 // the scan root the `path` input names — never the repository root — under a
 // per-run key whose prefix fallback lets each run restore the newest
 // same-version store and save its own successor. [ACTION-CACHE]
-check("the parse store is cached around the run, keyed per version and run", () => {
-  const key = "key: deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-${{ github.run_id }}";
+check("the parse store is cached around the run, under the key the naming step computed", () => {
+  const key = "key: ${{ steps.store-key.outputs.key }}";
   assert.equal(action.split(key).length - 1, 2, "restore and save must share the exact per-run key");
   assert.ok(
-    action.includes("deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-\n"),
-    "restore-keys must fall back to the version+OS prefix so a new run restores the newest store",
+    action.includes("restore-keys: |\n          ${{ steps.store-key.outputs.restore-prefix }}\n"),
+    "restore-keys must fall back to the key without its run id so a new run restores the newest store",
+  );
+  assert.ok(
+    !action.includes("${{ runner.os }}-${{ github.run_id }}"),
+    "a key of version, OS and run id alone is shared by every job of a run (gh #619)",
+  );
+  const naming =
+    'action-cache-key.mjs" "${VERSION}" "${RUNNER_OS}" "${SCAN_PATH}" "${CACHE_SCOPE:-${GITHUB_JOB}}" "${GITHUB_RUN_ID}"';
+  assert.ok(action.includes(naming), "the key must name the version, OS, scan root, job scope and run");
+  assert.ok(
+    action.indexOf("id: store-key") < action.indexOf("actions/cache/restore@"),
+    "the store must be named before it is restored",
   );
   assert.equal(
     action.split("path: ${{ inputs.path }}/.deslop/cache").length - 1,
@@ -310,8 +321,8 @@ check("the parse store is cached around the run, keyed per version and run", () 
 check("the cache is opt-out and a storeless run skips the save instead of failing it", () => {
   assert.equal(
     action.split("if: inputs.cache != 'false'").length - 1,
-    3,
-    "the restore, the existence probe, and the save must all honour the cache input",
+    4,
+    "the naming step, the restore, the existence probe, and the save must all honour the cache input",
   );
   assert.ok(
     action.includes("if: inputs.cache != 'false' && steps.store.outputs.exists == 'true'"),

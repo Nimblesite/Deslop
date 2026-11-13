@@ -15,6 +15,7 @@ import { check, expectThrows } from "../lib/contract-harness.mjs";
 import { releaseArtifact, resolveRelease, resolveVersion } from "./action-resolve-artifact.mjs";
 import { expectedDigest, verifyChecksum } from "./action-verify-checksum.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
+import { cacheKey, scanRootDigest } from "./action-cache-key.mjs";
 
 const scratch = mkdtempSync(join(tmpdir(), "deslop-action-"));
 
@@ -235,3 +236,56 @@ expectThrows(
   () => readOutputs(join(scratch, "absent"), 0),
   "rendered no JSON report",
 );
+
+// One run, several jobs, several scan roots: every store has its own name, and
+// a later run restores only its own predecessor. [ACTION-CACHE] (gh #619)
+const STORE = { version: "0.42.0", runnerOs: "Linux", scanPath: "examples/rust", scope: "gate", runId: "42739095437" };
+const NEXT_RUN_ID = "42741475217";
+
+check("jobs and scan roots of one run never share a parse store", () => {
+  const gate = cacheKey(STORE);
+  const others = [
+    { ...STORE, scope: "cache-seed" },
+    { ...STORE, scanPath: "examples/go" },
+    { ...STORE, runnerOs: "macOS" },
+    { ...STORE, version: "0.43.0" },
+  ].map(cacheKey);
+  const names = new Set([gate, ...others].map((store) => store.key));
+  assert.equal(names.size, others.length + 1, "each job, root, OS and version names a different store");
+  for (const other of others) {
+    assert.ok(!other.key.startsWith(gate["restore-prefix"]), `${other.key} must not restore into the gate job`);
+    assert.ok(!gate.key.startsWith(other["restore-prefix"]), `the gate store must not restore into ${other.key}`);
+  }
+});
+
+check("the next run restores this job's store and saves its own successor", () => {
+  const first = cacheKey(STORE);
+  const next = cacheKey({ ...STORE, runId: NEXT_RUN_ID });
+  assert.equal(first.key, `deslop-0.42.0-Linux-${scanRootDigest("examples/rust")}-gate-${STORE.runId}`);
+  assert.equal(first.key, `${first["restore-prefix"]}${STORE.runId}`);
+  assert.equal(next["restore-prefix"], first["restore-prefix"], "only the run id differs between runs");
+  assert.notEqual(next.key, first.key, "an exact-key hit is never re-saved, so each run needs its own key");
+  assert.ok(first.key.startsWith(next["restore-prefix"]));
+});
+
+check("two jobs given one scope share one store", () => {
+  const seed = cacheKey({ ...STORE, scope: "cache-selftest", runId: STORE.runId });
+  const warm = cacheKey({ ...STORE, scope: "cache-selftest", runId: STORE.runId });
+  assert.deepEqual(warm, seed, "the self-test's warm job restores exactly what its seed job saved");
+});
+
+check("a scan root's name is a short digest, stable and free of separators", () => {
+  const digest = scanRootDigest("packages/app/src");
+  assert.equal(digest, scanRootDigest("packages/app/src"));
+  assert.notEqual(digest, scanRootDigest("packages/app"));
+  assert.equal(digest.length, 16);
+  assert.ok([...digest].every((character) => "0123456789abcdef".includes(character)));
+});
+
+for (const missing of ["version", "runnerOs", "scanPath", "scope", "runId"]) {
+  expectThrows(
+    `a store with no ${missing} has no name`,
+    () => cacheKey({ ...STORE, [missing]: "" }),
+    `cache key needs a ${missing}`,
+  );
+}
