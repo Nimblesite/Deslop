@@ -473,6 +473,14 @@ include = ["identical", "nearly_identical"]   # the default
 - Excluded kinds keep their clusters, their `per_kind` figures and their ranking. Only the headline number, per-file/folder numerators and `duplicated_files` change.
 - Every surface states what the total counts (text and HTML print `total counts: <kinds>`) and marks excluded kinds wherever kinds are listed: greyed groups in the HTML report, greyed tree rows with no bubbles in VS Code. Clients read `total_includes` from the wire; none re-derives the set.
 
+#### [METRICS-TOTAL-COUNTED] One marker for every kind that does not count
+
+A kind's lines are in the headline figure only when it is a clone kind the include set names. Every other kind present in a report — a clone kind the set leaves out, and shape-only, which can never join the set — is shown the same way on every surface that groups by kind: the words `not counted in total`, muted styling, and a group that starts collapsed. Kinds that count are listed first; each run keeps the category display order ([CLONE-KIND-LABELS]), so shape-only stays last.
+
+A reader must never have to work out whether a group is in the number. Marking Similar code "excluded" while leaving 4,595 shape-only rows unmarked and expanded made the panel contradict itself (gh #633).
+
+One function per language decides it: `report_facts::kind_counts_toward_total` in Rust (HTML report) and `kindCountsTowardTotal` in the VS Code client (tree, report webview, kind filter). Both read `metrics.total_includes`. Tests: `crates/deslop/tests/cli/bucket_groups/counted.rs`, `tree.topOffenders.groups.unit.test.ts`, `facets.unit.test.ts`.
+
 #### [METRICS-REPO-WEIGHTED] Evidence weighting is prohibited
 
 There is no evidence-weighted duplication percentage. Evidence decides whether a relation is a clone; shape-only non-clones are excluded before line counting, not discounted by a small weight. Every eligible clone line counts equally. `bucket_weights`, `category_weights`, `WeightedMetrics`, `weighted_duplicated_loc`, `weighted_duplication_percent`, and a `[metrics]` weight table are forbidden wire and configuration fields. Unknown root configuration fields and threshold keys fail configuration parsing before analysis; retired settings must never be silently accepted.

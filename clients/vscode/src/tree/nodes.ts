@@ -20,6 +20,7 @@ import {
   kindChip,
   kindTaxonomy,
   kindTitle,
+  NOT_COUNTED_MARKER,
   isClone,
   INFORMATIONAL_FINDING,
   occurrenceCount,
@@ -29,6 +30,11 @@ import {
 } from "../types/report";
 import { baseName, displayPath, representativePath } from "./paths";
 import type { ThresholdStatus } from "./threshold";
+
+/** [METRICS-TOTAL-COUNTED] Kind-group tooltip lines: every group states
+ * plainly whether its lines are in the headline figure. */
+const COUNTED_TOOLTIP = "Counted in the duplication total.";
+const NOT_COUNTED_TOOLTIP = "Not counted in the duplication total.";
 
 // Re-exported so existing import sites (`../tree/nodes`) keep resolving
 // after the helpers moved to the cycle-free `./paths` leaf module.
@@ -114,7 +120,7 @@ export class ClusterNode extends vscode.TreeItem {
     const rank = cluster.rank;
     this.rank = rank;
     const baseDesc = isClone(cluster) ? `rank #${rank} · ${occurrenceCount(cluster)} copies` : INFORMATIONAL_FINDING;
-    this.description = excluded ? `${baseDesc} · excluded` : baseDesc;
+    this.description = excluded ? `${baseDesc} · ${NOT_COUNTED_MARKER}` : baseDesc;
     this.contextValue =
       occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
     this.iconPath = kindIcon(kind, excluded);
@@ -252,15 +258,15 @@ export class KindGroupNode extends GroupNode {
       "deslop.kindGroup",
       showFileInChildren,
       kindIcon(kind, excluded),
-      // [VSIX-TOP-OFFENDERS-EXCLUDED] Excluded noise starts collapsed —
-      // the default view leads with the kinds that count.
+      // [METRICS-TOTAL-COUNTED] A kind the total does not count starts
+      // collapsed — the default view leads with the kinds that count.
       excluded
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.Expanded,
     );
-    if (excluded) this.description = "excluded";
-    const excludedNotice = excluded ? "\n\n*(Excluded from total duplication)*" : "";
-    this.tooltip = new vscode.MarkdownString(`**${kindTitle(kind)}** — ${kindTaxonomy(kind)}${excludedNotice}`);
+    if (excluded) this.description = NOT_COUNTED_MARKER;
+    const counted = excluded ? NOT_COUNTED_TOOLTIP : COUNTED_TOOLTIP;
+    this.tooltip = new vscode.MarkdownString(`**${kindTitle(kind)}** — ${kindTaxonomy(kind)}\n\n*${counted}*`);
   }
 }
 

@@ -203,10 +203,25 @@ test("live updates release a comparison selection whose range disappeared", asyn
   await expect(page.getByRole("button", { name: COMPARE_SELECTED_LABEL, exact: true })).toHaveCount(0);
 });
 
+/** [METRICS-TOTAL-COUNTED] The one marker every surface uses. */
+const NOT_COUNTED_MARKER = "not counted in total";
+const KINDS_NOT_COUNTED_BY_DEFAULT = 3;
+
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
   { name: "narrow", width: 390, height: 844 },
 ];
+
+/** [METRICS-TOTAL-COUNTED] A kind group the total does not count is
+ * marked in its header and starts collapsed; opens it for the rows. */
+async function expandNotCountedGroup(page: Page, kindTitle: string): Promise<void> {
+  const group = page.locator("details.clone-group--excluded").filter({ hasText: kindTitle });
+  await expect(group).not.toHaveAttribute("open", /.*/);
+  await expect(group.locator("summary")).toContainText(`${kindTitle} — `);
+  await expect(group.locator("summary")).toContainText(` — ${NOT_COUNTED_MARKER}`);
+  await group.locator("summary").click();
+  await expect(group).toHaveAttribute("open", /.*/);
+}
 
 test.describe("VSIX webview bundles", () => {
   // [VSIX-TOP-OFFENDERS-EXCLUDED] Report rows retain their identity while quieted.
@@ -221,7 +236,7 @@ test.describe("VSIX webview bundles", () => {
     const row = page.locator(".report-cluster-row").filter({ hasText: excludedTitle });
     await expect(page.locator(".report-cluster-row")).toHaveCount(sampleReport.clusters.length);
     await expect(row).toHaveClass(`report-cluster-row ${excludedClass}`);
-    await expect(row).toContainText("excluded from total");
+    await expect(row).toContainText(NOT_COUNTED_MARKER);
     await expect(row).toHaveCSS("opacity", "0.55");
     await row.locator("xpath=../..").locator("summary").click();
     await row.click();
@@ -230,7 +245,7 @@ test.describe("VSIX webview bundles", () => {
     await postHostMessage(page, { kind: "report/delta", report: sampleReport });
     await expect(row).toHaveClass("report-cluster-row");
     await expect(row).toHaveCSS("opacity", "1");
-    await expect(row).not.toContainText("excluded from total");
+    await expect(row).not.toContainText(NOT_COUNTED_MARKER);
     await expect(page.getByRole("option", { name: excludedTitle, exact: true })).toHaveAttribute("value", excludedKind);
     await expect(page.locator(".report-cluster-row")).toHaveCount(sampleReport.clusters.length);
   });
@@ -254,6 +269,7 @@ test.describe("VSIX webview bundles", () => {
     await loadView(page, "report", viewport);
     await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
     const shapeRow = page.locator("li").filter({ hasText: STRUCTURAL_ONLY_TITLE });
+    await expandNotCountedGroup(page, STRUCTURAL_ONLY_TITLE);
     await expect(shapeRow.getByText(INFORMATIONAL_FINDING)).toBeVisible();
     await expect(shapeRow).not.toContainText("mass");
     await expect(shapeRow).not.toContainText("×");
@@ -296,13 +312,15 @@ test.describe("VSIX webview bundles", () => {
       // ignores — greyed, still selectable — and the headline names the
       // kinds it counts.
       await expect(
-        page.getByRole("option", { name: /Similar code \(excluded from total\)/ }),
+        page.getByRole("option", { name: `Similar code (${NOT_COUNTED_MARKER})` }),
       ).toBeAttached();
-      await expect(page.locator("option.kind-option--excluded")).toHaveCount(2);
+      // Similar code, Same behavior and shape-only: none is in the total.
+      await expect(page.locator("option.kind-option--excluded")).toHaveCount(KINDS_NOT_COUNTED_BY_DEFAULT);
       await expect(page.getByText("total counts: Identical code, Nearly identical code")).toBeVisible();
       const clusterList = page.locator(".report-cluster-row");
       await expect(clusterList.getByText(IDENTICAL_TITLE, { exact: true })).toBeVisible();
       await expect(clusterList.getByText(NEARLY_IDENTICAL_TITLE, { exact: true })).toBeVisible();
+      await expandNotCountedGroup(page, STRUCTURAL_ONLY_TITLE);
       await expect(clusterList.getByText(STRUCTURAL_ONLY_TITLE, { exact: true })).toBeVisible();
       await expect(clusterList.getByText(RETIRED_NEUTRAL_TITLE, { exact: true })).toHaveCount(0);
 

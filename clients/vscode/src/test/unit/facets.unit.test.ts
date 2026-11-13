@@ -40,7 +40,8 @@ const SAME_BEHAVIOR_KIND = "same_behavior";
 const STRUCTURAL_ONLY_KIND = "structural_only";
 const DEFAULT_TOTAL_INCLUDES = [IDENTICAL_KIND, NEARLY_IDENTICAL_KIND] as const;
 const ALL_CLONE_KINDS_LABEL = "All clone kinds";
-const EXCLUDED_FILTER_MARKER = "(excluded from total)";
+const NOT_COUNTED_MARKER = "not counted in total";
+const EXCLUDED_FILTER_MARKER = `(${NOT_COUNTED_MARKER})`;
 
 // Category grouping is independent of mass and diagnostic severity.
 const KIND_GROUPED = stampRanks([
@@ -261,7 +262,7 @@ suite("include-set surfaces ([METRICS-TOTAL-INCLUDE] in the webview)", () => {
     const children = provider.getChildren().flatMap((root) => provider.getChildren(root));
     const similar = children.find((node) => node instanceof ClusterNode && node.cluster.kind === LOOSELY_SIMILAR_KIND);
     assert.ok(similar instanceof ClusterNode);
-    assert.ok(String(similar.description).includes("excluded"));
+    assert.ok(String(similar.description).endsWith(`· ${NOT_COUNTED_MARKER}`));
     assert.equal((similar.iconPath as vscode.ThemeIcon).color?.id, "disabledForeground");
     assert.equal(children.length, KIND_GROUPED.length);
     assert.deepEqual(children.map((node) => (node as ClusterNode).cluster.id).sort(), KIND_GROUPED.map((item) => item.id).sort());
@@ -300,8 +301,12 @@ suite("include-set surfaces ([METRICS-TOTAL-INCLUDE] in the webview)", () => {
     assert.equal(byKind.get(SAME_BEHAVIOR_KIND)?.excluded, true);
     assert.equal(
       byKind.get(STRUCTURAL_ONLY_KIND)?.excluded,
-      false,
-      "shape-only is never marked excluded — it was never a candidate",
+      true,
+      "[METRICS-TOTAL-COUNTED] shape-only never counts, so it carries the same mark",
+    );
+    assert.equal(
+      byKind.get(STRUCTURAL_ONLY_KIND)?.label,
+      `${kindTitle(STRUCTURAL_ONLY_KIND)} ${EXCLUDED_FILTER_MARKER}`,
     );
   });
 

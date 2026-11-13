@@ -7,12 +7,14 @@
 // Every displayed mass and rank comes from the engine.
 
 import {
-  CLUSTER_KINDS,
   ClusterKind,
   ReportCluster,
   ReportOccurrence,
   compareClusterRank,
-  isKindExcluded,
+  isClone,
+  isCloneKindLeftOut,
+  kindCountsTowardTotal,
+  kindsCountedFirst,
 } from "../types/report";
 import {
   ClusterNode,
@@ -74,7 +76,7 @@ export function buildClusterMode(
   totalIncludes?: readonly ClusterKind[],
 ): Node[] {
   return clusters.map((cluster) => {
-    const excluded = isKindExcluded(cluster.kind, totalIncludes);
+    const excluded = isCloneKindLeftOut(cluster.kind, totalIncludes);
     return new ClusterNode(cluster, { showFile: true, excluded });
   });
 }
@@ -133,8 +135,9 @@ const fileNodeClusters = new WeakMap<FileNode, ReportCluster[]>();
 function kindSections(
   clusters: ReportCluster[],
   order: (list: ReportCluster[]) => ReportCluster[],
+  totalIncludes: readonly ClusterKind[] | undefined,
 ): { kind: ClusterKind; list: ReportCluster[] }[] {
-  return CLUSTER_KINDS.map((kind) => ({
+  return kindsCountedFirst(totalIncludes).map((kind) => ({
     kind,
     list: order(clusters.filter((cluster) => cluster.kind === kind)),
   })).filter(({ list }) => list.length > 0);
@@ -147,8 +150,8 @@ export function getFileNodeChildren(
 ): Node[] {
   const clusters = fileNodeClusters.get(file);
   if (!clusters) return [];
-  return kindSections(clusters, (list) => list.slice().sort(byRank)).map(({ kind, list }) => {
-    const excluded = isKindExcluded(kind, totalIncludes);
+  return kindSections(clusters, (list) => list.slice().sort(byRank), totalIncludes).map(({ kind, list }) => {
+    const excluded = !kindCountsTowardTotal(kind, totalIncludes);
     return registerGroup(new KindGroupNode(kind, list, false, excluded), list);
   });
 }
@@ -172,7 +175,7 @@ export function getGroupNodeChildren(group: GroupNode, totalIncludes?: readonly 
   if (!clusters) return [];
   return clusters.map(
     (cluster) => new ClusterNode(cluster, { showFile: group.showFileInChildren,
-      excluded: totalIncludes === undefined ? group instanceof KindGroupNode && group.excluded : isKindExcluded(cluster.kind, totalIncludes) }),
+      excluded: totalIncludes === undefined ? group instanceof KindGroupNode && group.excluded && isClone(cluster) : isCloneKindLeftOut(cluster.kind, totalIncludes) }),
   );
 }
 
@@ -181,8 +184,8 @@ export function buildKindMode(
   clusters: ReportCluster[],
   totalIncludes?: readonly ClusterKind[],
 ): Node[] {
-  return kindSections(clusters, (list) => list).map(({ kind, list }) => {
-    const excluded = isKindExcluded(kind, totalIncludes);
+  return kindSections(clusters, (list) => list, totalIncludes).map(({ kind, list }) => {
+    const excluded = !kindCountsTowardTotal(kind, totalIncludes);
     return registerGroup(new KindGroupNode(kind, list, true, excluded), list);
   });
 }

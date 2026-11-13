@@ -491,7 +491,7 @@ fn report_text_and_html_mark_the_include_set_and_excluded_kinds() -> Result<()> 
     )));
     let identical_header = format!("{INCLUDED_MARKER}</summary>");
     assert!(!html.contains(&format!("{identical_header}{EXCLUDED_MARKER}")));
-    // Shape-only was never a candidate, so it is never marked excluded.
-    assert!(!html.contains("clone-group--structural-only clone-group--excluded"));
+    // The corpus holds no shape-only finding, so no such group is written.
+    assert!(!html.contains("<details class=\"clone-group clone-group--structural-only"));
     Ok(())
 }
