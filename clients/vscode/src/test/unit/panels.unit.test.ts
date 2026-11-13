@@ -1,8 +1,49 @@
 // Unit: handleMessage dispatch — every case must execute the corresponding
 // deslop.* command without throwing on malformed payloads.
 
+import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as vscode from "vscode";
+
 import { handleMessage } from "../../webview/panels";
 import { ReportStore } from "../../reportStore";
+import { occurrence, wireCluster } from "../cluster.helpers";
+import { emptyReport, storeWith } from "./report-store.helpers";
+import { withTempDir } from "./temp-file.helpers";
+
+/** Five numbered lines; each `lineN` starts at a known byte. */
+const SOURCE_LINES = ["line1", "line2", "line3", "line4", "line5"];
+const LINE_BYTES = "lineN\n".length;
+/** Zero-based editor lines of the two duplicates and of the file's top. */
+const HEAVIER_DUPLICATE_LINE = 3;
+const LIGHTER_DUPLICATE_LINE = 1;
+const FILE_TOP_LINE = 0;
+const TOP_RANK = 1;
+const LOWER_RANK = 2;
+const CLUSTER_MASS = 10;
+const DUPLICATED_FILE = "Duplicated.cs";
+const CLEAN_FILE = "Clean.cs";
+const TEMP_PREFIX = "deslop-open-file-";
+
+/** A two-occurrence cluster whose first occurrence starts `line` of `file`. */
+function clusterAtLine(id: string, rank: number, file: string, line: number) {
+  const start = line * LINE_BYTES;
+  return wireCluster({
+    id,
+    rank,
+    severity: "information",
+    kind: "identical",
+    mass: CLUSTER_MASS,
+    occurrences: [occurrence(file, start, start + LINE_BYTES), occurrence(`${file}.other`)],
+  });
+}
+
+/** The active editor's file and the line its selection starts on. */
+function activeLocation(): { file: string; line: number } {
+  const editor = vscode.window.activeTextEditor;
+  assert.ok(editor, "a file row must open an editor");
+  return { file: fs.realpathSync(editor.document.uri.fsPath), line: editor.selection.start.line };
+}
 
 suite("webview handleMessage", () => {
   test("ignores malformed messages", async () => {
@@ -30,6 +71,36 @@ suite("webview handleMessage", () => {
       // we only need to cover the dispatch branch
     }
     await handleMessage(store, { kind: "open/occurrence" });
+  });
+
+  test("[VSIX-METRICS-REPORT-NAVIGATE] open/file opens the file at its highest-ranked duplicate", async () => {
+    await withTempDir(TEMP_PREFIX, async (dir) => {
+      const duplicated = fs.realpathSync(dir) + `/${DUPLICATED_FILE}`;
+      const clean = fs.realpathSync(dir) + `/${CLEAN_FILE}`;
+      for (const file of [duplicated, clean]) fs.writeFileSync(file, `${SOURCE_LINES.join("\n")}\n`);
+      // The lower-ranked cluster is listed first: the row must follow the
+      // engine's rank, not the order the clusters happen to arrive in.
+      const store = storeWith(
+        emptyReport({
+          clusters: [
+            clusterAtLine("lighter", LOWER_RANK, duplicated, LIGHTER_DUPLICATE_LINE),
+            clusterAtLine("heavier", TOP_RANK, duplicated, HEAVIER_DUPLICATE_LINE),
+          ],
+        }),
+      );
+      await handleMessage(store, { kind: "open/file", path: duplicated });
+      assert.deepEqual(activeLocation(), { file: duplicated, line: HEAVIER_DUPLICATE_LINE });
+
+      // A file no cluster touches still opens, at its first line.
+      await handleMessage(store, { kind: "open/file", path: clean });
+      assert.deepEqual(activeLocation(), { file: clean, line: FILE_TOP_LINE });
+
+      // Malformed rows open nothing: the clean file stays active.
+      for (const path of [undefined, 7, ""]) await handleMessage(store, { kind: "open/file", path });
+      assert.deepEqual(activeLocation(), { file: clean, line: FILE_TOP_LINE });
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      store.dispose();
+    });
   });
 
   test("open/cluster path validation — non-string id ignored", async () => {

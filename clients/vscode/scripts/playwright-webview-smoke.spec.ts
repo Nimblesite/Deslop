@@ -203,6 +203,12 @@ test("live updates release a comparison selection whose range disappeared", asyn
   await expect(page.getByRole("button", { name: COMPARE_SELECTED_LABEL, exact: true })).toHaveCount(0);
 });
 
+/** Rows of the sample report's folder rollup. */
+const DUPLICATION_FOLDER_PATH = "src/dart";
+const DUPLICATION_FILE_PATH = "src/dart/alpha.dart";
+const DUPLICATION_SIBLING_PATH = "src/dart/parser_beta.dart";
+const DUPLICATION_OTHER_FOLDER_FILE_PATH = "src/models/models.g.dart";
+
 /** [METRICS-TOTAL-COUNTED] The one marker every surface uses. */
 const NOT_COUNTED_MARKER = "not counted in total";
 const KINDS_NOT_COUNTED_BY_DEFAULT = 3;
@@ -248,6 +254,56 @@ test.describe("VSIX webview bundles", () => {
     await expect(row).not.toContainText(NOT_COUNTED_MARKER);
     await expect(page.getByRole("option", { name: excludedTitle, exact: true })).toHaveAttribute("value", excludedKind);
     await expect(page.locator(".report-cluster-row")).toHaveCount(sampleReport.clusters.length);
+  });
+  // [VSIX-METRICS-REPORT-NAVIGATE] Rows act: a file opens, a folder folds.
+  test("duplication rows open their file and fold their folder, by mouse and keyboard, across a live refresh", async ({ page }) => {
+    const viewport = viewports[DESKTOP_VIEWPORT_INDEX];
+    if (!viewport) throw new Error("Missing desktop viewport");
+    await loadView(page, "duplication", viewport);
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    const row = (path: string) => page.locator(`.duplication-row[data-path="${path}"]`);
+    const file = row(DUPLICATION_FILE_PATH);
+    const sibling = row(DUPLICATION_SIBLING_PATH);
+    const folder = row(DUPLICATION_FOLDER_PATH);
+    const openFile = { kind: "open/file", path: DUPLICATION_FILE_PATH };
+    const postedOpenFile = () =>
+      page.evaluate(() => window.__deslopPosts?.filter((message) => message.kind === "open/file"));
+
+    for (const target of [file, folder]) {
+      await expect(target).toHaveAttribute("role", "treeitem");
+      await expect(target).toHaveAttribute("tabindex", "0");
+      await expect(target).toHaveCSS("cursor", "pointer");
+    }
+    await expect(file).not.toHaveAttribute("aria-expanded", /.*/);
+    await expect(folder).toHaveAttribute("aria-expanded", "true");
+
+    await clearPostedMessages(page);
+    await file.click();
+    await expectPosted(page, "open/file");
+    expect(await postedOpenFile()).toEqual([openFile]);
+    await file.focus();
+    await page.keyboard.press("Enter");
+    expect(await postedOpenFile()).toEqual([openFile, openFile]);
+
+    await folder.click();
+    await expect(folder).toHaveAttribute("aria-expanded", "false");
+    await expect(file).toHaveCount(0);
+    await expect(sibling).toHaveCount(0);
+    await expect(row(DUPLICATION_OTHER_FOLDER_FILE_PATH)).toBeVisible();
+    expect(await postedOpenFile()).toEqual([openFile, openFile]);
+
+    // A live refresh re-renders every row and leaves the folder closed.
+    await postHostMessage(page, { kind: "report/delta", report: sampleReport });
+    await expect(folder).toHaveAttribute("aria-expanded", "false");
+    await expect(file).toHaveCount(0);
+
+    await folder.focus();
+    await page.keyboard.press("Enter");
+    await expect(folder).toHaveAttribute("aria-expanded", "true");
+    await expect(file).toBeVisible();
+    await expect(sibling).toBeVisible();
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    await expect(file).toBeVisible();
   });
   test("the report's path filter keeps exactly the clusters with a matching location, in any case", async ({ page }) => {
     await loadView(page, "report", viewports[DESKTOP_VIEWPORT_INDEX]);

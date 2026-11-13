@@ -7,7 +7,7 @@
 // wire rows into a tree; recomputing a percentage or re-summing LOC in
 // the VSIX is prohibited.
 
-import { FileMetric, RepoMetrics } from "../types/report";
+import { FileMetric, RepoMetrics, ReportCluster, ReportOccurrence } from "../types/report";
 import { buildPathTree, PathTree } from "./pathTree";
 
 export interface FolderRollup {
@@ -75,4 +75,27 @@ function rollupFolder(
     percent: row.duplication_percent,
     children: rollupChildren(folder, folderRows),
   };
+}
+
+/** [VSIX-METRICS-REPORT-NAVIGATE] The occurrence a file row opens: the
+ * file's first occurrence in the highest-ranked cluster that touches it.
+ * Reads the engine's `rank` off each cluster; nothing is ranked here. */
+export function topOccurrenceInFile(
+  clusters: readonly ReportCluster[],
+  filePath: string,
+): ReportOccurrence | undefined {
+  const wanted = normalizePath(filePath);
+  let best: { rank: number; occurrence: ReportOccurrence } | undefined;
+  for (const cluster of clusters) {
+    if (best && cluster.rank >= best.rank) continue;
+    const occurrence = cluster.occurrences.find((item) => normalizePath(item.path) === wanted);
+    if (occurrence) best = { rank: cluster.rank, occurrence };
+  }
+  return best?.occurrence;
+}
+
+/** [VSIX-METRICS-REPORT-NAVIGATE] The top of a file, for a row no cluster
+ * touches: the same open-occurrence route, pointed at line 1. */
+export function fileStartOccurrence(filePath: string): ReportOccurrence {
+  return { path: filePath, start_byte: 0, end_byte: 0, start_line: 1, end_line: 1, hidden: false };
 }
