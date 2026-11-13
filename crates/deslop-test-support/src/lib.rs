@@ -31,6 +31,8 @@ pub mod skip_contract;
 pub mod skip_policy;
 mod syntax;
 pub mod test_target_parity;
+mod workspace_bin;
+pub use workspace_bin::workspace_bin;
 
 use std::{
     fs,
@@ -149,7 +151,7 @@ fn read_lsp_content_length(reader: &mut impl BufRead) -> Result<usize> {
 ///
 /// Returns an error if the child process fails to spawn.
 pub fn spawn_deslop_lsp(root: &Path, stderr: Stdio) -> Result<Child> {
-    let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
+    let bin = workspace_bin("deslop-lsp");
     Ok(Command::new(bin)
         .arg(root)
         .stdin(Stdio::piped())
