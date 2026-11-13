@@ -285,6 +285,7 @@ pub(crate) fn is_literal_kind(raw: &str) -> bool {
         raw,
         "string_literal"
             | "verbatim_string_literal"
+            | "raw_string_literal"
             | "interpolated_string_text"
             | "integer_literal"
             | "real_literal"

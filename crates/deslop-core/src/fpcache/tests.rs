@@ -423,11 +423,11 @@ fn the_blob_format_revisions_are_pinned() {
          superseded values must stay rejected, never reused"
     );
     assert_eq!(
-        SEMANTIC_EPOCH, 6,
+        SEMANTIC_EPOCH, 7,
         "the semantic epoch changes when parse/normalise/fingerprint/signature \
          *meaning* changes without moving a byte — the case the `0.0.0-dev` \
-         directory partition cannot invalidate. 6 is the fingerprint-aware \
-         signature fold ([PIPELINE-SIGNATURE-FOLD]); bumping past it \
+         directory partition cannot invalidate. 7 is C# raw strings as \
+         literals ([LANG-CAND-CSHARP-RAW-STRING]); bumping past it \
          requires a new dated entry on the constant's doc, then this pin"
     );
     assert_eq!(

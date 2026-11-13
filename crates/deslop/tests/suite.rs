@@ -167,6 +167,8 @@ mod js_ts_signatures;
 mod jsx_tsx_components;
 #[path = "jwt_independent_verification_false_positive.rs"]
 mod jwt_independent_verification_false_positive;
+#[path = "literal_carried_endpoints.rs"]
+mod literal_carried_endpoints;
 #[path = "live_session_equivalence.rs"]
 mod live_session_equivalence;
 #[path = "location_rendering.rs"]

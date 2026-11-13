@@ -5,8 +5,11 @@
 //! test program, sharing only `\n` and `\"` — then look like two copies
 //! of one shape, and a near-miss pair is admitted on shape alone. When
 //! one authored literal's fragments outnumber everything else in an
-//! endpoint, that shape is the literal's own text layout, so the pair is
-//! a copy only if the two literals hold the same text.
+//! endpoint, that shape is the literal's own text layout. And when one
+//! literal is most of an endpoint's source text — a multi-line SQL query
+//! assigned and given two parameters — the few statements around it are
+//! all two endpoints can share. Either way the pair is a copy only if
+//! the two literals hold the same text.
 
 use std::{collections::HashMap, hash::BuildHasher};
 
@@ -18,8 +21,8 @@ use crate::{
     tokens::resolve_fingerprint_nodes,
 };
 
-/// A literal carries its endpoint when its nodes are a strict majority:
-/// more than one node in every this-many.
+/// A literal carries its endpoint when it is a strict majority of the
+/// endpoint's nodes or of its source bytes: more than one in every this-many.
 const MAJORITY_DENOMINATOR: usize = 2;
 /// The literal node itself, counted beside its fragments.
 const LITERAL_NODE: usize = 1;
@@ -31,7 +34,7 @@ pub(crate) struct HeaviestLiteral {
     file: FileId,
     /// Source bytes of the whole literal.
     range: ByteRange,
-    /// Whether the literal and its fragments outnumber the rest of the endpoint.
+    /// Whether the literal is most of the endpoint, by nodes or by bytes.
     carries_endpoint: bool,
 }
 
@@ -46,25 +49,56 @@ pub(crate) fn heaviest_literal(
     for member in resolve_fingerprint_nodes(root, fingerprint)? {
         weigh_literals(member, &mut heaviest);
     }
-    heaviest.map(|(mass, range): (usize, ByteRange)| HeaviestLiteral {
+    heaviest.map(|literal: Weighed| HeaviestLiteral {
         file: fingerprint.file_id,
-        range,
-        carries_endpoint: mass.saturating_mul(MAJORITY_DENOMINATOR) > fingerprint.node_count,
+        range: literal.range,
+        carries_endpoint: is_majority(literal.nodes, fingerprint.node_count)
+            || is_majority(span(literal.range), span(fingerprint.byte_range)),
     })
+}
+
+/// One literal's weight inside an endpoint.
+#[derive(Clone, Copy)]
+struct Weighed {
+    /// The literal node plus its fragments.
+    nodes: usize,
+    /// Source bytes of the whole literal.
+    range: ByteRange,
+}
+
+impl Weighed {
+    /// Heavier by fragments first, then by text: a raw string is one
+    /// fragment however long it runs.
+    fn outweighs(self, other: Self) -> bool {
+        (self.nodes, span(self.range)) > (other.nodes, span(other.range))
+    }
+}
+
+/// Byte length of a range.
+const fn span(range: ByteRange) -> usize {
+    range.end.saturating_sub(range.start)
+}
+
+/// Whether `part` is more than half of `whole`.
+const fn is_majority(part: usize, whole: usize) -> bool {
+    part.saturating_mul(MAJORITY_DENOMINATOR) > whole
 }
 
 /// Pre-order walk keeping the literal with the most fragments. A fragment
 /// is a leaf child: code inside an interpolation is structure, not text.
-fn weigh_literals(node: &NormalizedNode, heaviest: &mut Option<(usize, ByteRange)>) {
+fn weigh_literals(node: &NormalizedNode, heaviest: &mut Option<Weighed>) {
     if node.kind == LITERAL_KIND {
         let fragments = node
             .children
             .iter()
             .filter(|child| child.children.is_empty())
             .count();
-        let mass = fragments.saturating_add(LITERAL_NODE);
-        if heaviest.map_or(true, |(best, _)| mass > best) {
-            *heaviest = Some((mass, node.byte_range));
+        let literal = Weighed {
+            nodes: fragments.saturating_add(LITERAL_NODE),
+            range: node.byte_range,
+        };
+        if heaviest.map_or(true, |best| literal.outweighs(best)) {
+            *heaviest = Some(literal);
         }
     }
     for child in &node.children {

@@ -69,9 +69,14 @@ impl AdmissionFacts {
                     measured.core.has_async_edit(),
                     &measured.content,
                 ));
+        // [FUSED-CONTENT-GATE-LITERAL-BOUND] The last guard: it refuses
+        // what every other guard would admit.
         let failure = policy
             .failure
-            .or((!content_ok).then_some(AdmissionFailure::Content));
+            .or((!content_ok).then_some(AdmissionFailure::Content))
+            .or(measured
+                .literal_bound
+                .then_some(AdmissionFailure::LiteralBound));
         Self {
             content_required,
             content_ok,
@@ -180,7 +185,6 @@ impl PairPolicy {
                 size_is_coherent(pair, measured.merkle_equal),
                 AdmissionFailure::Size,
             ),
-            (!measured.literal_bound, AdmissionFailure::LiteralBound),
             (
                 lsh_guard(pair, measured, rescue, explicit_cross_language),
                 AdmissionFailure::Lsh,
@@ -203,7 +207,7 @@ impl PairPolicy {
 }
 
 /// First failed non-content admission predicate in specification order.
-fn first_policy_failure(results: [(bool, AdmissionFailure); 5]) -> Option<AdmissionFailure> {
+fn first_policy_failure(results: [(bool, AdmissionFailure); 4]) -> Option<AdmissionFailure> {
     results
         .into_iter()
         .find_map(|(passed, failure)| (!passed).then_some(failure))
