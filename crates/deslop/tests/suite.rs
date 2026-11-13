@@ -291,6 +291,8 @@ mod signature_reuse;
 mod skip_policy_contract;
 #[path = "spec_id_traceability.rs"]
 mod spec_id_traceability;
+#[path = "tree_sitter_output_exclusion.rs"]
+mod tree_sitter_output_exclusion;
 #[path = "ts_issue_283_object_literal_tables.rs"]
 mod ts_issue_283_object_literal_tables;
 #[path = "ts_issue_284_produce_then_assert.rs"]

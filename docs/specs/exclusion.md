@@ -8,7 +8,7 @@ Deslop ships with conservative built-in defaults, and a `.deslop.toml` in the sc
 - `exclude` — matching files are dropped in [PIPELINE-DISCOVER-FILES] before parsing. They are not counted in `files_analysed`, never fingerprinted, never embedded, and cannot appear in any cluster. Use for third-party vendored code you do not want analysed at all.
 - `report_hide` — matching files **are analysed** and can contribute to clustering, but each occurrence is flagged `hidden = true` at render time. A cluster where **every** occurrence is hidden is dropped from the rendered `clusters` list and counted under `clusters_hidden`. A cluster with at least one non-hidden occurrence is kept intact so the user sees "regular code duplicates generated code." This is the default tier for generated output like `*.g.cs`, `*.generated.cs`, OpenAPI clients, protobuf output.
 
-**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN], excludes bundled and minified build artifacts per [CONFIG-EXCLUDE-MINIFIED], and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`), and any file that opens with a generator's banner ([EXCLUSION-GENERATED-BANNER]). Project config adds to these defaults.
+**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN], excludes bundled and minified build artifacts per [CONFIG-EXCLUDE-MINIFIED], excludes `tree-sitter generate` output per [CONFIG-EXCLUDE-TREE-SITTER], and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`), and any file that opens with a generator's banner ([EXCLUSION-GENERATED-BANNER]). Project config adds to these defaults.
 
 **File format.** TOML. Parsed via the `toml` crate. Minimal, familiar, diffable:
 
@@ -137,6 +137,16 @@ The shape test reads a bounded prefix of files above a size floor, so discovery'
 **Size is never the signal.** A 53 KB file of ordinary source is analysed; a 17 KB artifact is not. Excluding on size would drop real code from the report with nothing to say it had, which is a false negative — the one outcome this project treats as worse than any other. A file that cannot be read is not excluded, for the same reason: the rule can only ever remove code from the analysis, so when it cannot tell, it declines to.
 
 Excluded, not report-hidden: the memory is spent at parse time, so the file has to leave before [PIPELINE-DISCOVER-FILES] hands it on. It is not counted in `files_analysed` and can appear in no cluster.
+
+### [CONFIG-EXCLUDE-TREE-SITTER] Generated grammar output is not source
+
+`tree-sitter generate` writes `src/parser.c`, `src/grammar.json` and `src/node-types.json`, and copies its runtime headers to `src/tree_sitter/`. Older releases write no banner, so [EXCLUSION-GENERATED-BANNER] never sees the parser. In Osprey one such `parser.c` (164k lines) supplied 46,965 of 76,538 duplicated lines, and the copied headers reported as 100% duplicates of each other (gh #621).
+
+The layout is the signal. A directory named `src` that holds `parser.c`, `grammar.json` and `tree_sitter/parser.h` is a grammar's generated output. Inside it, `parser.c`, `grammar.json`, `node-types.json` and every `tree_sitter/*.h` are excluded. Everything else stays, including the hand-written `scanner.c`. A `src/parser.c` with no `grammar.json` beside it is an ordinary C file and is analysed.
+
+Excluded, not report-hidden, for the reason [CONFIG-EXCLUDE-MINIFIED] gives: the cost is paid at parse time. A file whose neighbours cannot be read is not excluded.
+
+Code: `crates/deslop-core/src/config/tree_sitter_output.rs`. Tests: `crates/deslop/tests/tree_sitter_output_exclusion.rs`.
 
 ### [CONFIG-EXCLUDE-BUILTIN] Built-in component exclusion
 

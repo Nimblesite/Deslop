@@ -39,6 +39,7 @@ use raw::{
     RawConfig,
 };
 use serde::Deserialize;
+use tree_sitter_output::is_tree_sitter_output;
 
 use crate::{
     buckets::{ClusterKind, TotalInclude},
@@ -49,6 +50,7 @@ use crate::{
 mod builtin;
 mod generated_banner;
 mod kind_thresholds;
+mod tree_sitter_output;
 pub use kind_thresholds::KindThresholds;
 mod paths;
 mod ranking;
@@ -369,7 +371,7 @@ impl ExclusionConfig {
         if corpus_built_in_excluded(path, self.scan_root.as_deref(), self.include_dependencies) {
             return true;
         }
-        if is_minified_artifact(path, self.max_average_line_bytes) {
+        if is_minified_artifact(path, self.max_average_line_bytes) || is_tree_sitter_output(path) {
             return true;
         }
         if matches(&self.default_exclude, path) {
