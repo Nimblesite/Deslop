@@ -1,4 +1,4 @@
-//! [PIPELINE-NORMALIZE-AST] [FUSED-CONTENT-GATE] Long Rust string literals
+//! [FUSED-CONTENT-GATE-LITERAL-BOUND] [LANG-CAND-RUST-STRING-PARTS] Long Rust string literals
 //! that share nothing but their escape sequences are not duplicates.
 //!
 //! On the Osprey repository Deslop grouped 16 unrelated strings as "Similar
@@ -17,9 +17,12 @@ use std::{fs, path::Path};
 use anyhow::{Context, Result};
 use serde_json::Value;
 
+use deslop_core::report::PairEndpoint;
+
 use crate::common::{
     cluster_kind, cluster_spanning, cluster_touches, clusters, field, occurrences, run_report,
-    seeded_fixture_root, IDENTICAL_KIND, LOOSELY_SIMILAR_KIND, NEARLY_IDENTICAL_KIND,
+    seeded_fixture_root, signals::compare_endpoints, IDENTICAL_KIND, LOOSELY_SIMILAR_KIND,
+    NEARLY_IDENTICAL_KIND,
 };
 
 const FIXTURE: &str = "rust-escaped-string-literals";
@@ -33,6 +36,13 @@ const WITH_COPY_FILES: u64 = 4;
 const COPY_OCCURRENCES: usize = 2;
 const USAGE_NAME: &str = "const USAGE";
 const COPY_NAME: &str = "const HELP";
+
+/// The `let osp = "…"` statement and the usage constant's type and value:
+/// the pair v0.42.0 reported, as `(file, start byte, end byte)`.
+const EMBEDDED_PROGRAM: (&str, usize, usize) = ("run_output.rs", 270, 566);
+const USAGE_TEXT: (&str, usize, usize) = (USAGE_FILE, 24, 1545);
+const LITERAL_BOUND_REFUSAL: &str =
+    "rejected: one string literal carries an endpoint and the texts differ";
 
 /// The fixture contains excerpts from the Serde corpus pin 0db9b3b504bc
 /// (MIT or Apache-2.0). These are the reported spans on the reduced fixture.
@@ -101,6 +111,32 @@ fn unrelated_escaped_strings_are_never_grouped() -> Result<()> {
         clusters(&report).is_empty(),
         "no two of these strings share any text, so the report must be empty: {:?}",
         cluster_files(&report),
+    );
+    Ok(())
+}
+
+/// [FUSED-CONTENT-GATE-LITERAL-BOUND] Asked directly, the engine refuses the
+/// pair for the reason the scan dropped it, and still measures every axis.
+#[test]
+fn explicit_comparison_refuses_the_unrelated_strings_by_name() -> Result<()> {
+    let (_tmp, scan_root) = seeded_fixture_root(FIXTURE)?;
+    let [left, right] =
+        [EMBEDDED_PROGRAM, USAGE_TEXT].map(|(file, start_byte, end_byte)| PairEndpoint {
+            path: scan_root.join(file),
+            start_byte,
+            end_byte,
+        });
+    let evidence = compare_endpoints(&scan_root, MIN_NODES, left, right)?.evidence;
+    assert!(!evidence.admitted, "unrelated strings: {evidence:#?}");
+    assert_eq!(evidence.explanation, LITERAL_BOUND_REFUSAL);
+    assert_eq!(evidence.classification, None);
+    assert!(
+        evidence.agreement.abs() < f64::EPSILON,
+        "the two statements share no authored text: {evidence:#?}"
+    );
+    assert!(
+        evidence.structural > evidence.agreement,
+        "shape alone made them look alike: {evidence:#?}"
     );
     Ok(())
 }

@@ -12,6 +12,9 @@ pub(super) enum GateVerdict {
     AuthoredScopeMismatch,
     /// Refused: a token-only pair merely wraps an exact function clone.
     ContainerEcho,
+    /// Refused: one literal carries an endpoint and the texts differ
+    /// ([FUSED-CONTENT-GATE-LITERAL-BOUND]).
+    LiteralBound,
     /// Admitted without measurement: no content route saturated.
     NotRequired,
     /// Admitted from ordered frontier identity.
@@ -34,7 +37,10 @@ impl GateVerdict {
     /// Whether the edge survives the guard.
     pub(super) fn admitted(&self) -> bool {
         match self {
-            Self::RoleMismatch | Self::AuthoredScopeMismatch | Self::ContainerEcho => false,
+            Self::RoleMismatch
+            | Self::AuthoredScopeMismatch
+            | Self::ContainerEcho
+            | Self::LiteralBound => false,
             Self::NotRequired => true,
             Self::ExactFrontier { floor } => EXACT_CONTENT_AGREEMENT >= *floor,
             Self::Measured {
@@ -51,6 +57,7 @@ impl GateVerdict {
             Self::RoleMismatch => "role_mismatch",
             Self::AuthoredScopeMismatch => "authored_scope_mismatch",
             Self::ContainerEcho => "container_echo",
+            Self::LiteralBound => "literal_bound",
             Self::NotRequired => "not_required",
             Self::ExactFrontier { .. } => "exact_frontier",
             Self::Measured { .. } => "measured",

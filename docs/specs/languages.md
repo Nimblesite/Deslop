@@ -54,7 +54,7 @@ Implemented by `lang/typescript.rs` and `lang/ecmascript.rs` in `deslop-core`; e
 
 ## [LANG-CAND-RUST] Rust
 
-**[LANG-CAND-RUST-STRING-PARTS]** A Rust string's `string_content` and `escape_sequence` parts collapse to `__literal__`, as C's do ([LANG-CAND-C]). Left as structural kinds, a long usage message and an unrelated embedded test program — sharing nothing but runs of `\n` and `\"` — formed matching 44-node subtrees with no literal leaves, so [FUSED-CONTENT-GATE] had no content to compare and admitted them as Similar code (Osprey, gh #626). As literal leaves they are content evidence: unrelated strings are rejected and a byte-identical copy is still reported. Implemented by `crates/deslop-core/src/lang/rust_lang.rs`; pinned by `crates/deslop/tests/rust_escaped_string_literals.rs`.
+**[LANG-CAND-RUST-STRING-PARTS]** A Rust string collapses to `__literal__`; its `string_content` and `escape_sequence` parts stay structural kinds beneath it. Collapsing the parts too raised token overlap on every string-bearing pair and dropped two judged Serde token-run clones (gh #640), so the parts are left alone and unrelated escape-heavy strings are refused by [FUSED-CONTENT-GATE-LITERAL-BOUND] instead (Osprey, gh #626). Implemented by `crates/deslop-core/src/lang/rust_lang.rs`; pinned by `crates/deslop/tests/rust_escaped_string_literals.rs`, which holds the Serde token runs at their exact members and ranks.
 
 ## [LANG-CAND-KOTLIN] Kotlin is not registered
 

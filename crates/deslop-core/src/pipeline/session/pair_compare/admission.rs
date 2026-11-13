@@ -118,6 +118,9 @@ impl AdmissionFacts {
                 "rejected: cross-language comparison is not enabled"
             }
             Some(AdmissionFailure::Size) => "rejected: endpoint sizes are incoherent",
+            Some(AdmissionFailure::LiteralBound) => {
+                "rejected: one string literal carries an endpoint and the texts differ"
+            }
             Some(AdmissionFailure::Lsh) => "rejected: pair fails the LSH-only guards",
             Some(AdmissionFailure::Score) => {
                 "rejected: pair clears neither its threshold nor rescue"
@@ -134,6 +137,9 @@ enum AdmissionFailure {
     Language,
     /// Endpoint sizes are incoherent.
     Size,
+    /// One literal carries an endpoint and the texts differ
+    /// ([FUSED-CONTENT-GATE-LITERAL-BOUND]).
+    LiteralBound,
     /// LSH-only evidence misses its floors.
     Lsh,
     /// Neither the ordinary threshold nor rescue passed.
@@ -174,6 +180,7 @@ impl PairPolicy {
                 size_is_coherent(pair, measured.merkle_equal),
                 AdmissionFailure::Size,
             ),
+            (!measured.literal_bound, AdmissionFailure::LiteralBound),
             (
                 lsh_guard(pair, measured, rescue, explicit_cross_language),
                 AdmissionFailure::Lsh,
@@ -196,7 +203,7 @@ impl PairPolicy {
 }
 
 /// First failed non-content admission predicate in specification order.
-fn first_policy_failure(results: [(bool, AdmissionFailure); 4]) -> Option<AdmissionFailure> {
+fn first_policy_failure(results: [(bool, AdmissionFailure); 5]) -> Option<AdmissionFailure> {
     results
         .into_iter()
         .find_map(|(passed, failure)| (!passed).then_some(failure))

@@ -7,6 +7,7 @@ mod cache;
 mod call_targets;
 mod core_frontier;
 mod frontier;
+pub(crate) mod literal_bound;
 mod rename;
 
 pub(crate) use cache::{ContentMeasurer, ContentPair};
