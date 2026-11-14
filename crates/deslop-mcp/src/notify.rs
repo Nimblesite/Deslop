@@ -83,19 +83,25 @@ pub(crate) fn push_report_changed(sender: &NotificationSender, generation: u64) 
         return;
     };
     if output.report_subscribed {
-        let resources_updated = json!({
-            "jsonrpc": JSONRPC_VERSION,
-            "method": METHOD_RESOURCES_UPDATED,
-            "params": { "uri": REPORT_URI }
-        });
-        write_frame(&mut *output.writer, &resources_updated);
+        write_notification(
+            &mut *output.writer,
+            METHOD_RESOURCES_UPDATED,
+            &json!({ "uri": REPORT_URI }),
+        );
     }
-    let report_changed = json!({
-        "jsonrpc": JSONRPC_VERSION,
-        "method": METHOD_REPORT_CHANGED,
-        "params": { "generation": generation }
-    });
-    write_frame(&mut *output.writer, &report_changed);
+    write_notification(
+        &mut *output.writer,
+        METHOD_REPORT_CHANGED,
+        &json!({ "generation": generation }),
+    );
+}
+
+/// Writes one JSON-RPC notification frame.
+fn write_notification(writer: &mut dyn Write, method: &str, params: &Value) {
+    write_frame(
+        writer,
+        &json!({ "jsonrpc": JSONRPC_VERSION, "method": method, "params": params }),
+    );
 }
 
 /// Serialises `value` as a newline-terminated JSON frame and flushes `writer`.

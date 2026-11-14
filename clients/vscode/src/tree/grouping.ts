@@ -143,6 +143,17 @@ function kindSections(
   })).filter(({ list }) => list.length > 0);
 }
 
+/** One registered category node per non-empty category, display order. */
+function kindGroupNodes(
+  clusters: ReportCluster[],
+  order: (list: ReportCluster[]) => ReportCluster[],
+  showFileInChildren: boolean,
+  totalIncludes?: readonly ClusterKind[],
+): Node[] {
+  return kindSections(clusters, order, totalIncludes).map(({ kind, list }) =>
+    registerGroup(new KindGroupNode(kind, list, showFileInChildren, !kindCountsTowardTotal(kind, totalIncludes)), list));
+}
+
 // File categories share the same category display order as category roots.
 export function getFileNodeChildren(
   file: FileNode,
@@ -150,10 +161,7 @@ export function getFileNodeChildren(
 ): Node[] {
   const clusters = fileNodeClusters.get(file);
   if (!clusters) return [];
-  return kindSections(clusters, (list) => list.slice().sort(byRank), totalIncludes).map(({ kind, list }) => {
-    const excluded = !kindCountsTowardTotal(kind, totalIncludes);
-    return registerGroup(new KindGroupNode(kind, list, false, excluded), list);
-  });
+  return kindGroupNodes(clusters, (list) => list.slice().sort(byRank), false, totalIncludes);
 }
 
 // Per-GroupNode side table — one machinery for BOTH group axes
@@ -184,10 +192,7 @@ export function buildKindMode(
   clusters: ReportCluster[],
   totalIncludes?: readonly ClusterKind[],
 ): Node[] {
-  return kindSections(clusters, (list) => list, totalIncludes).map(({ kind, list }) => {
-    const excluded = !kindCountsTowardTotal(kind, totalIncludes);
-    return registerGroup(new KindGroupNode(kind, list, true, excluded), list);
-  });
+  return kindGroupNodes(clusters, (list) => list, true, totalIncludes);
 }
 
 // [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Language is a grouping choice, not a second axis.

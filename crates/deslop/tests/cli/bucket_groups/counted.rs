@@ -9,10 +9,7 @@
 use anyhow::Context;
 
 use super::*;
-use crate::{
-    cli::total_include::{seed_three_relation_corpus, TOTAL_INCLUDE_MIN_NODES},
-    common::LOOSELY_SIMILAR_TITLE,
-};
+use crate::{cli::total_include::scan_three_relation_corpus, common::LOOSELY_SIMILAR_TITLE};
 
 /// Only Similar code counts: the reverse of the default include set.
 const SIMILAR_ONLY_INCLUDE: &str = "[total]\ninclude = [\"loosely_similar\"]\n";
@@ -43,15 +40,7 @@ fn position(html: &str, needle: &str) -> Result<usize> {
 /// and first; the two stronger kinds are marked, collapsed and after it.
 #[test]
 fn groups_the_total_counts_lead_and_the_rest_are_marked_and_collapsed() -> Result<()> {
-    let (tmp, scan_root) = temp_scan_dir("src")?;
-    seed_three_relation_corpus(&scan_root)?;
-    fs::write(scan_root.join(".deslop.toml"), SIMILAR_ONLY_INCLUDE)?;
-    let out = outputs_under(tmp.path());
-    run_scan(
-        &scan_root,
-        &tmp.path().join(REPORT_OUTPUT_STEM),
-        &[MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES],
-    )?;
+    let (_tmp, out) = scan_three_relation_corpus(Some(SIMILAR_ONLY_INCLUDE))?;
     let html = fs::read_to_string(&out.html)?;
     let similar = position(
         &html,

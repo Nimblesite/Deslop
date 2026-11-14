@@ -4,10 +4,11 @@ use std::{fs, path::Path};
 
 use anyhow::Result;
 use serde_json::Value;
+use tempfile::TempDir;
 
 use super::support::{
     assert_contains, deslop_command, outputs_under, read_json_report, run_scan, temp_scan_dir,
-    MIN_NODES_FLAG, NO_COLOR_FLAG, REPORT_OUTPUT_STEM,
+    RunOutputs, MIN_NODES_FLAG, NO_COLOR_FLAG, REPORT_OUTPUT_STEM,
 };
 use crate::common::{field, metric_field};
 
@@ -165,6 +166,23 @@ const IDENTICAL_KIND_PERCENT: f64 = 16.0;
 /// cluster — no intra-file fragments join the report.
 pub(crate) const TOTAL_INCLUDE_MIN_NODES: &str = "30";
 
+/// Seeds the three-relation corpus, writes `config` as its `.deslop.toml`
+/// when given, and scans it; the temp dir must outlive the outputs.
+pub(crate) fn scan_three_relation_corpus(config: Option<&str>) -> Result<(TempDir, RunOutputs)> {
+    let (tmp, scan_root) = temp_scan_dir("src")?;
+    seed_three_relation_corpus(&scan_root)?;
+    if let Some(body) = config {
+        fs::write(scan_root.join(".deslop.toml"), body)?;
+    }
+    let out = outputs_under(tmp.path());
+    run_scan(
+        &scan_root,
+        &tmp.path().join(REPORT_OUTPUT_STEM),
+        &[MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES],
+    )?;
+    Ok((tmp, out))
+}
+
 /// Seeds the three-relation corpus into a scan root. `pub(crate)` so
 /// the per-kind threshold suites in `cli::thresholds` drive the same
 /// corpus — one fixture, many gates.
@@ -183,14 +201,7 @@ pub(crate) fn seed_three_relation_corpus(scan_root: &Path) -> Result<()> {
 /// Seeds the three-relation corpus into a fresh scan root and returns
 /// its parsed JSON report.
 fn run_total_include_corpus() -> Result<Value> {
-    let (tmp, scan_root) = temp_scan_dir("src")?;
-    seed_three_relation_corpus(&scan_root)?;
-    let out = outputs_under(tmp.path());
-    run_scan(
-        &scan_root,
-        &tmp.path().join(REPORT_OUTPUT_STEM),
-        &[MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES],
-    )?;
+    let (_tmp, out) = scan_three_relation_corpus(None)?;
     read_json_report(&out.json)
 }
 
@@ -381,15 +392,7 @@ fn assert_default_total_per_file(json: &Value) {
 #[test]
 fn include_all_kinds_reproduces_the_all_clones_total() -> Result<()> {
     const ALL_KINDS_INCLUDE: &str = "[total]\ninclude = [\"identical\", \"nearly_identical\", \"loosely_similar\", \"same_behavior\"]\n";
-    let (tmp, scan_root) = temp_scan_dir("src")?;
-    seed_three_relation_corpus(&scan_root)?;
-    fs::write(scan_root.join(".deslop.toml"), ALL_KINDS_INCLUDE)?;
-    let out = outputs_under(tmp.path());
-    run_scan(
-        &scan_root,
-        &tmp.path().join(REPORT_OUTPUT_STEM),
-        &[MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES],
-    )?;
+    let (_tmp, out) = scan_three_relation_corpus(Some(ALL_KINDS_INCLUDE))?;
     let json = read_json_report(&out.json)?;
     assert_eq!(
         metric_field(&json, "duplicated_loc").as_u64(),
@@ -455,14 +458,7 @@ fn report_text_and_html_mark_the_include_set_and_excluded_kinds() -> Result<()> 
     const EXCLUDED_CLASS: &str = "clone-group--excluded";
     const EXCLUDED_MARKER: &str = " — not counted in total";
     const INCLUDED_MARKER: &str = "Identical code — 1 group(s)";
-    let (tmp, scan_root) = temp_scan_dir("src")?;
-    seed_three_relation_corpus(&scan_root)?;
-    let out = outputs_under(tmp.path());
-    run_scan(
-        &scan_root,
-        &tmp.path().join(REPORT_OUTPUT_STEM),
-        &[MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES],
-    )?;
+    let (_tmp, out) = scan_three_relation_corpus(None)?;
     let text = fs::read_to_string(&out.txt)?;
     assert_contains(
         &text,
