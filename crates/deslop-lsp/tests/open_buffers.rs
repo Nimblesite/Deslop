@@ -30,6 +30,8 @@ use crate::common::{
 mod deletion;
 #[path = "open_buffers/embedding.rs"]
 mod embedding;
+#[path = "open_buffers/analysed_versions.rs"]
+mod analysed_versions;
 
 /// The two-file C# workspace whose one clone spans both files.
 const FIXTURE: &str = "csharp-small";

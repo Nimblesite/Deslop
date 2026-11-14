@@ -323,7 +323,8 @@ export const CORE_TYPE_CONFIG = {
   ReportDelta: {
     docs: "Diff between two report generations.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
-    fieldSerdeAttrs: { routing: ["default"] },
+    fieldSerdeAttrs: { routing: ["default"], analysed_buffers: ["default", 'skip_serializing_if = "Option::is_none"'] },
+    tsOptional: ["analysed_buffers"],
     fieldOverrides: {
       from_generation: "u64",
       to_generation: "u64",
@@ -341,6 +342,7 @@ export const CORE_TYPE_CONFIG = {
       metrics: "Repo-wide duplication totals recomputed for the later generation, so live consumers refresh the headline instead of freezing at the seed (#199).",
       cache_stats: "Cache telemetry for the generation-producing run.",
       tool_version: "Producer version stamped on the later snapshot.",
+      analysed_buffers: "[LIVE-OPEN-BUFFERS] The editor version of each open buffer the `to` report analysed.",
     },
   },
   CacheStats: {

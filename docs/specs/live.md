@@ -338,7 +338,7 @@ Open, edit, and close operations validate the resolved path against the pinned w
 
 ### [LIVE-OPEN-BUFFERS] Open editor buffers shadow the file on disk
 
-Editor-driven report notifications identify the analysed path and LSP document version using the generated `AnalysedBuffer` wire model. They are emitted even when the analysis leaves clone membership unchanged, so the VSIX can release its stale-offset guard without waiting for save ([VSIX-STATE-DIRTY]).
+Editor-driven report notifications identify the analysed path and LSP document version using the generated `AnalysedBuffer` wire model, and every live report answer (`deslop/reportGet`, `deslop/reportDelta`) carries the same models in `analysed_buffers`: the version of each open buffer that report analysed, read under the lock that produced it. CLI and MCP reports omit the field. They are emitted even when the analysis leaves clone membership unchanged, so the VSIX can release its stale-offset guard without waiting for save ([VSIX-STATE-DIRTY]).
 What the editor shows is what gets analysed. From the moment an editor opens a file until it closes it, the session analyses that file from the editor's text, not from the bytes on disk. Every edit the editor reports is applied to that text and re-analysed at once, so a clone the user deletes in an unsaved buffer leaves the report, the diagnostics, the code lenses, the live bubble and every `report/forRange` answer before the file is saved. Restoring the text brings the clone back. Closing the buffer without saving makes the disk the truth again and the report returns to what the saved bytes say.
 
 The rules:

@@ -52,11 +52,6 @@ impl LspBackend {
 
     /// Runs `change` against the locked session and pushes the resulting
     /// report delta to the editor.
-    ///
-    /// [LIVE-OPEN-BUFFERS] The notification is queued while the session lock
-    /// is still held, so no `deslop/reportGet` or `deslop/reportDelta` answer
-    /// can describe the new generation before the editor has been told which
-    /// buffer version that generation analysed.
     pub(super) async fn apply_session_change(
         &self,
         change: impl SessionChange,

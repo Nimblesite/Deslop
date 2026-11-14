@@ -269,6 +269,7 @@ impl AnalysisSession {
             analysed_buffers: Arc::default(),
             buffers: OpenBuffers::default(),
             deferred_acknowledgements: BTreeMap::new(),
+            analysed_versions: BTreeMap::new(),
         }
     }
 }

@@ -107,10 +107,6 @@ export async function refreshAfterChange(
   // accepted by the rollback guard and then lock out the new session's
   // generation 1.
   const epoch = store.current.sessionEpoch;
-  // [LIVE-OPEN-BUFFERS] Noted before any await: an earlier notification's
-  // refresh may fetch the report that analysed this buffer, and must
-  // acknowledge it as that report lands.
-  store.noteAnalysedBuffer(payload.generation, payload.analysed_buffer);
   // Pull the delta spanning the store's own baseline (#230). Without a
   // `since_generation` the server defaults to `current - 1`, which only spans
   // one generation — so a client that missed a `reportChanged` (lagged

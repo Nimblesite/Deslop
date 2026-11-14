@@ -86,6 +86,7 @@ fn report_with_cluster(path: &Path, spans: OccurrenceSpans) -> Report {
         literal_findings_hidden: 0,
         literal_findings_capped: false,
         literal_max_findings: 0,
+        analysed_buffers: None,
     }
 }
 
