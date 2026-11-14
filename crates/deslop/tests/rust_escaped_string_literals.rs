@@ -54,6 +54,15 @@ const TAGGED_ENUM_RUNS: [TokenRun; 4] = [
     ("test_enum_internally_tagged.rs", 44, 77),
     ("test_enum_internally_tagged.rs", 122, 155),
 ];
+/// [PIPELINE-CLUSTER-SUBSUME] The `Token::Seq` run each of two same-file
+/// tests repeats twice: the test pair holding them does not report the
+/// copy inside one test, so the block family stands beside it.
+const REPEATED_SEQ_RUNS: [TokenRun; 4] = [
+    ("test_annotations.rs", 94, 98),
+    ("test_annotations.rs", 113, 117),
+    ("test_annotations.rs", 135, 139),
+    ("test_annotations.rs", 154, 158),
+];
 const FLATTENED_ENUM_RUNS: [TokenRun; 3] = [
     ("issue2565.rs", 37, 46),
     ("test_annotations.rs", 34, 45),
@@ -176,18 +185,40 @@ fn a_copied_string_is_reported_without_the_unrelated_ones() -> Result<()> {
 #[test]
 fn serde_token_runs_keep_their_clone_membership_and_rank() -> Result<()> {
     const TAGGED_RANK: u64 = 1;
-    const FLATTENED_RANK: u64 = 8;
+    const REPEATED_SEQ_RANK: u64 = 7;
+    const FLATTENED_RANK: u64 = 9;
     let (_tmp, root) = seeded_fixture_root(SERDE_TOKEN_RUNS)?;
     let report = run_report(&root, MIN_NODES)?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
         Some(FIXTURE_FILES)
     );
-    assert_token_run_cluster(&report, &TAGGED_ENUM_RUNS, TAGGED_RANK)?;
-    assert_token_run_cluster(&report, &FLATTENED_ENUM_RUNS, FLATTENED_RANK)
+    assert_token_run_cluster(
+        &report,
+        &TAGGED_ENUM_RUNS,
+        TAGGED_RANK,
+        LOOSELY_SIMILAR_KIND,
+    )?;
+    assert_token_run_cluster(
+        &report,
+        &REPEATED_SEQ_RUNS,
+        REPEATED_SEQ_RANK,
+        NEARLY_IDENTICAL_KIND,
+    )?;
+    assert_token_run_cluster(
+        &report,
+        &FLATTENED_ENUM_RUNS,
+        FLATTENED_RANK,
+        LOOSELY_SIMILAR_KIND,
+    )
 }
 
-fn assert_token_run_cluster(report: &Value, expected: &[TokenRun], rank: u64) -> Result<()> {
+fn assert_token_run_cluster(
+    report: &Value,
+    expected: &[TokenRun],
+    rank: u64,
+    kind: &str,
+) -> Result<()> {
     let cluster = clusters(report)
         .iter()
         .find(|cluster| expected.iter().all(|run| contains_token_run(cluster, *run)))
@@ -197,7 +228,7 @@ fn assert_token_run_cluster(report: &Value, expected: &[TokenRun], rank: u64) ->
         field(cluster, "occurrence_count").as_u64(),
         Some(expected.len() as u64)
     );
-    assert_eq!(cluster_kind(cluster), LOOSELY_SIMILAR_KIND);
+    assert_eq!(cluster_kind(cluster), kind);
     assert_eq!(field(cluster, "rank").as_u64(), Some(rank));
     Ok(())
 }

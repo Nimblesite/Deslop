@@ -15,6 +15,9 @@ const DISTINCT_VIEWS: usize = 2;
 const WIDE_FILES: [&str; 2] = ["alpha.rs", "beta.rs"];
 const WIDE_SPAN: (usize, usize) = (0, 100);
 const TWO_FUNCTIONS: [(usize, usize); 2] = [(10, 40), (50, 90)];
+/// Two tests in one file, each repeating one block twice (vite HMR).
+const SAME_FILE_TESTS: [(usize, usize); 2] = [(0, 100), (120, 220)];
+const REPEATED_BLOCKS: [(usize, usize); 4] = [(10, 40), (50, 90), (130, 160), (170, 210)];
 
 fn published_same_file(first: &[(usize, usize)], second: &[(usize, usize)]) -> Vec<Cluster> {
     let mut registry = FileRegistry::new();
@@ -59,6 +62,21 @@ fn a_window_holding_two_copies_in_every_file_absorbs_them() {
     let clusters = published_across(&[wide, narrow]);
     assert_eq!(clusters.len(), 1);
     assert_eq!(spans(&clusters), vec![vec![WIDE_SPAN; WIDE_FILES.len()]]);
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME] Two windows in one file that each hold two
+/// copies do not absorb them: the window pair does not report the copy
+/// repeated inside one window, which the corpus register judges CLEARLY
+/// IN (vite `hmr.spec.ts`, blocks repeated inside each of two tests).
+#[test]
+fn two_same_file_windows_each_holding_two_copies_keep_them() {
+    let clusters = published_same_file(&SAME_FILE_TESTS, &REPEATED_BLOCKS);
+    assert_eq!(clusters.len(), DISTINCT_VIEWS);
+    let mut published = spans(&clusters);
+    published.sort();
+    let mut expected = vec![SAME_FILE_TESTS.to_vec(), REPEATED_BLOCKS.to_vec()];
+    expected.sort();
+    assert_eq!(published, expected);
 }
 
 /// [PIPELINE-CLUSTER-SUBSUME] Reordered nested copies are still one finding.
