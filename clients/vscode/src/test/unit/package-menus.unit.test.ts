@@ -25,6 +25,9 @@ const CHOOSE_GROUPING_COMMAND = "deslop.topOffenders.chooseGrouping";
 const TOP_OFFENDERS_VIEW = "view == deslop.topOffenders";
 const GROUPING_SLOT = "navigation@1";
 
+/** Settings under this prefix fed the retired `[ranking]` policy. */
+const RETIRED_RANKING_SETTING_PREFIX = "deslop.ranking.";
+
 suite("package menu contributions", () => {
   test("one grouping picker replaces the sort and language toolbar controls", () => {
     // [VSIX-TOP-OFFENDERS-GROUPING] / [VSIX-TOP-OFFENDERS-SORT]
@@ -182,6 +185,12 @@ suite("package menu contributions", () => {
     assert.equal(titleItems[0]?.when, TOP_OFFENDERS_VIEW);
     assert.equal(commandTitle(pkg, "deslop.topOffenders.showByLanguage"), "Deslop: Group Top Offenders by Language");
     assert.deepEqual(pkg.contributes.configuration.properties["deslop.topOffenders.groupBy"]?.enum, ["cluster", "file", "folder", "kind", "language"]);
+    // [RANK-MASS-SUM] No setting reweights or hides a category: the retired
+    // shape-only ranking preference must not be offered.
+    assert.deepEqual(
+      Object.keys(pkg.contributes.configuration.properties).filter((key) => key.startsWith(RETIRED_RANKING_SETTING_PREFIX)),
+      [],
+    );
     assert.equal(
       commandTitle(pkg, "deslop.topOffenders.showByKind"),
       "Deslop: Group Top Offenders by Clone Category",

@@ -210,20 +210,51 @@ fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
     finish_after_tools_list(child)
 }
 
-/// [MCP-NOTIFICATIONS] After `notifications/deslop/filesChanged` the
-/// server must push `notifications/resources/updated` and
-/// `notifications/deslop/reportChanged` before waiting for the next
-/// client frame.
+/// [MCP-RESOURCES-SUBSCRIPTIONS] Only subscribers receive standard updates.
 #[test]
-fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> Result<()> {
+fn report_edits_send_standard_updates_only_while_subscribed() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
-
-    // Modify a file, regenerate the state file, then notify the server.
+    let init = child.initialize("resource-subscription-test")?;
+    assert_eq!(
+        init.pointer("/result/capabilities/resources/subscribe"),
+        Some(&json!(true))
+    );
+    let params = json!({ "uri": REPORT_URI });
+    assert_subscription_response(&mut child, "resources/subscribe", &params)?;
     mutate_two_and_notify(&mut child, temp.path())?;
+    assert_resource_updated(&child.read_frame()?);
+    assert_report_changed(&child.read_frame()?);
 
-    // Server pushes two notification frames synchronously before it
-    // returns to its read loop — read them both right away.
-    let frame1 = child.read_frame()?;
+    assert_subscription_response(&mut child, "resources/unsubscribe", &params)?;
+    let source = temp.path().join(SECOND_FILE_NAME);
+    std::fs::write(&source, include_str!("../fixtures/csharp-mcp/Beta.cs"))?;
+    child.notify(
+        "notifications/deslop/filesChanged",
+        &json!({ (PATHS_FIELD): [source] }),
+    )?;
+    assert_report_changed(&child.read_frame()?);
+    finish_after_tools_list(child)
+}
+
+#[test]
+fn report_edits_send_only_custom_updates_before_subscribing() -> Result<()> {
+    let (temp, mut child) = two_file_workspace_with_state()?;
+    mutate_two_and_notify(&mut child, temp.path())?;
+    assert_report_changed(&child.read_frame()?);
+    finish_after_tools_list(child)
+}
+
+fn assert_subscription_response(child: &mut McpChild, method: &str, params: &Value) -> Result<()> {
+    let response = child.request(method, params)?;
+    assert_eq!(
+        response.get("result"),
+        Some(&json!({})),
+        "{method}: {response}"
+    );
+    Ok(())
+}
+
+fn assert_resource_updated(frame1: &Value) {
     assert_eq!(
         frame1.get(METHOD_FIELD).and_then(Value::as_str),
         Some("notifications/resources/updated"),
@@ -238,12 +269,13 @@ fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> 
         Some(REPORT_URI),
         "resources/updated must name deslop://report: {frame1}"
     );
+}
 
-    let frame2 = child.read_frame()?;
+fn assert_report_changed(frame2: &Value) {
     assert_eq!(
         frame2.get(METHOD_FIELD).and_then(Value::as_str),
         Some("notifications/deslop/reportChanged"),
-        "second pushed frame must be deslop/reportChanged: {frame2}"
+        "expected a deslop/reportChanged notification: {frame2}"
     );
     assert!(
         frame2.get(ID_FIELD).is_none(),
@@ -256,7 +288,4 @@ fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> 
             .is_some(),
         "reportChanged must include a numeric generation: {frame2}"
     );
-
-    // Server stays alive and responsive after pushing notifications.
-    finish_after_tools_list(child)
 }

@@ -26,10 +26,6 @@ export function buildServerArgs(
   if (!workspaceRoot) return debug ? ["--debug"] : [];
   const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const args = [workspaceRoot, ...processArguments(cfg)];
-  // [RANK-STRUCTURAL-ONLY] Only an explicit editor preference overrides TOML.
-  const preference = cfg.inspect<string>("ranking.structuralOnly");
-  const structuralOnly = preference?.workspaceFolderValue ?? preference?.workspaceValue ?? preference?.globalValue;
-  if (structuralOnly && ["demote", "ignore", "keep"].includes(structuralOnly)) args.push("--ranking-structural-only", structuralOnly);
   if (debug) args.push("--debug");
   return args;
 }

@@ -72,6 +72,7 @@ impl ReportDelta {
             routing: next.routing,
             cache_stats: next.cache_stats,
             tool_version: next.tool_version.clone(),
+            analysed_buffers: None,
         }
     }
 

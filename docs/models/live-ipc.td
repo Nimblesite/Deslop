@@ -375,6 +375,9 @@ type Report {
   literal_findings_hidden: Int
   literal_findings_capped: Bool
   literal_max_findings: Int
+  # [LIVE-OPEN-BUFFERS] Live answers only: the editor version of each open
+  # buffer this report analysed, read under the lock that produced it.
+  analysed_buffers: Option<List<AnalysedBuffer>>
 }
 
 type ReportDelta {
@@ -390,6 +393,9 @@ type ReportDelta {
   routing: RoutingTuning
   cache_stats: CacheStats
   tool_version: String
+  # [LIVE-OPEN-BUFFERS] The editor version of each open buffer the
+  # `to_generation` report analysed.
+  analysed_buffers: Option<List<AnalysedBuffer>>
 }
 
 # ---------------------------------------------------------------------------

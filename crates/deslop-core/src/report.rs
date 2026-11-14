@@ -234,6 +234,7 @@ pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Repo
         literal_findings_hidden: 0,
         literal_findings_capped: false,
         literal_max_findings: UNLIMITED_LITERAL_FINDINGS,
+        analysed_buffers: None,
     }
 }
 

@@ -9,7 +9,7 @@ pub(crate) mod merge;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    fmt, fs,
+    fmt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -64,7 +64,7 @@ pub(crate) fn occurrences_with_component(report: &Report, component: &str) -> us
 pub(crate) fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
     let src = fixture(name);
     let dir = tempfile::tempdir().context("tempdir")?;
-    copy_recursive(&src, dir.path())?;
+    deslop_test_support::copy_tree(&src, dir.path())?;
     Ok(dir)
 }
 
@@ -95,21 +95,6 @@ pub(crate) fn live_session_at(
     let provider = Arc::new(deslop_core::embedding::test_support::StubProvider::new());
     deslop_core::live::AnalysisSession::new(root.to_path_buf(), min_nodes, false, None, provider)
         .context("session")
-}
-
-/// Recursively copies `src` into `dst`, creating directories as needed.
-pub(crate) fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
-    if src.is_dir() {
-        fs::create_dir_all(dst).with_context(|| format!("mkdir {}", dst.display()))?;
-        for entry in fs::read_dir(src).with_context(|| format!("read_dir {}", src.display()))? {
-            let entry = entry.context("dir entry")?;
-            let target = dst.join(entry.file_name());
-            copy_recursive(&entry.path(), &target)?;
-        }
-    } else {
-        let _bytes = fs::copy(src, dst).with_context(|| format!("copy {}", src.display()))?;
-    }
-    Ok(())
 }
 
 /// Thread-safe accumulator of `tracing` events captured during a pipeline run.

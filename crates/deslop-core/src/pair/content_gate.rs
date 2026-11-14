@@ -17,8 +17,10 @@ use crate::{
 };
 
 mod authored_scope;
+mod literal_bound;
 mod verdict;
 use authored_scope::AuthoredScopeMemo;
+use literal_bound::LiteralBoundMemo;
 use verdict::GateVerdict;
 
 /// Fewest candidate edges per worker worth sharding the gate for
@@ -129,6 +131,8 @@ pub(crate) struct PairGate<'a, L: BuildHasher> {
     shared: &'a GateShared<'a, L>,
     /// Cached authored-declaration roles for the one-vs-many guard.
     authored_scope: AuthoredScopeMemo,
+    /// Cached heaviest literals ([FUSED-CONTENT-GATE-LITERAL-BOUND]).
+    literal_bound: LiteralBoundMemo,
     /// Exact-fingerprint frontier reuse across this gate's verdicts.
     content: ContentMeasurer,
 }
@@ -139,6 +143,7 @@ impl<'a, L: BuildHasher> PairGate<'a, L> {
         Self {
             shared,
             authored_scope: AuthoredScopeMemo::new(fingerprint_count),
+            literal_bound: LiteralBoundMemo::new(fingerprint_count),
             content: ContentMeasurer::default(),
         }
     }
@@ -194,6 +199,9 @@ fn gate_verdict<L: BuildHasher>(
             .wraps_within(left, right, SHARED_SUBTREE_MIN_NODE_COUNT)
     {
         return GateVerdict::ContainerEcho;
+    }
+    if gate.literal_bound.refuses(pair, left, right, gate.shared) {
+        return GateVerdict::LiteralBound;
     }
     if !content_is_required(pair, left, right) {
         return GateVerdict::NotRequired;

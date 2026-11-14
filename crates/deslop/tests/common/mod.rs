@@ -103,6 +103,9 @@ pub(crate) mod corpora;
 /// One [CLONE-NOISE-POLYMORPHIC-SIGNATURE] scan proving a contract
 /// pair stays hidden while a rename clone beside it still surfaces.
 pub(crate) mod contract_boundary;
+/// Judged string-heavy corpus pairs scored through the corpus gate's
+/// scorer ([FUSED-CONTENT-GATE-LITERAL-BOUND]).
+pub(crate) mod judged_pairs;
 pub(crate) mod verbatim_subgroup;
 
 use std::{

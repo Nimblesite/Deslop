@@ -171,6 +171,7 @@ fn report(
         literal_findings_hidden: 0,
         literal_findings_capped: false,
         literal_max_findings: 0,
+        analysed_buffers: None,
     }
 }
 

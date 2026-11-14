@@ -69,9 +69,14 @@ impl AdmissionFacts {
                     measured.core.has_async_edit(),
                     &measured.content,
                 ));
+        // [FUSED-CONTENT-GATE-LITERAL-BOUND] The last guard: it refuses
+        // what every other guard would admit.
         let failure = policy
             .failure
-            .or((!content_ok).then_some(AdmissionFailure::Content));
+            .or((!content_ok).then_some(AdmissionFailure::Content))
+            .or(measured
+                .literal_bound
+                .then_some(AdmissionFailure::LiteralBound));
         Self {
             content_required,
             content_ok,
@@ -118,6 +123,9 @@ impl AdmissionFacts {
                 "rejected: cross-language comparison is not enabled"
             }
             Some(AdmissionFailure::Size) => "rejected: endpoint sizes are incoherent",
+            Some(AdmissionFailure::LiteralBound) => {
+                "rejected: one string literal carries an endpoint and the texts differ"
+            }
             Some(AdmissionFailure::Lsh) => "rejected: pair fails the LSH-only guards",
             Some(AdmissionFailure::Score) => {
                 "rejected: pair clears neither its threshold nor rescue"
@@ -134,6 +142,9 @@ enum AdmissionFailure {
     Language,
     /// Endpoint sizes are incoherent.
     Size,
+    /// One literal carries an endpoint and the texts differ
+    /// ([FUSED-CONTENT-GATE-LITERAL-BOUND]).
+    LiteralBound,
     /// LSH-only evidence misses its floors.
     Lsh,
     /// Neither the ordinary threshold nor rescue passed.

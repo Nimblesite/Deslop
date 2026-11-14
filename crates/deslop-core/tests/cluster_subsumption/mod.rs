@@ -256,9 +256,14 @@ fn one_duplication(left: &View, right: &View) -> bool {
     pairs_one_to_one(left, right) || holds_evenly(left, right) || holds_evenly(right, left)
 }
 
-/// Every `outer` occurrence holds the same number of `inner`
-/// occurrences, and each `inner` occurrence sits in exactly one of them.
+/// Every `outer` occurrence lies in a file of its own and holds the same
+/// number of `inner` occurrences, and each `inner` occurrence sits in
+/// exactly one of them.
 fn holds_evenly(outer: &View, inner: &View) -> bool {
+    let files: std::collections::BTreeSet<FileId> = outer.iter().map(|wide| wide.0).collect();
+    if files.len() != outer.len() {
+        return false;
+    }
     let held: Vec<usize> = outer
         .iter()
         .map(|wide| inner.iter().filter(|narrow| contains(wide, narrow)).count())

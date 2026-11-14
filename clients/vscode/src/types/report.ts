@@ -205,16 +205,40 @@ export function kindChip(kind: ClusterKind): string {
   return KIND_LABELS[kind].chip;
 }
 
-/** [METRICS-TOTAL-INCLUDE] True when a clone kind is excluded from the
- * server's include set. An absent set claims nothing — reports written
- * before the field existed keep every kind eligible. Shape-only is
- * never excluded: it was never a candidate ([CLONE-BUCKETS-STRUCTURAL-ONLY]). */
-export function isKindExcluded(
+/** [METRICS-TOTAL-COUNTED] The words every surface puts on a kind group
+ * whose lines are not in the headline figure. */
+export const NOT_COUNTED_MARKER = "not counted in total";
+
+/** [METRICS-TOTAL-COUNTED] True when a kind's lines are in the headline
+ * figure: a clone kind the server's include set names. Shape-only never
+ * counts ([CLONE-BUCKETS-STRUCTURAL-ONLY]). An absent set claims nothing —
+ * reports written before the field existed mark no kind. The one fact
+ * every group header, tooltip and filter reads. */
+export function kindCountsTowardTotal(
   kind: ClusterKind,
   totalIncludes: readonly ClusterKind[] | undefined,
 ): boolean {
-  if (totalIncludes === undefined) return false;
-  return kind !== "structural_only" && !totalIncludes.includes(kind);
+  if (totalIncludes === undefined) return true;
+  return kind !== "structural_only" && totalIncludes.includes(kind);
+}
+
+/** [VSIX-TOP-OFFENDERS-EXCLUDED] True when a clone kind is left out of the
+ * total: the kinds the editor keeps quiet. Shape-only has its own default. */
+export function isCloneKindLeftOut(
+  kind: ClusterKind,
+  totalIncludes: readonly ClusterKind[] | undefined,
+): boolean {
+  return kind !== "structural_only" && !kindCountsTowardTotal(kind, totalIncludes);
+}
+
+/** [METRICS-TOTAL-COUNTED] Every kind, the ones the total counts first,
+ * each run in the category display order. */
+export function kindsCountedFirst(
+  totalIncludes: readonly ClusterKind[] | undefined,
+): ClusterKind[] {
+  const counted = CLUSTER_KINDS.filter((kind) => kindCountsTowardTotal(kind, totalIncludes));
+  const rest = CLUSTER_KINDS.filter((kind) => !kindCountsTowardTotal(kind, totalIncludes));
+  return [...counted, ...rest];
 }
 
 /** [METRICS-TOTAL-INCLUDE] The kinds the headline counts, as one
@@ -238,7 +262,7 @@ export interface KindFilterOption {
 
 const ALL_CLONE_KINDS_LABEL = "All clone kinds";
 const NO_CLONE_KINDS_LABEL = "No clone kinds";
-const EXCLUDED_FILTER_MARKER = "(excluded from total)";
+const EXCLUDED_FILTER_MARKER = `(${NOT_COUNTED_MARKER})`;
 
 /** [FACET-REPORT-WEBVIEW] The kind axis's option list, shared by every
  * filter surface: All first, then the kinds in category display order,
@@ -250,7 +274,7 @@ export function kindFilterOptions(
   return [
     { label: ALL_CLONE_KINDS_LABEL, value: null, excluded: false },
     ...CLUSTER_KINDS.map((kind) => {
-      const excluded = isKindExcluded(kind, totalIncludes);
+      const excluded = !kindCountsTowardTotal(kind, totalIncludes);
       return {
         label: excluded ? `${kindTitle(kind)} ${EXCLUDED_FILTER_MARKER}` : kindTitle(kind),
         value: kind,

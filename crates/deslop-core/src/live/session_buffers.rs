@@ -49,24 +49,49 @@ impl AnalysisSession {
         self.apply_changes(&[path.to_path_buf()])
     }
 
-    /// The acknowledgement a buffer change has earned. In the seed window the
-    /// change is only queued, so the report still describes the older text:
-    /// the version is held back for [`Self::take_deferred_acknowledgements`].
+    /// The acknowledgement a buffer change has earned, recorded against the
+    /// report it produced. In the seed window the change is only queued, so
+    /// the report still describes the older text: the version is held back
+    /// for [`Self::take_deferred_acknowledgements`].
     pub fn acknowledgement(&mut self, buffer: AnalysedBuffer) -> Option<AnalysedBuffer> {
-        if !self.is_seed_only() {
-            return Some(buffer);
+        if self.is_seed_only() {
+            let _previous = self
+                .deferred_acknowledgements
+                .insert(buffer.path, buffer.version);
+            return None;
         }
         let _previous = self
-            .deferred_acknowledgements
-            .insert(buffer.path, buffer.version);
-        None
+            .analysed_versions
+            .insert(buffer.path.clone(), buffer.version);
+        Some(buffer)
     }
 
     /// Buffers whose seed-window edits the cold pass has now replayed.
     pub fn take_deferred_acknowledgements(&mut self) -> Vec<AnalysedBuffer> {
-        std::mem::take(&mut self.deferred_acknowledgements)
+        let replayed = std::mem::take(&mut self.deferred_acknowledgements);
+        self.analysed_versions.extend(
+            replayed
+                .iter()
+                .map(|(path, version)| (path.clone(), *version)),
+        );
+        replayed
             .into_iter()
             .map(|(path, version)| AnalysedBuffer { path, version })
+            .collect()
+    }
+
+    /// [LIVE-OPEN-BUFFERS] The editor version of each open buffer the
+    /// current report analysed. Read under the same lock as the report, so
+    /// a client can release exactly the versions the report it holds
+    /// describes.
+    #[must_use]
+    pub fn analysed_versions(&self) -> Vec<AnalysedBuffer> {
+        self.analysed_versions
+            .iter()
+            .map(|(path, version)| AnalysedBuffer {
+                path: path.clone(),
+                version: *version,
+            })
             .collect()
     }
 
@@ -81,6 +106,7 @@ impl AnalysisSession {
     pub fn close_buffer(&mut self, path: &Path) -> Result<ReportDelta, LiveError> {
         self.guard_path(path)?;
         let _was_open = self.buffers.close(path);
+        let _analysed = self.analysed_versions.remove(path);
         self.apply_changes(&[path.to_path_buf()])
     }
 }

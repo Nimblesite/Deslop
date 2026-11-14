@@ -35,7 +35,7 @@ deliveries and their catalog. SharpLsp's
 capture and automatic camera modules record the real packaged extension and
 Deslop commands. Shared Videos sound and delivery modules supply narration,
 score, captions and encoding. The installer rejects stale scripts or invalid
-media. MP4 files use Git LFS; production intermediates are never published.
+media. The finished MP4s, posters, captions and chapter tracks use Git LFS.
 Every film must stay re-renderable from its preserved inputs with the
 documented steps; delivered MP4s are never patched directly.
 
@@ -96,7 +96,7 @@ Directly after the hero, the English and Chinese homepages list every supported 
 
 `/python/` (and `/zh/python/`) is the page a Python developer lands on from an advertisement or a search for duplicate Python code. Its one job is a direct install: the primary button is the `vscode:extension/Nimblesite.deslop-live` link, which opens VS Code and installs the extension in one step, repeated at the foot of the page; the Marketplace page is the fallback for readers without VS Code.
 
-Everything it shows is real. The hero pairs two constructors copied verbatim from Click (`src/click/exceptions.py` at the registered corpus commit in `corpus/register/click.json`), the three example clones are clusters Deslop reports in Click's library code at that commit, and the film ([DOC-FILMS-PYTHON]) is unstaged footage of Deslop on that same checkout, cut only by the automatic camera and speed-up every documentation film uses. Copy lives once in `site/src/_data/pythonLanding.json`, rendered by `site/src/_includes/partials/python-landing.njk`; its FAQ also feeds `FAQPage` structured data. Motion is decorative and stops entirely under reduced-motion preferences. Verified by `site/tests/python-landing.spec.js`.
+Everything it shows is real. The hero carries the narrated Click film itself ([DOC-FILMS-PYTHON]), first on the page and never a mockup or retyped code; the clone cards show code copied verbatim from Click (`corpus/register/click.json` commit), Prism-highlighted as Python, the three example clones are clusters Deslop reports in Click's library code at that commit, and that film is unstaged footage of Deslop on that same checkout, cut only by the automatic camera and speed-up every documentation film uses. Copy lives once in `site/src/_data/pythonLanding.json`, rendered by `site/src/_includes/partials/python-landing.njk`; its FAQ also feeds `FAQPage` structured data. Motion is decorative and stops entirely under reduced-motion preferences. Verified by `site/tests/python-landing.spec.js`.
 
 ## [DOC-FILMS-PYTHON] Python film on a real repository
 

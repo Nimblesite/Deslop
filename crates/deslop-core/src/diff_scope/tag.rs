@@ -238,6 +238,7 @@ mod tests {
             literal_findings_hidden: 0,
             literal_findings_capped: false,
             literal_max_findings: 0,
+            analysed_buffers: None,
         };
         report.metrics.clusters_total = 2;
         apply_only_changed(&mut report);

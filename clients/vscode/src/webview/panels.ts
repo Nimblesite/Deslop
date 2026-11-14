@@ -12,6 +12,7 @@ import { logError, logWarn } from "../logging";
 import { ReportStore } from "../reportStore";
 import { anchorForClusterId, ClusterAnchor, clusterPanelFeed } from "../clusterSelection";
 import { PairEndpoint, Report, ReportOccurrence } from "../types/report";
+import { fileStartOccurrence, topOccurrenceInFile } from "../tree/rollup";
 
 /** The context every failed webview message is logged under. */
 export const HANDLE_MESSAGE_FAILED = "webview: handleMessage failed";
@@ -267,7 +268,7 @@ function buildHtml(
     </html>`;
 }
 
-export async function handleMessage(_store: ReportStore, message: unknown): Promise<void> {
+export async function handleMessage(store: ReportStore, message: unknown): Promise<void> {
   if (!message || typeof message !== "object") return;
   const m = message as { kind?: string } & Record<string, unknown>;
   switch (m.kind) {
@@ -279,6 +280,17 @@ export async function handleMessage(_store: ReportStore, message: unknown): Prom
     case "open/occurrence": {
       const occurrence = m["occurrence"] as ReportOccurrence | undefined;
       if (occurrence) await vscode.commands.executeCommand("deslop.openOccurrence", occurrence);
+      return;
+    }
+    case "open/file": {
+      // [VSIX-METRICS-REPORT-NAVIGATE] A Duplication panel file row opens
+      // the file at its highest-ranked duplicate, through the same
+      // command every occurrence link uses.
+      const filePath = m["path"];
+      if (typeof filePath !== "string" || filePath.length === 0) return;
+      const clusters = store.current.report?.clusters ?? [];
+      const occurrence = topOccurrenceInFile(clusters, filePath) ?? fileStartOccurrence(filePath);
+      await vscode.commands.executeCommand("deslop.openOccurrence", occurrence);
       return;
     }
     case "compare/canonical": {

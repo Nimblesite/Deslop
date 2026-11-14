@@ -14,8 +14,10 @@
 //! of the other in the same file. The same-file election removes
 //! overlapping members, so pairing in file-and-start order is exact. A
 //! coarser reading of the same duplication also qualifies: every
-//! occurrence of the wider view holds the same number of the other's
-//! occurrences, and each of those sits in exactly one of them. Four
+//! occurrence of the wider view lies in a file of its own and holds the
+//! same number of the other's occurrences, and each of those sits in
+//! exactly one of them. Two wider occurrences in one file are two places
+//! in it, and a copy repeated inside one is not reported by the pair. Four
 //! weaker predicates were each wrong in a different direction.
 //!
 //! Requiring the whole occurrence *set* to nest misses the *crossed* case, where the depth difference falls on opposite sides in each file: `ledger_c[0..1238] + ledger_a[0..1234]` and `ledger_c[0..1237] + ledger_a[0..1235]` are two views of one whole-file duplicate, yet neither set nests inside the other.

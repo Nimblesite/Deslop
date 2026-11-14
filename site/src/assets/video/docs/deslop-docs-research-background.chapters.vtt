@@ -1,13 +1,3 @@
-WEBVTT
-
-00:00.000 --> 00:14.318
-Start with two copies
-
-00:14.318 --> 00:28.224
-Change one copy
-
-00:28.224 --> 00:42.625
-See what now differs
-
-00:42.625 --> 00:59.005
-Decide what to share
+version https://git-lfs.github.com/spec/v1
+oid sha256:01378871975e88493cc414c11aec55fdf737aac6a3772a9c677530ea4a9d1331
+size 187

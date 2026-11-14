@@ -12,7 +12,7 @@ use deslop_core::{
     buckets::ClusterKind,
     live::FileReport,
     report::{ReportCluster, ReportOccurrence},
-    report_facts::kind_excluded_from_total,
+    report_facts::clone_kind_left_out_of_total,
 };
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
@@ -37,7 +37,7 @@ pub fn build_for_file(report: &FileReport, total_includes: &[ClusterKind]) -> Ve
     report
         .clusters
         .iter()
-        .filter(|cluster| !kind_excluded_from_total(cluster.kind, total_includes))
+        .filter(|cluster| !clone_kind_left_out_of_total(cluster.kind, total_includes))
         .flat_map(|cluster| lenses_for_cluster(cluster, &report.path))
         .collect()
 }

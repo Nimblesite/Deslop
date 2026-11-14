@@ -18,9 +18,11 @@ import { ClusterBadge } from "../components/ClusterBadge";
 import { LanguageBadge } from "../components/LanguageBadge";
 import {
   clusterSlug,
-  CLUSTER_KINDS,
   kindFilterOptions,
-  isKindExcluded,
+  isCloneKindLeftOut,
+  kindCountsTowardTotal,
+  kindsCountedFirst,
+  NOT_COUNTED_MARKER,
   kindTitle,
   isClone,
   INFORMATIONAL_FINDING,
@@ -138,17 +140,17 @@ function ReportApp() {
         </button>
       </section>
 
-      {CLUSTER_KINDS.map((kind) => {
+      {kindsCountedFirst(snapshot.metrics.total_includes).map((kind) => {
         const group = rows.filter((cluster) => cluster.kind === kind);
         if (group.length === 0) return null;
-        const excludedKind = isKindExcluded(kind, snapshot.metrics.total_includes);
+        const excludedKind = !kindCountsTowardTotal(kind, snapshot.metrics.total_includes);
         return <details key={kind} class={excludedKind ? "clone-group clone-group--excluded" : "clone-group"} open={!excludedKind}>
-          <summary>{kindTitle(kind)} — {group.length} group(s){excludedKind ? " — not counted in total" : ""}</summary>
+          <summary>{kindTitle(kind)} — {group.length} group(s){excludedKind ? ` — ${NOT_COUNTED_MARKER}` : ""}</summary>
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
         {group.map((cluster, i) => {
           const severity = severityByClusterId.value.get(cluster.id) ?? "hint";
           const slug = clusterSlug(cluster);
-          const excluded = isKindExcluded(cluster.kind, snapshot.metrics.total_includes);
+          const excluded = isCloneKindLeftOut(cluster.kind, snapshot.metrics.total_includes);
           return (
             <li
               class={excluded ? `${CLUSTER_ROW_CLASS} report-cluster-row--excluded` : CLUSTER_ROW_CLASS}
@@ -187,7 +189,7 @@ function ReportApp() {
                   <span style={{ fontWeight: 600, overflowWrap: "anywhere" }}>
                     {kindTitle(cluster.kind)}
                   </span>
-                  {excluded ? <span>excluded from total</span> : null}
+                  {excluded ? <span>{NOT_COUNTED_MARKER}</span> : null}
                 </div>
                 <div
                   class={MONOSPACE_CLASS}

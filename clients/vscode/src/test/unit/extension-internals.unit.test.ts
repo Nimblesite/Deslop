@@ -44,6 +44,8 @@ const LEGACY_LSP_FLAGS = [
   "--embedding-provider",
   "--embedding-model",
   "--embedding-endpoint",
+  // [RANK-MASS-SUM] Retired with the `[ranking]` section; the server refuses it.
+  "--ranking-structural-only",
 ] as const;
 
 function assertNoLegacyLspFlags(args: string[]): void {

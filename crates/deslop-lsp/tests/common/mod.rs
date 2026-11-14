@@ -149,6 +149,19 @@ pub fn request(method: &str, params: &serde_json::Value) -> Result<(i64, String)
     Ok((id, serde_json::to_string(&payload)?))
 }
 
+/// A whole-buffer `textDocument/didChange`: the buffer at `uri` becomes
+/// `text` at editor `version`.
+pub fn whole_buffer_change(uri: &str, version: i64, text: &str) -> Result<String> {
+    const DID_CHANGE: &str = "textDocument/didChange";
+    notification(
+        DID_CHANGE,
+        &serde_json::json!({
+            "textDocument": { "uri": uri, "version": version },
+            "contentChanges": [{ "text": text }]
+        }),
+    )
+}
+
 /// Builds a JSON-RPC notification, omitting a `Null` `params` for the same
 /// reason [`request`] does.
 pub fn notification(method: &str, params: &serde_json::Value) -> Result<String> {

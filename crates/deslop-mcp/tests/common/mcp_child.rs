@@ -20,7 +20,7 @@ use super::{
     ChildKillOnDrop,
 };
 use anyhow::{anyhow, Context, Result};
-use assert_cmd::cargo::cargo_bin;
+use deslop_test_support::workspace_bin;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -250,7 +250,7 @@ pub fn generate_state_file(root: &Path, min_nodes: u32) -> Result<()> {
     let cache = root.join(".deslop/cache");
     fs::create_dir_all(&cache)?;
     let out_prefix = cache.join("report-gen");
-    let status = Command::new(cargo_bin("deslop"))
+    let status = Command::new(workspace_bin("deslop"))
         .arg(root)
         .arg("--min-nodes")
         .arg(min_nodes.to_string())

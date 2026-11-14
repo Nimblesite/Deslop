@@ -451,19 +451,6 @@
           "minimum": 1,
           "description": "Minimum AST node count for a subtree to be fingerprinted. Forwarded to the LSP at initialize."
         },
-        "deslop.ranking.structuralOnly": {
-          "type": "string",
-          "enum": [
-            "keep",
-            "ignore"
-          ],
-          "enumDescriptions": [
-            "Show shape-only findings last, for information.",
-            "Hide shape-only findings."
-          ],
-          "default": "keep",
-          "description": "Shape-only findings are not clones and always have zero duplication weight. Choose whether to show them. Overrides the TOML visibility setting after the language server restarts."
-        },
         "deslop.embedding.provider": {
           "type": "string",
           "enum": [

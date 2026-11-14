@@ -70,13 +70,27 @@ pub fn included_kind_titles(kinds: &[ClusterKind]) -> String {
         .join(", ")
 }
 
-/// True when `kind` is a clone whose lines the include set leaves out
-/// of the total ([METRICS-TOTAL-INCLUDE]). Shape-only is never
-/// "excluded" — it was never a candidate ([CLONE-BUCKETS-STRUCTURAL-ONLY])
-/// — so it keeps its informational styling.
+/// The words every surface puts on a kind group whose lines are not in
+/// the headline figure ([METRICS-TOTAL-COUNTED]).
+pub const NOT_COUNTED_MARKER: &str = "not counted in total";
+
+/// [METRICS-TOTAL-COUNTED] True when `kind`'s lines are in the headline
+/// figure: a clone kind the include set names ([METRICS-TOTAL-INCLUDE]).
+/// Shape-only never counts ([CLONE-BUCKETS-STRUCTURAL-ONLY]), so it
+/// carries the same marker as a clone kind the set leaves out. The one
+/// fact every group header, tooltip and filter reads.
 #[must_use]
-pub fn kind_excluded_from_total(kind: ClusterKind, total_includes: &[ClusterKind]) -> bool {
-    kind.is_clone() && !total_includes.contains(&kind)
+pub fn kind_counts_toward_total(kind: ClusterKind, total_includes: &[ClusterKind]) -> bool {
+    kind.is_clone() && total_includes.contains(&kind)
+}
+
+/// True when `kind` is a clone the include set leaves out of the total:
+/// the kinds the editor keeps silent by default
+/// ([SEVERITY-DIAGNOSTICS-EXCLUDED]). Shape-only has its own default
+/// ([SEVERITY-DIAGNOSTICS-STRUCTURAL-ONLY]).
+#[must_use]
+pub fn clone_kind_left_out_of_total(kind: ClusterKind, total_includes: &[ClusterKind]) -> bool {
+    kind.is_clone() && !kind_counts_toward_total(kind, total_includes)
 }
 
 /// The `--only-changed` cluster split ([METRICS-DIFF-SCOPE]).

@@ -378,17 +378,17 @@ fn inflate_workspace_with_clones(root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// `resources/templates/list` returns a strict MCP-spec error
+/// An unknown method returns a strict MCP-spec error
 /// envelope — `code`, `message`, no extra fields — so Codex's
 /// `rmcp_client` doesn't trip on a shape it didn't expect
 /// ([MCP-WIRE-FRAMING]).
 #[test]
-fn resources_templates_list_returns_well_formed_method_not_found() -> Result<()> {
+fn unknown_method_returns_well_formed_method_not_found() -> Result<()> {
     // Tests [MCP-WIRE-FRAMING]
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let mut mcp = initialized_mcp(workspace.path())?;
 
-    let response = mcp.request("resources/templates/list", &json!({}))?;
+    let response = mcp.request("resources/unknown", &json!({}))?;
     assert_method_not_found_envelope(&response)?;
     Ok(())
 }
