@@ -9,8 +9,7 @@ use std::{io::Write, path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
 use deslop_core::{
-    config::ClonePolicy, live::transport::IpcMode, requests_version, version_contract_output,
-    ComponentKind,
+    live::transport::IpcMode, requests_version, version_contract_output, ComponentKind,
 };
 use tokio::runtime::{Builder, Runtime};
 use tracing_subscriber::EnvFilter;
@@ -23,8 +22,6 @@ pub(crate) const WORKER_THREADS_FLAG: &str = "--worker-threads";
 pub(crate) const NICE_FLAG: &str = "--nice";
 /// Startup flag choosing the IPC transport (stdio or TCP).
 pub(crate) const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
-/// Startup flag restricting ranking to structural evidence.
-pub(crate) const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
 
 /// Fully parsed startup configuration for the LSP app layer.
 #[derive(Debug, Clone)]
@@ -42,11 +39,6 @@ pub struct LspStartup {
     /// IPC transport for the MCP bridge ([LIVE-IPC-TCP]). Platform
     /// default unless `--ipc-transport` overrides it.
     pub ipc_mode: IpcMode,
-    /// Optional [RANK-STRUCTURAL-ONLY] policy override from
-    /// `--ranking-structural-only`, fed by the
-    /// `deslop.ranking.structuralOnly` editor setting
-    /// ([RANK-STRUCTURAL-ONLY]). `None` defers to `.deslop.toml`.
-    pub ranking_structural_only: Option<ClonePolicy>,
 }
 
 /// The top-level action requested by the user-facing argv.
@@ -143,9 +135,6 @@ where
     apply_process_nice(startup.nice)?;
     #[cfg(not(unix))]
     apply_process_nice(startup.nice);
-    if let Some(policy) = startup.ranking_structural_only {
-        deslop_core::state::set_structural_only_override(policy);
-    }
     log_startup(&startup);
     let runtime = build_runtime(startup.worker_threads)?;
     let outcome = runtime.block_on(server(
@@ -193,7 +182,6 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
         nice: parse_nice(args)?,
         embedding: LspEmbeddingConfig::default(),
         ipc_mode: parse_ipc_mode(args)?,
-        ranking_structural_only: parse_ranking_structural_only(args)?,
     })
 }
 
@@ -259,22 +247,6 @@ fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
     Ok(IpcMode::platform_default())
 }
 
-/// Reads the optional `--ranking-structural-only` value
-/// ([RANK-STRUCTURAL-ONLY], [RANK-STRUCTURAL-ONLY]). `None` defers to
-/// `.deslop.toml`.
-fn parse_ranking_structural_only(args: &[String]) -> Result<Option<ClonePolicy>> {
-    for (index, arg) in args.iter().enumerate() {
-        if arg == RANKING_STRUCTURAL_ONLY_FLAG {
-            let value = required_flag_value(args, index, RANKING_STRUCTURAL_ONLY_FLAG)?;
-            return value
-                .parse::<ClonePolicy>()
-                .map(Some)
-                .map_err(|message| anyhow!("--ranking-structural-only: {message}"));
-        }
-    }
-    Ok(None)
-}
-
 /// Parses a required usize flag value after `flag`.
 fn parse_required_usize(args: &[String], index: usize, flag: &str) -> Result<usize> {
     Ok(required_flag_value(args, index, flag)?.parse::<usize>()?)
@@ -297,7 +269,7 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            WORKER_THREADS_FLAG | NICE_FLAG | IPC_TRANSPORT_FLAG | RANKING_STRUCTURAL_ONLY_FLAG => {
+            WORKER_THREADS_FLAG | NICE_FLAG | IPC_TRANSPORT_FLAG => {
                 index = index.saturating_add(2);
             }
             "--debug" | "--stdio" => index = index.saturating_add(1),
@@ -322,7 +294,12 @@ const LEGACY_STARTUP_FLAGS: &[&str] = &[
     "--embedding-provider",
     "--embedding-model",
     "--embedding-endpoint",
+    RETIRED_RANKING_FLAG,
 ];
+
+/// The retired shape-only ranking override. Ranking is mass alone
+/// ([RANK-MASS-SUM]), so the flag is refused rather than ignored.
+const RETIRED_RANKING_FLAG: &str = "--ranking-structural-only";
 
 /// Builds the Tokio runtime for the app layer.
 fn build_runtime(worker_threads: usize) -> Result<Runtime> {
@@ -397,7 +374,6 @@ fn log_startup(startup: &LspStartup) {
         worker_threads = startup.worker_threads,
         nice = startup.nice,
         ipc_transport = ?startup.ipc_mode,
-        ranking_structural_only = ?startup.ranking_structural_only,
         embedding_mode = startup.embedding.mode.as_str(),
         embedding_provider = %startup.embedding.provider_id,
         embedding_model = %startup.embedding.model_id,

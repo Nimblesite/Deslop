@@ -13,8 +13,6 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::config::ClonePolicy;
-
 #[cfg(test)]
 mod tests;
 
@@ -164,27 +162,4 @@ pub fn worker_budget() -> usize {
         || std::thread::available_parallelism().map_or(1, NonZeroUsize::get),
         NonZeroUsize::get,
     )
-}
-
-/// Process-wide override of the `[ranking] structural_only` policy
-/// ([RANK-STRUCTURAL-ONLY]). Set at most once, at process startup,
-/// from the surface's own channel — `deslop-lsp
-/// --ranking-structural-only`, fed by the
-/// `deslop.ranking.structuralOnly` editor setting
-/// ([RANK-STRUCTURAL-ONLY]). Consulted by every subsequent config
-/// load so the editor channel wins over `.deslop.toml`.
-static STRUCTURAL_ONLY_OVERRIDE: OnceLock<ClonePolicy> = OnceLock::new();
-
-/// Records the process-wide [RANK-STRUCTURAL-ONLY] policy override.
-/// First write wins; later calls are ignored — the override models a
-/// startup flag, not a runtime toggle.
-pub fn set_structural_only_override(policy: ClonePolicy) {
-    let _first_write_wins = STRUCTURAL_ONLY_OVERRIDE.set(policy);
-}
-
-/// Returns the process-wide [RANK-STRUCTURAL-ONLY] policy override,
-/// when one was recorded at startup.
-#[must_use]
-pub fn structural_only_override() -> Option<ClonePolicy> {
-    STRUCTURAL_ONLY_OVERRIDE.get().copied()
 }

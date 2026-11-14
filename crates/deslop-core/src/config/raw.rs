@@ -7,7 +7,7 @@ use std::{collections::HashMap, path::Path};
 
 use serde::Deserialize;
 
-use super::{BoilerplateImportsMode, ClonePolicy, KindThresholds};
+use super::{BoilerplateImportsMode, KindThresholds};
 use crate::{
     buckets::{ClusterKind, TotalInclude},
     error::CoreError,
@@ -39,9 +39,10 @@ pub(super) struct RawConfig {
     /// Report-rendering toggles.
     #[serde(default)]
     pub(super) report: RawReport,
-    /// Clone-category ranking policy ([RANK-CATEGORY]).
+    /// The retired `[ranking]` section. Still recognised, so its presence
+    /// fails the load with a reason instead of an unknown-field error.
     #[serde(default)]
-    pub(super) ranking: RawRanking,
+    pub(super) ranking: Option<serde::de::IgnoredAny>,
     /// [EXCLUSION-CONFIG] Pre-ranking visibility of proven data tables.
     #[serde(default)]
     pub(super) visibility: RawVisibility,
@@ -51,35 +52,13 @@ pub(super) struct RawConfig {
 }
 
 /// Raw on-disk shape of the `[visibility]` section ([EXCLUSION-CONFIG]):
-/// `data_clones` is `keep` (default) or `ignore`; `demote` is rejected.
+/// `data_clones` is `keep` (default) or `ignore`; anything else is rejected.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct RawVisibility {
-    /// Whether proven data-table findings are dropped before ranking.
+    /// The `data_clones` choice as written, validated at load.
     #[serde(default)]
-    pub(super) data_clones: Option<ClonePolicy>,
-}
-
-/// Raw on-disk shape of the `[ranking]` section ([RANK-CATEGORY],
-/// [RANK-STRUCTURAL-ONLY]).
-#[derive(Debug, Default, Clone, Deserialize)]
-pub(super) struct RawRanking {
-    /// How `data`-category clusters are ranked. `None` means the key was
-    /// not set, so the [`ClonePolicy`] default (`demote`) applies.
-    #[serde(default)]
-    pub(super) data_clones: Option<ClonePolicy>,
-    /// Data demote multiplier. `None` means inherit
-    /// [`super::DEFAULT_DATA_CLONE_WEIGHT`].
-    #[serde(default)]
-    pub(super) data_clone_weight: Option<f64>,
-    /// How structural-only clusters are ranked. `None` means the key
-    /// was not set, so the [`ClonePolicy`] default (`demote`) applies.
-    #[serde(default)]
-    pub(super) structural_only: Option<ClonePolicy>,
-    /// Structural-only demote multiplier. `None` means inherit
-    /// [`super::DEFAULT_STRUCTURAL_ONLY_WEIGHT`].
-    #[serde(default)]
-    pub(super) structural_only_weight: Option<f64>,
+    pub(super) data_clones: Option<String>,
 }
 
 /// Raw on-disk shape of the `[analysis]` section.

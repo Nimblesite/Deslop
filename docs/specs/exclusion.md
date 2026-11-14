@@ -39,7 +39,7 @@ report_hide = ["**/target/**"]
 data_clones = "keep"        # "keep" (default) | "ignore"
 ```
 
-`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted.
+`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted. The whole `[ranking]` section is retired with them: a config that still carries one fails to load with "the [ranking] section is retired", and the language server refuses its former `--ranking-structural-only` flag, so a setting nothing reads is never accepted and ignored (`crates/deslop-core/src/config/visibility.rs`; `rank_structural_only_policy.rs`, `issue_190_data_table_demote.rs`).
 
 **`[tuning]` section.** Every detection, admission, category and suppression threshold is configurable here. Existing defaults are listed in [FUSED-TUNING-LEVERS]; the new category defaults are in [CLONE-BUCKETS-THRESHOLDS](taxonomy.md#clone-buckets-thresholds-defaults-and-toml-settings). No unnamed or hard-coded category cutoff is permitted. Omitted keys use their named defaults; all surfaces receive the same resolved settings.
 

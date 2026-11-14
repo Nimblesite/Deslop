@@ -8,7 +8,6 @@ use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
 use deslop_core::{
-    config::ClonePolicy,
     embedding::{EmbeddingMode, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL},
     live::transport::IpcMode,
 };
@@ -25,7 +24,10 @@ const TEST_WORKSPACE_ROOT: &str = "/tmp/ws";
 const VERSION_FLAG: &str = "--version";
 const STDIO_FLAG: &str = "--stdio";
 const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
-const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
+const RETIRED_RANKING_FLAG: &str = "--ranking-structural-only";
+const RETIRED_RANKING_VALUES: [&str; 3] = ["demote", "ignore", "keep"];
+const RETIRED_RANKING_REFUSAL: &str =
+    "unsupported LSP startup flag --ranking-structural-only; configure Deslop through settings";
 const WORKER_THREADS_FLAG: &str = "--worker-threads";
 const NICE_FLAG: &str = "--nice";
 const OLLAMA_PROVIDER_ID: &str = "ollama";
@@ -193,7 +195,6 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
             endpoint: "http://127.0.0.1:1234".to_owned(),
         },
         ipc_mode: IpcMode::Tcp,
-        ranking_structural_only: None,
     };
     let mut observed: Option<LspStartup> = None;
 
@@ -205,7 +206,6 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
             nice: 0,
             embedding,
             ipc_mode,
-            ranking_structural_only: None,
         });
         std::future::ready(Ok(()))
     })?;
@@ -299,64 +299,28 @@ fn ipc_transport_flag_parses_defaults_and_rejects() -> Result<()> {
     Ok(())
 }
 
-/// [RANK-STRUCTURAL-ONLY] / [RANK-STRUCTURAL-ONLY]:
-/// `--ranking-structural-only` parses every policy, defaults to
-/// deferring to `.deslop.toml`, rejects unknown values, and reaches
-/// the process-wide override when startup dispatch runs.
+/// [RANK-MASS-SUM] `--ranking-structural-only` is retired: ranking is
+/// mass alone and no startup flag reweights or hides a category. Every
+/// former spelling is refused by name, never accepted and ignored.
 #[test]
-fn ranking_structural_only_flag_parses_applies_and_rejects() -> Result<()> {
-    let demote = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        RANKING_STRUCTURAL_ONLY_FLAG,
-        "demote",
-    ])?)?;
-    assert_eq!(demote.ranking_structural_only, Some(ClonePolicy::Demote));
-    let keep = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        RANKING_STRUCTURAL_ONLY_FLAG,
-        "keep",
-    ])?)?;
-    assert_eq!(keep.ranking_structural_only, Some(ClonePolicy::Keep));
-    let unset = serve_startup(action_from_args([PROGRAM_NAME, TEST_WORKSPACE_ROOT])?)?;
-    assert_eq!(unset.ranking_structural_only, None);
+fn the_retired_ranking_flag_is_refused_with_every_former_value() -> Result<()> {
+    for value in RETIRED_RANKING_VALUES {
+        assert_error_contains(
+            [
+                PROGRAM_NAME,
+                TEST_WORKSPACE_ROOT,
+                RETIRED_RANKING_FLAG,
+                value,
+            ],
+            RETIRED_RANKING_REFUSAL,
+        )?;
+    }
     assert_error_contains(
-        [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
-            RANKING_STRUCTURAL_ONLY_FLAG,
-            "shout",
-        ],
-        "--ranking-structural-only: expected demote|ignore|keep",
+        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, RETIRED_RANKING_FLAG],
+        RETIRED_RANKING_REFUSAL,
     )?;
-    assert_error_contains(
-        [
-            PROGRAM_NAME,
-            TEST_WORKSPACE_ROOT,
-            RANKING_STRUCTURAL_ONLY_FLAG,
-        ],
-        "--ranking-structural-only requires",
-    )?;
-
-    // Startup dispatch records the override in the central state
-    // module so every later config load sees the editor's choice.
-    let ignore = serve_startup(action_from_args([
-        PROGRAM_NAME,
-        TEST_WORKSPACE_ROOT,
-        RANKING_STRUCTURAL_ONLY_FLAG,
-        "ignore",
-    ])?)?;
-    run_startup_with(
-        ignore,
-        |_workspace_root, _min_nodes, _embedding, _ipc_mode| std::future::ready(Ok(())),
-    )?;
-    assert_eq!(
-        deslop_core::state::structural_only_override(),
-        Some(ClonePolicy::Ignore),
-        "run_startup_with must record the [RANK-STRUCTURAL-ONLY] override \
-         in deslop-core::state before the server starts"
-    );
+    let plain = serve_startup(action_from_args([PROGRAM_NAME, TEST_WORKSPACE_ROOT])?)?;
+    assert_eq!(plain.workspace_root, PathBuf::from(TEST_WORKSPACE_ROOT));
     Ok(())
 }
 

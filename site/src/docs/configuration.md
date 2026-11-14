@@ -131,18 +131,11 @@ split_by_language = false
 | --- | --- | --- | --- |
 | `split_by_language` | bool | `false` | Divide the HTML report into one section per language. Also enabled by the `--split-by-language` flag — either source turns it on. |
 
-## `[ranking]`
+## Ranking
 
-Clones are ranked by duplicated mass: canonical AST nodes × additional visible copies. Category and confidence do not multiply that mass.
+Clones are ranked by duplicated mass: canonical AST nodes × additional visible copies. Category and confidence do not multiply that mass, and no setting reweights or hides a category. Shape-only findings are listed after the clones, marked as not counted in the total, and never add to the duplication figure.
 
-To hide informational shape-only findings:
-
-```toml
-[ranking]
-structural_only = "ignore"
-```
-
-`structural_only` accepts `demote` (default), `ignore` or `keep`. Visible shape-only findings remain after clones, with zero duplicated mass; none of these settings makes them count as duplication. The VS Code setting overrides this file setting.
+The `[ranking]` section is retired. A config that still has one fails to load and says so; remove the section.
 
 ## `[visibility]`
 
@@ -209,10 +202,6 @@ max_duplication_percent = 20
 # Split the HTML report per language.
 [report]
 split_by_language = true
-
-# Hide informational shape-only matches.
-[ranking]
-structural_only = "ignore"
 ```
 
 ## CLI flags

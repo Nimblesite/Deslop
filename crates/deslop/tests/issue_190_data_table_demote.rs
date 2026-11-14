@@ -123,18 +123,21 @@ fn keep_mode_keeps_logic_clone_first_and_publishes_no_data_table() -> Result<()>
     Ok(())
 }
 
+/// [RANK-CATEGORY] The `[ranking]` section is retired. Whatever it holds,
+/// a valid multiplier or an invalid one, the load fails and says the
+/// section is gone, so no reader mistakes an ignored key for a working one.
 #[test]
-fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
+fn the_retired_ranking_section_is_refused_whatever_it_holds() -> Result<()> {
+    const RANKING_RETIRED: &str = "the [ranking] section is retired";
     let (tmp, src) = temp_scan_dir("src")?;
     fs::write(src.join("a.dart"), "class A { int x = 1; }\n")?;
 
-    // [RANK-CATEGORY] config validation: an out-of-range multiplier fails the
-    // run with a ConfigThreshold-style diagnostic naming the offending key
-    // and the accepted range — never a silent default.
-    for (body, needle) in [
-        ("[ranking]\ndata_clone_weight = 2.5\n", "range (0.0, 1.0]"),
-        ("[ranking]\ndata_clone_weight = 0.0\n", "range (0.0, 1.0]"),
-        ("[ranking]\ndata_clone_weight = nan\n", "must be finite"),
+    for body in [
+        "[ranking]\ndata_clone_weight = 0.5\n",
+        "[ranking]\ndata_clone_weight = 2.5\n",
+        "[ranking]\ndata_clone_weight = 0.0\n",
+        "[ranking]\ndata_clone_weight = nan\n",
+        "[ranking]\ndata_clones = \"ignore\"\n",
     ] {
         write_ranking_config(&src, body)?;
         let mut cmd = deslop_cmd(&src, &tmp.path().join("r"))?;
@@ -149,8 +152,8 @@ fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
             ])
             .assert()
             .failure()
-            .stderr(predicates::str::contains("data_clone_weight"))
-            .stderr(predicates::str::contains(needle));
+            .stderr(predicates::str::contains(RANKING_RETIRED))
+            .stderr(predicates::str::contains(".deslop.toml"));
     }
     Ok(())
 }
