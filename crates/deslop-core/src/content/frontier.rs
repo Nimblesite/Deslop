@@ -248,6 +248,17 @@ fn identity_counts(keys: impl Iterator<Item = u64>) -> BTreeMap<u64, usize> {
     counts
 }
 
+/// How two differing literal texts at one position compare.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LiteralText {
+    /// Near-copies of each other ([`super::literal_bound::near_copies`]).
+    NearCopies,
+    /// Two different multi-line texts: embedded documents.
+    Documents,
+    /// Any other difference.
+    Different,
+}
+
 /// Positional agreement between two shape-aligned members' frontiers:
 /// the share of measured positions whose raw bytes match.
 ///
@@ -257,14 +268,33 @@ fn identity_counts(keys: impl Iterator<Item = u64>) -> BTreeMap<u64, usize> {
 /// shape-aligned members carry identical operator kinds by construction
 /// ([`Population::is_authored_content`]).
 ///
+/// A literal position whose two texts differ is read by `literal_text`
+/// ([FUSED-CONTENT-GATE-LITERAL-BOUND]): near-copies agree, since an
+/// embedded program edited by one name is one string position and one
+/// edit must not outvote the code around it; two different embedded
+/// documents are not measured, since they are the data a test or query
+/// carries and the literal-bound rule alone judges whether that data
+/// carries the pair; any other difference disagrees.
+///
 /// `1.0` when nothing was measured, the same answer two empty
 /// frontiers get and for the same reason: a subtree with no authored
 /// content has nothing to disagree on.
-pub(super) fn positional_agreement(canonical: &[LeafKey], member: &[LeafKey]) -> f64 {
-    let (matched, measured) = canonical.iter().zip(member.iter()).fold(
+pub(super) fn positional_agreement(
+    canonical: &[LeafKey],
+    member: &[LeafKey],
+    literal_text: impl Fn(usize) -> LiteralText,
+) -> f64 {
+    let (matched, measured) = canonical.iter().zip(member.iter()).enumerate().fold(
         (0_usize, 0_usize),
-        |(matched, measured), (left, right)| {
-            let agrees = left == right;
+        |(matched, measured), (index, (left, right))| {
+            let differing_literals = left != right
+                && left.population == Population::Literal
+                && right.population == Population::Literal;
+            let text = differing_literals.then(|| literal_text(index));
+            if text == Some(LiteralText::Documents) {
+                return (matched, measured);
+            }
+            let agrees = left == right || text == Some(LiteralText::NearCopies);
             if agrees && !left.population.is_authored_content() {
                 return (matched, measured);
             }

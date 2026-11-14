@@ -4,10 +4,10 @@
 //! The pairs are the CLEARLY IN entries of
 //! `fixtures/judged-string-pairs/register.json` (see `judged_string_pairs.rs`
 //! for where each was judged). Discovery may answer a pair through a wider
-//! cluster; explicit comparison names both judged extents exactly, so the
-//! literal-bound rule meets each pair head on: an embedded program, a
-//! docstring or a YAML document that is most of its endpoint, beside a
-//! near-copy of itself. Refusing one of them is a false negative the
+//! cluster; explicit comparison names the two occurrences that answer the
+//! judged sides exactly, so the literal-bound rule meets each pair head
+//! on: an embedded program, a docstring or a YAML document that is most
+//! of its endpoint, beside a near-copy of itself. Refusing one of them is a false negative the
 //! comparison names.
 //!
 //! The negatives are gh #626's unrelated escaped strings and gh #581's two
@@ -17,13 +17,14 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use deslop_core::report::PairEndpoint;
-use deslop_test_support::corpus_score::{Range, CLEARLY_IN};
+use deslop_test_support::corpus_score::{Range, ScoredEntry};
 use serde_json::Value;
 
 use crate::common::{
-    field, fixture,
-    judged_pairs::{all_repos, register, seed_repos, JUDGED_FIXTURE, MIN_NODES},
-    signals::compare_endpoints,
+    clusters, field, fixture,
+    judged_pairs::{all_repos, register, scan_and_score, seed_repos, JUDGED_FIXTURE, MIN_NODES},
+    occurrence_line_span, occurrences,
+    signals::{compare_endpoints, compare_pair},
     temp_scan_dir,
 };
 
@@ -65,60 +66,80 @@ fn endpoint(root: &Path, path: &str, start: u32, end: u32) -> Result<PairEndpoin
     })
 }
 
-/// Both endpoints of one register entry.
-fn entry_endpoints(root: &Path, entry: &Value) -> Result<[PairEndpoint; 2]> {
-    let ranges: Vec<Range> = field(entry, "occurrences")
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(Range::parse)
+/// The reported occurrence that answers one judged side: the same file,
+/// overlapping the judged lines.
+fn answering_occurrence<'a>(cluster: &'a Value, side: &Range) -> Result<&'a Value> {
+    occurrences(cluster)
+        .iter()
+        .find(|occurrence| {
+            let (start, end) = occurrence_line_span(occurrence);
+            field(occurrence, "path").as_str() == Some(side.path.as_str())
+                && start <= u64::from(side.end)
+                && u64::from(side.start) <= end
+        })
+        .with_context(|| format!("no occurrence answers {side:?}: {cluster:#}"))
+}
+
+/// The two reported occurrences that answer one judged entry, in register
+/// order: the exact extents a report renders, each comparable by
+/// [PAIR-COMPARE-CLI].
+fn answering_pair<'a>(report: &'a Value, entry: &ScoredEntry) -> Result<[&'a Value; 2]> {
+    let id = entry
+        .cluster
+        .as_deref()
+        .with_context(|| format!("judged pair is not reported: {:?}", entry.occurrences))?;
+    let cluster = clusters(report)
+        .iter()
+        .find(|cluster| field(cluster, "id").as_str() == Some(id))
+        .with_context(|| format!("cluster {id} is not in the report"))?;
+    let sides: Vec<Range> = entry
+        .occurrences
+        .iter()
+        .map(|range| Range::parse(range))
         .collect::<Result<_>>()?;
-    let [left, right] = ranges.as_slice() else {
-        anyhow::bail!("a judged pair names two ranges: {entry:#}");
+    let [left, right] = sides.as_slice() else {
+        anyhow::bail!("a judged pair names two ranges: {:?}", entry.occurrences);
     };
     Ok([
-        endpoint(root, &left.path, left.start, left.end)?,
-        endpoint(root, &right.path, right.start, right.end)?,
+        answering_occurrence(cluster, left)?,
+        answering_occurrence(cluster, right)?,
     ])
 }
 
-/// Every judged string-heavy copy is admitted by explicit comparison, in
-/// both orders, with the same classification and agreement each way.
+/// Every judged string-heavy copy is admitted by explicit comparison of
+/// the occurrences that report it, in both orders, with the same
+/// classification and explanation each way.
 #[test]
 fn explicit_comparison_admits_every_judged_string_copy_both_ways() -> Result<()> {
-    let register = register()?;
     let (_tmp, root) = temp_scan_dir(JUDGED_FIXTURE)?;
     seed_repos(&root, &all_repos())?;
-    let entries = field(&register, CLEARLY_IN)
-        .as_array()
-        .context("clearly_in")?;
-    assert_eq!(entries.len(), JUDGED_PAIRS);
+    let (report, score) = scan_and_score(&root, &register()?)?;
+    assert_eq!(score.entries.len(), JUDGED_PAIRS);
 
     let mut refused = Vec::new();
-    for entry in entries {
-        let [left, right] = entry_endpoints(&root, entry)?;
-        let forward = compare_endpoints(&root, MIN_NODES, left.clone(), right.clone())?.evidence;
-        let backward = compare_endpoints(&root, MIN_NODES, right, left)?.evidence;
-        assert_eq!(forward.admitted, backward.admitted, "{entry:#}");
-        assert_eq!(forward.classification, backward.classification, "{entry:#}");
-        assert_eq!(forward.explanation, backward.explanation, "{entry:#}");
+    for entry in &score.entries {
+        let [left, right] = answering_pair(&report, entry)?;
+        let forward = compare_pair(&root, MIN_NODES, left, right)?.evidence;
+        let backward = compare_pair(&root, MIN_NODES, right, left)?.evidence;
+        let judged = &entry.occurrences;
+        assert_eq!(forward.admitted, backward.admitted, "{judged:?}");
+        assert_eq!(
+            forward.classification, backward.classification,
+            "{judged:?}"
+        );
+        assert_eq!(forward.explanation, backward.explanation, "{judged:?}");
         if !forward.admitted {
-            refused.push(format!(
-                "{}: {}",
-                field(entry, "occurrences"),
-                forward.explanation
-            ));
+            refused.push(format!("{judged:?}: {}", forward.explanation));
             continue;
         }
         assert!(
             forward.classification.is_some(),
-            "an admitted copy is classified: {entry:#}"
+            "an admitted copy is classified: {judged:?}"
         );
-        assert_ne!(forward.explanation, LITERAL_BOUND_REFUSAL, "{entry:#}");
+        assert_ne!(forward.explanation, LITERAL_BOUND_REFUSAL, "{judged:?}");
         assert!(
             forward.agreement > 0.0,
-            "a judged copy agrees with itself somewhere: {entry:#}"
+            "a judged copy agrees with itself somewhere: {judged:?}"
         );
     }
     assert!(

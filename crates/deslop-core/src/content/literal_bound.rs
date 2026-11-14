@@ -8,7 +8,8 @@
 //! endpoint, that shape is the literal's own text layout. And when one
 //! literal is most of an endpoint's source text — a multi-line SQL query
 //! assigned and given two parameters — the few statements around it are
-//! all two endpoints can share. Either way the pair is a copy only if
+//! all two endpoints can share. When both endpoints are carried so, the
+//! pair is a copy only if
 //! the two literals are near-copies of each other: a test whose embedded
 //! program differs from its neighbour's by one name is a copy, two
 //! different queries are not.
@@ -18,7 +19,7 @@ use std::{
     hash::BuildHasher,
 };
 
-use super::frontier::member_count;
+use super::frontier::{member_count, LiteralText};
 use crate::{
     ast::{ByteRange, NormalizedNode},
     buckets::CONTENT_SUPPORT_FLOOR,
@@ -36,6 +37,8 @@ const LITERAL_NODE: usize = 1;
 /// Bytes per shingle when two literals' texts are compared. Long enough
 /// that indentation and punctuation alone do not make two texts alike.
 const SHINGLE_BYTES: usize = 8;
+/// The byte that makes a literal an embedded document: it spans lines.
+const NEWLINE: u8 = b'\n';
 
 /// An endpoint's heaviest authored literal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,18 +119,18 @@ fn weigh_literals(node: &NormalizedNode, heaviest: &mut Option<Weighed>) {
     }
 }
 
-/// Whether a literal-carried endpoint is paired with different text: one
-/// side is carried by its literal and the other side's heaviest literal
-/// is not a near-copy of it.
+/// Whether two literal-carried endpoints hold different text: each side
+/// is carried by its heaviest literal and the two are not near-copies.
+/// A side its literal does not carry has code of its own to compare,
+/// and the content gate has compared it.
 pub(crate) fn carried_text_differs<S: BuildHasher>(
     left: Option<HeaviestLiteral>,
     right: Option<HeaviestLiteral>,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> bool {
-    let carried = [left, right]
-        .into_iter()
-        .flatten()
-        .any(|literal| literal.carries_endpoint);
+    let carried = left
+        .zip(right)
+        .is_some_and(|(left, right)| left.carries_endpoint && right.carries_endpoint);
     let same_text = left.zip(right).is_some_and(|(left, right)| {
         match (bytes(left, sources), bytes(right, sources)) {
             (Some(left), Some(right)) => near_copies(left, right),
@@ -145,6 +148,18 @@ fn bytes<S: BuildHasher>(
     sources
         .get(&literal.file)?
         .get(literal.range.start..literal.range.end)
+}
+
+/// How two differing literal texts compare in positional agreement:
+/// near-copies, two embedded documents (both span lines), or different.
+pub(super) fn literal_text(left: &[u8], right: &[u8]) -> LiteralText {
+    if near_copies(left, right) {
+        LiteralText::NearCopies
+    } else if [left, right].iter().all(|text| text.contains(&NEWLINE)) {
+        LiteralText::Documents
+    } else {
+        LiteralText::Different
+    }
 }
 
 /// Whether two literal texts are near-copies: the same bytes, or enough

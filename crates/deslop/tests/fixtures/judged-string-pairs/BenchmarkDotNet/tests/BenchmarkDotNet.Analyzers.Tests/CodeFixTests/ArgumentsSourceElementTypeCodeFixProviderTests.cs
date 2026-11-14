@@ -1,4 +1,4 @@
-public class Argumentssourceelementtypecodefixprovidertests
+public class ArgumentsSourceValueTupleCodeFixProviderTests
 {
     private static string Code(string values, bool reported)
         => /* lang=c#-test */ $$"""
@@ -39,7 +39,7 @@ public class Argumentssourceelementtypecodefixprovidertests
 
         await RunAsync();
     }
-
+} public class ArgumentsSourceByRefLikeUnwrapCodeFixProviderTests {
     private static string Code(string values, bool reported)
         => /* lang=c#-test */ $$"""
             using System;
