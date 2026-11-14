@@ -15,17 +15,16 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
-use tower_lsp::lsp_types::Url;
 
 use super::{
-    byte_field, cluster_spanning, did_open, has_cluster, occurrence_in, string_field, DID_CHANGE,
-    EDITED_FILE, FIXTURE, FIXTURE_FILE_COUNT, PEER_FILE,
+    byte_field, cluster_spanning, did_open, has_cluster, occurrence_in, string_field, EDITED_FILE,
+    FIXTURE, FIXTURE_FILE_COUNT, PEER_FILE,
 };
 use crate::common::{
-    at, call, handshake, notification, read_frame,
+    at, call, handshake, read_frame,
     reports::{assert_initialize_contract, report_clusters, REPORT_TIMEOUT},
-    request, spawn_lsp_on_fixture_guarded, wait_for_report_matching, workspace_file_uri,
-    write_frame,
+    request, spawn_lsp_on_fixture_guarded, wait_for_report_matching, whole_buffer_change,
+    workspace_file_uri, write_frame,
 };
 
 const REPORT_GET: &str = "deslop/reportGet";
@@ -75,7 +74,10 @@ fn every_report_answer_names_the_buffer_version_it_analysed() -> Result<()> {
         } else {
             &without_clone
         };
-        write_frame(&mut stdin, &whole_buffer(&uri, text, version)?)?;
+        write_frame(
+            &mut stdin,
+            &whole_buffer_change(uri.as_str(), version.into(), text)?,
+        )?;
         let edit = Edit {
             cluster_id: &cluster_id,
             clone_present,
@@ -182,15 +184,4 @@ fn named_versions(answer: &Value) -> Vec<i32> {
         .filter_map(|buffer| buffer.get("version").and_then(Value::as_i64))
         .filter_map(|version| i32::try_from(version).ok())
         .collect()
-}
-
-/// A whole-buffer `textDocument/didChange` to `text` at `version`.
-fn whole_buffer(uri: &Url, text: &str, version: i32) -> Result<String> {
-    notification(
-        DID_CHANGE,
-        &json!({
-            "textDocument": { "uri": uri.as_str(), "version": version },
-            "contentChanges": [{ "text": text }]
-        }),
-    )
 }

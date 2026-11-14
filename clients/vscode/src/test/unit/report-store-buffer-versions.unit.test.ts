@@ -20,6 +20,13 @@ const SNAPSHOT = emptyReport({ clusters: [cluster(CLUSTER_ID, CLONE_MASS, [
   occurrence(PEER_PATH, RANGE_START, RANGE_END),
 ])] });
 
+/** The edit under test, as a report names it once analysed. */
+const ANALYSED_NOW: AnalysedBuffer[] = [{ path: BUFFER_PATH, version: CURRENT_VERSION }];
+
+function naming(snapshot: Report, analysed: AnalysedBuffer[]): Report {
+  return { ...snapshot, analysed_buffers: analysed };
+}
+
 function analysedDelta(snapshot: Report, analysed?: AnalysedBuffer[]) {
   return delta({
     from_generation: INITIAL_GENERATION, to_generation: ANALYSED_GENERATION,
@@ -28,7 +35,7 @@ function analysedDelta(snapshot: Report, analysed?: AnalysedBuffer[]) {
 }
 
 function applySnapshot(store: ReportStore, snapshot: Report, buffer: AnalysedBuffer): boolean {
-  return store.setSnapshot({ ...snapshot, analysed_buffers: [buffer] }, ANALYSED_GENERATION);
+  return store.setSnapshot(naming(snapshot, [buffer]), ANALYSED_GENERATION);
 }
 
 function applyDelta(store: ReportStore, snapshot: Report, buffer: AnalysedBuffer): boolean {
@@ -66,8 +73,7 @@ suite("analysed buffer generation guards", () => {
   test("a rejected snapshot cannot acknowledge the current editor version", () => {
     const store = storeWith(SNAPSHOT, ANALYSED_GENERATION);
     store.markFileDirty(BUFFER_PATH, CURRENT_VERSION);
-    const analysed = [{ path: BUFFER_PATH, version: CURRENT_VERSION }];
-    assert.equal(store.setSnapshot({ ...SNAPSHOT, analysed_buffers: analysed }, INITIAL_GENERATION), false);
+    assert.equal(store.setSnapshot(naming(SNAPSHOT, ANALYSED_NOW), INITIAL_GENERATION), false);
     assert.equal(store.isFileDirty(BUFFER_PATH), true, "a stale report releases nothing");
     assert.equal(store.current.generation, ANALYSED_GENERATION);
     assert.equal(store.current.visibleReport?.clusters.length, NO_VISIBLE_CLUSTERS);
@@ -87,8 +93,7 @@ suite("a report names the buffer versions it analysed", () => {
     store.onDidChange((state) => {
       if (state.generation === ANALYSED_GENERATION) observations.push(store.isFileDirty(BUFFER_PATH));
     });
-    const analysed = [{ path: BUFFER_PATH, version: CURRENT_VERSION }];
-    assert.equal(store.applyDelta(analysedDelta(SNAPSHOT, analysed)), true);
+    assert.equal(store.applyDelta(analysedDelta(SNAPSHOT, ANALYSED_NOW)), true);
     assert.deepEqual(observations, [false], "no observer sees the analysed report while the buffer is still dirty");
     assert.equal(store.isFileDirty(BUFFER_PATH), false);
     assert.deepEqual(store.current.visibleReport?.clusters, SNAPSHOT.clusters);
@@ -100,10 +105,9 @@ suite("a report names the buffer versions it analysed", () => {
     assert.equal(store.applyDelta(analysedDelta(SNAPSHOT)), true);
     assert.equal(store.isFileDirty(BUFFER_PATH), true, "generation 2 did not analyse this edit");
     const peerOnly = [{ path: PEER_PATH, version: CURRENT_VERSION }];
-    assert.equal(store.setSnapshot({ ...SNAPSHOT, analysed_buffers: peerOnly }, ANALYSED_GENERATION), true);
+    assert.equal(store.setSnapshot(naming(SNAPSHOT, peerOnly), ANALYSED_GENERATION), true);
     assert.equal(store.isFileDirty(BUFFER_PATH), true, "another file's version releases nothing here");
-    const analysed = [{ path: BUFFER_PATH, version: CURRENT_VERSION }];
-    assert.equal(store.setSnapshot({ ...SNAPSHOT, analysed_buffers: analysed }, ANALYSED_GENERATION + 1), true);
+    assert.equal(store.setSnapshot(naming(SNAPSHOT, ANALYSED_NOW), ANALYSED_GENERATION + 1), true);
     assert.equal(store.isFileDirty(BUFFER_PATH), false);
   });
 
@@ -111,7 +115,7 @@ suite("a report names the buffer versions it analysed", () => {
     const store = storeWith(SNAPSHOT, INITIAL_GENERATION);
     store.markFileDirty(BUFFER_PATH, CURRENT_VERSION);
     store.resetForNewSession();
-    assert.equal(store.setSnapshot({ ...SNAPSHOT, analysed_buffers: [] }, ANALYSED_GENERATION), true);
+    assert.equal(store.setSnapshot(naming(SNAPSHOT, []), ANALYSED_GENERATION), true);
     assert.equal(store.isFileDirty(BUFFER_PATH), true, "the new session has not analysed this edit");
   });
 });
