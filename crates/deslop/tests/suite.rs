@@ -165,6 +165,10 @@ mod js_ts_normalization;
 mod js_ts_signatures;
 #[path = "jsx_tsx_components.rs"]
 mod jsx_tsx_components;
+#[path = "judged_string_pair_comparison.rs"]
+mod judged_string_pair_comparison;
+#[path = "judged_string_pairs.rs"]
+mod judged_string_pairs;
 #[path = "jwt_independent_verification_false_positive.rs"]
 mod jwt_independent_verification_false_positive;
 #[path = "literal_carried_endpoints.rs"]

@@ -1,0 +1,183 @@
+{
+  "name": "judged-string-pairs",
+  "language": "mixed",
+  "url": "crates/deslop/tests/fixtures/judged-string-pairs",
+  "sha": "fixture",
+  "protocol": "Excerpts of CLEARLY IN pairs from corpus/register, re-based to the excerpt lines",
+  "clearly_in": [
+    {
+      "why": "The code beginning with `[Fact]` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/RuntimeAndToolchainCodeFixProviderTests.cs:3-30",
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/RuntimeAndToolchainCodeFixProviderTests.cs:32-59"
+      ],
+      "judged_at": "https://github.com/dotnet/BenchmarkDotNet.git@04e8bfa38b19930a8c949e5e9f2bd9e6215d3996: tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/RuntimeAndToolchainCodeFixProviderTests.cs:12-39 tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/RuntimeAndToolchainCodeFixProviderTests.cs:41-68"
+    },
+    {
+      "why": "The code beginning with `private static string Code(string values, bool reported)` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/ArgumentsSourceElementTypeCodeFixProviderTests.cs:43-80",
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/ArgumentsSourceElementTypeCodeFixProviderTests.cs:3-41"
+      ],
+      "judged_at": "https://github.com/dotnet/BenchmarkDotNet.git@04e8bfa38b19930a8c949e5e9f2bd9e6215d3996: tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/ArgumentsSourceElementTypeCodeFixProviderTests.cs:870-907 tests/BenchmarkDotNet.Analyzers.Tests/CodeFixTests/ArgumentsSourceElementTypeCodeFixProviderTests.cs:25-63"
+    },
+    {
+      "why": "The code beginning with `public async Task Invoking_with_a_public_nonabstract_unsealed_nongeneric_type_argument_class_having_only_one_and_public_method_annotated_with_the_benc` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/BenchmarkRunner/RunAnalyzerTests.cs:3-38",
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/BenchmarkRunner/RunAnalyzerTests.cs:40-84"
+      ],
+      "judged_at": "https://github.com/dotnet/BenchmarkDotNet.git@04e8bfa38b19930a8c949e5e9f2bd9e6215d3996: tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/BenchmarkRunner/RunAnalyzerTests.cs:13-48 tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/BenchmarkRunner/RunAnalyzerTests.cs:56-100"
+    },
+    {
+      "why": "The code beginning with `fn test_nonzero_i128() {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "serde/test_suite/tests/test_de_error.rs:1-39",
+        "serde/test_suite/tests/test_de_error.rs:40-78"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/serde-rs/serde.git@0db9b3b504bcb0a7fa9cf001429869519afd3e9a: test_suite/tests/test_de_error.rs:664-702 test_suite/tests/test_de_error.rs:703-741"
+    },
+    {
+      "why": "The code beginning with `fn test_nonzero_u64() {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "serde/test_suite/tests/test_de_error.rs:80-136",
+        "serde/test_suite/tests/test_de_error.rs:137-193"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/serde-rs/serde.git@0db9b3b504bcb0a7fa9cf001429869519afd3e9a: test_suite/tests/test_de_error.rs:967-1023 test_suite/tests/test_de_error.rs:1024-1080"
+    },
+    {
+      "why": "The code beginning with `pub trait SerializeTupleStruct {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "serde/serde_core/src/ser/mod.rs:165-228",
+        "serde/serde_core/src/ser/mod.rs:8-113"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/serde-rs/serde.git@0db9b3b504bcb0a7fa9cf001429869519afd3e9a: serde_core/src/ser/mod.rs:1675-1738 serde_core/src/ser/mod.rs:1518-1623"
+    },
+    {
+      "why": "The code beginning with `def __init__(` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "fastapi/fastapi/security/oauth2.py:96-183",
+        "fastapi/fastapi/security/oauth2.py:2-94"
+      ],
+      "judged_at": "https://github.com/tiangolo/fastapi.git@8f9f47de69982705d96e4165a9f03c6537e8c9fe: fastapi/security/oauth2.py:553-640 fastapi/security/oauth2.py:442-534"
+    },
+    {
+      "why": "The code beginning with `def get_send_file_max_age(self, filename: str | None) -> int | None:` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "flask/src/flask/blueprints.py:2-75",
+        "flask/src/flask/app.py:2-82"
+      ],
+      "judged_at": "https://github.com/pallets/flask.git@49943b5a94413a530761350f04e896f76e8d620e: src/flask/blueprints.py:55-128 src/flask/app.py:363-443"
+    },
+    {
+      "why": "The code beginning with `test('do not rewrite when function declaration is in scope', async () => {` is repeated with the same operations in the same order and only consistent name or literal substitutions. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "vite/packages/vite/src/node/ssr/__tests__/ssrTransform.spec.ts:1-38",
+        "vite/packages/vite/src/node/ssr/__tests__/ssrTransform.spec.ts:40-75"
+      ],
+      "judged_at": "https://github.com/vitejs/vite.git@a579e352a66fbdce6a51d4e1f67006ccf4f91343: packages/vite/src/node/ssr/__tests__/ssrTransform.spec.ts:424-461 packages/vite/src/node/ssr/__tests__/ssrTransform.spec.ts:463-498"
+    },
+    {
+      "why": "The code beginning with `() =>` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "vite/playground/hmr/__tests__/hmr.spec.ts:26-42",
+        "vite/playground/hmr/__tests__/hmr.spec.ts:4-20"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/vitejs/vite.git@a579e352a66fbdce6a51d4e1f67006ccf4f91343: playground/hmr/__tests__/hmr.spec.ts:182-198 playground/hmr/__tests__/hmr.spec.ts:160-176"
+    },
+    {
+      "why": "The code beginning with `test('replaces require call in minified code that uses comma operator followed by assignment', () => {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "vite/packages/vite/src/node/__tests__/plugins/css.spec.ts:12-23",
+        "vite/packages/vite/src/node/__tests__/plugins/css.spec.ts:1-10"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/vitejs/vite.git@a579e352a66fbdce6a51d4e1f67006ccf4f91343: packages/vite/src/node/__tests__/plugins/css.spec.ts:385-396 packages/vite/src/node/__tests__/plugins/css.spec.ts:374-383"
+    },
+    {
+      "why": "The code beginning with `it('should parse fully-encoded extended syntax', function (done) {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "express/test/express.urlencoded.js:17-31",
+        "express/test/express.urlencoded.js:1-15"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/expressjs/express.git@43fca52d28a422c8be48fd489cbd4f2d6152bab6: test/express.urlencoded.js:139-153 test/express.urlencoded.js:93-107"
+    },
+    {
+      "why": "The code beginning with `it('should encode latin1 file names with an ASCII fallback and filename* param', function(done){` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "express/test/res.attachment.js:15-27",
+        "express/test/res.attachment.js:1-13"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/expressjs/express.git@43fca52d28a422c8be48fd489cbd4f2d6152bab6: test/res.attachment.js:92-104 test/res.attachment.js:78-90"
+    },
+    {
+      "why": "The code beginning with `console.log();` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "date-fns/pkgs/tz/playground.mjs:11-19",
+        "date-fns/pkgs/tz/playground.mjs:1-9"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/date-fns/date-fns.git@a9739fb3e5384a810e90d7376446f6d84ecc5029: pkgs/tz/playground.mjs:112-120 pkgs/tz/playground.mjs:59-67"
+    },
+    {
+      "why": "The code beginning with `$this->assertFalse($option->acceptValue(), '__construct() can take \"InputOption::VALUE_NONE\" as its mode');` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "console/Tests/Input/InputOptionTest.php:22-28",
+        "console/Tests/Input/InputOptionTest.php:15-21"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/symfony/console.git@dc3c284882e545b47f590c392e7be0da4184b6e2: Tests/Input/InputOptionTest.php:98-104 Tests/Input/InputOptionTest.php:91-97"
+    },
+    {
+      "why": "The code beginning with `public function testFormatBlockWithDiacriticLetters()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "console/Tests/Helper/FormatterHelperTest.php:5-16",
+        "console/Tests/Helper/FormatterHelperTest.php:18-28"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/symfony/console.git@dc3c284882e545b47f590c392e7be0da4184b6e2: Tests/Helper/FormatterHelperTest.php:56-67 Tests/Helper/FormatterHelperTest.php:69-79"
+    },
+    {
+      "why": "The code beginning with `public function testWriteContent()` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "monolog/tests/Monolog/Handler/LogmaticHandlerTest.php:5-14",
+        "monolog/tests/Monolog/Handler/LogEntriesHandlerTest.php:5-14"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/Seldaek/monolog.git@3bed304b1905fed5c30d172872f4d890cbb03c6a: tests/Monolog/Handler/LogmaticHandlerTest.php:37-46 tests/Monolog/Handler/LogEntriesHandlerTest.php:37-46"
+    },
+    {
+      "why": "The code beginning with `test('two set-cookie, with lots of commas', () async {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "http/pkgs/http/test/response_test.dart:16-29",
+        "http/pkgs/http/test/response_test.dart:2-14"
+      ],
+      "type": "Type II",
+      "judged_at": "https://github.com/dart-lang/http.git@2bac218a1115a58addd140d7a7eaabf803d57631: pkgs/http/test/response_test.dart:171-184 pkgs/http/test/response_test.dart:157-169"
+    },
+    {
+      "why": "The code beginning with `test(` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
+      "occurrences": [
+        "http/pkgs/http/test/request_test.dart:14-24",
+        "http/pkgs/http/test/request_test.dart:2-12"
+      ],
+      "judged_at": "https://github.com/dart-lang/http.git@2bac218a1115a58addd140d7a7eaabf803d57631: pkgs/http/test/request_test.dart:249-259 pkgs/http/test/request_test.dart:237-247"
+    },
+    {
+      "why": "The code beginning with `var data = map[string]any{` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "viper/internal/encoding/yaml/codec_test.go:66-86",
+        "viper/internal/encoding/yaml/codec_test.go:3-64"
+      ],
+      "judged_at": "https://github.com/spf13/viper.git@528f7416c4b56a4948673984b190bf8713f0c3c4: internal/encoding/yaml/codec_test.go:75-95 internal/encoding/yaml/codec_test.go:11-72"
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": []
+}

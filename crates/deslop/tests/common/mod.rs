@@ -104,6 +104,9 @@ pub(crate) mod corpora;
 /// pair stays hidden while a rename clone beside it still surfaces.
 pub(crate) mod contract_boundary;
 pub(crate) mod verbatim_subgroup;
+/// Judged string-heavy corpus pairs scored through the corpus gate's
+/// scorer ([FUSED-CONTENT-GATE-LITERAL-BOUND]).
+pub(crate) mod judged_pairs;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
