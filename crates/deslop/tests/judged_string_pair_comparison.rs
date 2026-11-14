@@ -32,7 +32,7 @@ use crate::common::{
 };
 
 /// Every judged pair in the fixture register.
-const JUDGED_PAIRS: usize = 20;
+const JUDGED_PAIRS: usize = 21;
 const LITERAL_BOUND_REFUSAL: &str =
     "rejected: one string literal carries an endpoint and the texts differ";
 const OSPREY_FIXTURE: &str = "rust-escaped-string-literals";

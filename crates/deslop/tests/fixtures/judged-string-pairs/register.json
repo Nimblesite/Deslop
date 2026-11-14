@@ -30,6 +30,14 @@
       "judged_at": "https://github.com/dotnet/BenchmarkDotNet.git@04e8bfa38b19930a8c949e5e9f2bd9e6215d3996: tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/BenchmarkRunner/RunAnalyzerTests.cs:13-48 tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/BenchmarkRunner/RunAnalyzerTests.cs:56-100"
     },
     {
+      "why": "The code beginning with `public OnlyOneMethodCanBeBaselinePerCategory() : base(BenchmarkClassAnalyzer.OnlyOneMethodCanBeBaselinePerCategoryRule) { }` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/General/BenchmarkClassAnalyzerTests.cs:38-73",
+        "BenchmarkDotNet/tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/General/BenchmarkClassAnalyzerTests.cs:5-33"
+      ],
+      "judged_at": "https://github.com/dotnet/BenchmarkDotNet.git@04e8bfa38b19930a8c949e5e9f2bd9e6215d3996: tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/General/BenchmarkClassAnalyzerTests.cs:1211-1246 tests/BenchmarkDotNet.Analyzers.Tests/AnalyzerTests/General/BenchmarkClassAnalyzerTests.cs:452-480"
+    },
+    {
       "why": "The code beginning with `fn test_nonzero_i128() {` is repeated with the same operations in the same order and only consistent name or literal substitutions.",
       "occurrences": [
         "serde/test_suite/tests/test_de_error.rs:1-39",

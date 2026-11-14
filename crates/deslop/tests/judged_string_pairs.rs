@@ -41,9 +41,9 @@ use crate::common::{
 };
 
 /// Every judged pair in the fixture register.
-const JUDGED_PAIRS: usize = 20;
+const JUDGED_PAIRS: usize = 21;
 /// Source files in the fixture tree, licences and register excluded.
-const SOURCE_FILES: u64 = 21;
+const SOURCE_FILES: u64 = 22;
 /// Directory names of the judged-unrelated negatives inside a mixed scan.
 const OSPREY_DIR: &str = "osprey";
 const DATAPROVIDER_DIR: &str = "dataprovider";
@@ -94,7 +94,7 @@ fn is_source(path: &std::path::Path) -> bool {
         .is_some_and(|name| !name.starts_with(LICENCE_PREFIX))
 }
 
-/// All 20 judged pairs, scanned together as one tree, each answered by a
+/// All 21 judged pairs, scanned together as one tree, each answered by a
 /// cluster that shows most of its judged lines.
 #[test]
 fn every_judged_string_pair_is_reported_in_one_scan() -> Result<()> {
