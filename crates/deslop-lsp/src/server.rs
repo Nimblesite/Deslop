@@ -66,7 +66,7 @@ pub enum ServeEnd {
 
 impl ServeEnd {
     /// The process exit code the base protocol requires for this ending.
-    #[must_use]
+    #[must_use = "the exit code is how the process reports this ending"]
     pub fn exit_code(self) -> ExitCode {
         match self {
             Self::ExitAfterShutdown | Self::ClientVanished => ExitCode::SUCCESS,

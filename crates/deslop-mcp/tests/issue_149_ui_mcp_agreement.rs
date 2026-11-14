@@ -102,7 +102,7 @@ fn cluster_by_id_accepts_seven_hex_slug() -> Result<()> {
 
 /// [UX-CLUSTER-IDENTITY] Copy the actual CLI handle into the MCP request.
 fn cli_cluster_slug(root: &Path, full_id: &str) -> Result<String> {
-    let output = Command::new(assert_cmd::cargo::cargo_bin("deslop"))
+    let output = Command::new(deslop_test_support::workspace_bin("deslop"))
         .arg(root)
         .arg("--output")
         .arg(root.join(".deslop/cli-identity"))

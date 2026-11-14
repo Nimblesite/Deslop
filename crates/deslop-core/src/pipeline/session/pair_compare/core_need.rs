@@ -101,6 +101,7 @@ mod tests {
                 raw: PairTextIdentity::Different,
                 identical: false,
             },
+            literal_bound: false,
         }
     }
 

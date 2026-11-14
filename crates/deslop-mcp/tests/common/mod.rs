@@ -80,27 +80,12 @@ pub fn copied_fixture_named(name: &str) -> Result<TempDir> {
             .join(name)
     };
     let dst = TempDir::new()?;
-    copy_dir(&src, dst.path())?;
+    deslop_test_support::copy_tree(&src, dst.path())?;
     let cache = dst.path().join(".deslop/cache");
     if cache.exists() {
         fs::remove_dir_all(&cache).context("clear cache dir")?;
     }
     Ok(dst)
-}
-
-/// Recursively copies `src` into `dst`, creating `dst` as needed.
-pub fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let target = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir(&entry.path(), &target)?;
-        } else {
-            let _bytes = fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
 }
 
 /// Spawned MCP child + an id-tracked JSON-RPC request loop.

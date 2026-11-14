@@ -102,6 +102,8 @@ const MIXED_DIR: &str = "category_order";
 /// The opening of one kind's collapsible group, which is what fixes its
 /// position on the page.
 const GROUP_OPEN: &str = "<details class=\"clone-group";
+/// The summary element that carries a group's title.
+const GROUP_SUMMARY: &str = "<summary";
 
 /// [CLONE-KIND-LABELS] The category display order: Identical, Nearly
 /// identical, Similar, Same behavior, then the informational non-clone.
@@ -120,7 +122,10 @@ fn group_titles_in_page_order(html: &str) -> Vec<String> {
     html.split(GROUP_OPEN)
         .skip(1)
         .filter_map(|group| {
-            let (_, after_summary_tag) = group.split_once("\">")?;
+            // A collapsed group closes its `<details>` tag with `">` too,
+            // so the title is read from the summary, not the first quote.
+            let (_, summary) = group.split_once(GROUP_SUMMARY)?;
+            let (_, after_summary_tag) = summary.split_once("\">")?;
             let (title, _) = after_summary_tag.split_once(" — ")?;
             Some(title.to_owned())
         })

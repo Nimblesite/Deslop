@@ -23,9 +23,12 @@ use crate::common::{
         assert_initialize_contract, assert_report_shell, cluster_paths, has_suffix,
         occurrence_paths, report_clusters, REPORT_TIMEOUT,
     },
-    spawn_lsp_on_fixture_guarded, wait_for_report_matching, workspace_file_uri, write_frame,
+    spawn_lsp_on_fixture_guarded, wait_for_report_matching, whole_buffer_change,
+    workspace_file_uri, write_frame,
 };
 
+#[path = "open_buffers/analysed_versions.rs"]
+mod analysed_versions;
 #[path = "open_buffers/deletion.rs"]
 mod deletion;
 #[path = "open_buffers/embedding.rs"]
@@ -43,6 +46,8 @@ const DID_CLOSE: &str = "textDocument/didClose";
 const REPORT_FOR_RANGE: &str = "deslop/reportForRange";
 /// Replacement text that removes the edited span outright.
 const DELETED: &str = "";
+/// The buffer version that restores the disk text after the deletion.
+const RESTORE_VERSION: i64 = 3;
 /// One byte inside the deleted clone, used to query the range it covered.
 const INSIDE_OCCURRENCE_BYTE: u64 = 1;
 /// [LIVE-OPEN-BUFFERS] The complete clone must survive disk removal until the buffer closes.
@@ -95,7 +100,10 @@ fn unsaved_buffer_edits_drive_the_report_and_range_queries() -> Result<()> {
         "a range inside the deleted clone must report nothing: {hits:?}"
     );
 
-    write_frame(&mut stdin, &whole_change(&uri, &disk_text)?)?;
+    write_frame(
+        &mut stdin,
+        &whole_buffer_change(uri.as_str(), RESTORE_VERSION, &disk_text)?,
+    )?;
     assert_restored_report(
         &mut stdin,
         &mut stdout,
@@ -198,18 +206,6 @@ fn ranged_change(
                 },
                 "text": replacement
             }]
-        }),
-    )
-}
-
-/// A `textDocument/didChange` without a range: the whole buffer becomes
-/// `text`.
-fn whole_change(uri: &Url, text: &str) -> Result<String> {
-    notification(
-        DID_CHANGE,
-        &json!({
-            "textDocument": { "uri": uri.as_str(), "version": 3 },
-            "contentChanges": [{ "text": text }]
         }),
     )
 }

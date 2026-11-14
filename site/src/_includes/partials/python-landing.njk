@@ -11,51 +11,20 @@
       <p class="py-chip"><span class="py-chip__icon">{{ python.icon | safe }}</span>{{ copy.eyebrow }}</p>
       <h1 id="py-title">{{ copy.headline }} <em>{{ copy.headlineEm }}</em></h1>
       <p class="py-hero__lede">{{ copy.lede }}</p>
-      <div class="py-cta">
-        {{ installButton(copy.install) }}
-        <a class="py-link" href="#film">{{ copy.watch }} <span aria-hidden="true">→</span></a>
-      </div>
+      <div class="py-cta">{{ installButton(copy.install) }}</div>
       <p class="py-hero__note">{{ copy.installNote }}</p>
       <p class="py-hero__note"><a href="https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live">{{ copy.marketplace }}</a></p>
     </div>
-    <figure class="py-clone" aria-label="{{ copy.cardLabel }}">
-      <figcaption class="py-clone__head"><span class="py-clone__kind">{{ copy.cardKind }}</span><span>src/click/exceptions.py</span></figcaption>
-      <div class="py-clone__panes">
-        <pre class="py-clone__pane"><span class="py-clone__file">NoSuchOption.__init__ · line 241</span>def __init__(
-    self,
-    <mark>option_name</mark>: str,
-    message: str | None = None,
-    possibilities: cabc.Iterable[str] | None = None,
-    ctx: Context | None = None,
-) -> None:
-    if message is None:
-        message = _("No such <mark>option</mark> {name!r}.").format(name=<mark>option_name</mark>)
-
-    super().__init__(message, ctx)
-    self.<mark>option_name</mark> = <mark>option_name</mark></pre>
-        <pre class="py-clone__pane"><span class="py-clone__file">NoSuchCommand.__init__ · line 277</span>def __init__(
-    self,
-    <mark>command_name</mark>: str,
-    message: str | None = None,
-    possibilities: cabc.Iterable[str] | None = None,
-    ctx: Context | None = None,
-) -> None:
-    if message is None:
-        message = _("No such <mark>command</mark> {name!r}.").format(name=<mark>command_name</mark>)
-
-    super().__init__(message, ctx)
-    self.<mark>command_name</mark> = <mark>command_name</mark></pre>
-      </div>
-      <p class="py-clone__foot">{{ copy.cardFoot }}</p>
-    </figure>
+    <div class="py-film" id="film">
+      {% set docFilm = "python-click" %}
+      {% include "partials/doc-film.njk" %}
+    </div>
   </section>
 
-  <section class="py-section py-film" id="film" aria-labelledby="py-film-title">
+  <section class="py-section" aria-labelledby="py-film-title">
     <p class="py-eyebrow">{{ copy.filmEyebrow }}</p>
     <h2 id="py-film-title">{{ copy.filmTitle }}</h2>
     <p class="py-lede">{{ copy.filmLede }}</p>
-    {% set docFilm = "python-click" %}
-    {% include "partials/doc-film.njk" %}
   </section>
 
   <section class="py-section" aria-labelledby="py-clones-title">
@@ -67,7 +36,7 @@
       <li class="py-card">
         <span class="py-card__kind">{{ clone.kind }}</span>
         <h3>{{ clone.title }}</h3>
-        <pre class="py-card__code">{{ clone.code }}</pre>
+        <div class="py-card__code">{% highlight "python" %}{{ clone.code | safe }}{% endhighlight %}</div>
         <p class="py-card__where">{{ clone.where }}</p>
         <p>{{ clone.text }}</p>
       </li>

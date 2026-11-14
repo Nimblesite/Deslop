@@ -96,10 +96,11 @@ pub async fn report_get(
     let _phase = backend
         .observability()
         .start_phase(CpuPhase::ReportRendering, Vec::new());
-    let report = backend.service().report_get().await;
-    let slim: Report = (*report)
+    let (report, analysed) = backend.service().report_with_buffers().await;
+    let mut slim: Report = (*report)
         .clone()
         .truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
+    slim.analysed_buffers = Some(analysed);
     let clusters = slim.clusters.len();
     let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     tracing::info!(

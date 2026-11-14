@@ -64,6 +64,7 @@ jobs:
 | `diff` | *(未设置)* | 以其新增行限定报告范围的统一 diff — 补丁文件路径。仍会分析整棵树；diff 只限定报告内容，绝不限定扫描范围。`-`（标准输入）仅适用于 CLI：复合 action 无法提供标准输入，因此 Action 会拒绝该值，而不是悄悄地度量一个空 diff |
 | `only-changed` | `false` | 只报告 diff 触及的簇，并按 diff 范围的百分比设门禁 — 重复的新增行数除以新增行数 — 使存量债务无法让合并前检查失败。需要 `diff` |
 | `cache` | `true` | 通过 Actions 缓存在运行之间保留解析存储，预热运行只重新解析有变化的文件 |
+| `cache-scope` | 作业 id | 为本作业的解析存储命名。默认每个作业各用各的存储；给两个作业相同的值即可共用一份，同一操作系统上的矩阵分支则应使用不同的值 |
 | `output` | `deslop-report` | 报告路径前缀；会追加 `.json`、`.txt`、`.html` |
 | `nojson` / `notext` / `nohtml` | `false` | 抑制某种输出格式 |
 | `log-level` | `info` | `error`、`warn`、`info`、`debug` 或 `trace` |

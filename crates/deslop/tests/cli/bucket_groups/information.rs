@@ -196,6 +196,11 @@ fn shape_only_presentations_identify_information_and_keep_locations() -> Result<
     for body in [&stderr, &reports.html, &reports.txt] {
         assert_informational_presentation(body);
     }
+    assert_contains(
+        &reports.html,
+        &super::counted::shape_only_expander(),
+        "[METRICS-TOTAL-COUNTED] shape-only never counts: marked and collapsed like any other",
+    );
     Ok(())
 }
 

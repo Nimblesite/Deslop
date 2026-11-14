@@ -18,7 +18,7 @@ use deslop_core::{
     buckets::ClusterKind,
     live::FileReport,
     report::{ReportCluster, ReportOccurrence},
-    report_facts::kind_excluded_from_total,
+    report_facts::clone_kind_left_out_of_total,
 };
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range, Url,
@@ -159,7 +159,7 @@ fn severity_for(
     if let Some(level) = settings.severity_by_kind.get(&cluster.kind) {
         return level.severity();
     }
-    if kind_excluded_from_total(cluster.kind, total_includes) {
+    if clone_kind_left_out_of_total(cluster.kind, total_includes) {
         return None;
     }
     match cluster.kind.default_diagnostic_severity() {

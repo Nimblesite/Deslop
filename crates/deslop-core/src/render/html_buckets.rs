@@ -6,7 +6,7 @@ use crate::{
     buckets::ClusterKind,
     render::{html::write_cluster_card, html_snippets::SnippetLoader},
     report::ReportCluster,
-    report_facts::kind_excluded_from_total,
+    report_facts::{kind_counts_toward_total, NOT_COUNTED_MARKER},
 };
 
 /// Groups clusters by `key`, preserving mass order and first-seen group order.
@@ -37,22 +37,20 @@ where
 
 /// Opens one kind's collapsible expander: the CSS suffix the colour rule
 /// keys on, the taxonomy tooltip, the title and the live group count.
-/// An excluded kind's header carries the grey modifier class and says
-/// so in words, so a reader never wonders why its lines are missing
-/// from the headline ([METRICS-TOTAL-INCLUDE]).
-fn write_group_header(out: &mut String, kind: ClusterKind, groups: usize, excluded: bool) {
+/// A kind the total does not count carries the grey modifier class,
+/// says so in words and starts collapsed, so a reader never wonders
+/// whether its lines are in the headline ([METRICS-TOTAL-COUNTED]).
+fn write_group_header(out: &mut String, kind: ClusterKind, groups: usize, counted: bool) {
     let labels = kind.labels();
-    let modifier = if excluded {
-        " clone-group--excluded"
+    let (modifier, marker, open_attr) = if counted {
+        ("", String::new(), " open")
     } else {
-        ""
+        (
+            " clone-group--excluded",
+            format!(" — {NOT_COUNTED_MARKER}"),
+            "",
+        )
     };
-    let marker = if excluded {
-        " — not counted in total"
-    } else {
-        ""
-    };
-    let open_attr = if excluded { "" } else { " open" };
     let _ = write!(
         out,
         "<details class=\"clone-group clone-group--{suffix}{modifier}\"{open_attr}>\
@@ -61,6 +59,18 @@ fn write_group_header(out: &mut String, kind: ClusterKind, groups: usize, exclud
         taxonomy = labels.taxonomy,
         title = labels.title,
     );
+}
+
+/// Every kind with whether the total counts it: the kinds that count
+/// first, then the rest, each run in the category display order
+/// ([METRICS-TOTAL-COUNTED]). Shape-only never counts, so it stays last.
+fn kinds_counted_first(total_includes: &[ClusterKind]) -> Vec<(ClusterKind, bool)> {
+    let mut kinds: Vec<(ClusterKind, bool)> = ClusterKind::all()
+        .into_iter()
+        .map(|kind| (kind, kind_counts_toward_total(kind, total_includes)))
+        .collect();
+    kinds.sort_by_key(|(_, counted)| !counted);
+    kinds
 }
 
 /// Writes one collapsible expander per clone kind present, in the
@@ -80,16 +90,11 @@ pub(super) fn write_bucket_groups<'c>(
     total_includes: &[ClusterKind],
 ) {
     let grouped = group_by_first_seen(clusters, |cluster| cluster.kind);
-    for kind in ClusterKind::all() {
+    for (kind, counted) in kinds_counted_first(total_includes) {
         let Some((_, clusters)) = grouped.iter().find(|(present, _)| *present == kind) else {
             continue;
         };
-        write_group_header(
-            out,
-            kind,
-            clusters.len(),
-            kind_excluded_from_total(kind, total_includes),
-        );
+        write_group_header(out, kind, clusters.len(), counted);
         for cluster in clusters {
             write_cluster_card(out, cluster, snippets);
         }

@@ -43,9 +43,22 @@ fn editor_html_and_json_exports_reuse_the_current_live_generation() -> Result<()
 }
 
 /// Reads the canonical structured snapshot, through the editor's real transport.
+///
+/// [LIVE-OPEN-BUFFERS] The live answer also names the open buffers it
+/// analysed, which is live transport state, not part of the report an export
+/// writes; with no buffer open it names none, and is compared without it.
 fn current_report(lsp: &mut FixtureSession) -> Result<Value> {
     let response = lsp.call(REPORT_GET, &json!({}))?;
-    response.get("result").cloned().context("report result")
+    let mut report = response.get("result").cloned().context("report result")?;
+    let analysed = report
+        .as_object_mut()
+        .and_then(|fields| fields.remove("analysed_buffers"));
+    assert_eq!(
+        analysed,
+        Some(json!([])),
+        "no buffer is open, so the live answer names none"
+    );
+    Ok(report)
 }
 
 /// Generation equality detects a refresh even when its calculated groups are equal.

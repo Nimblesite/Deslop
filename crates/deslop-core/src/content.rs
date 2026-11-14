@@ -7,13 +7,14 @@ mod cache;
 mod call_targets;
 mod core_frontier;
 mod frontier;
+pub(crate) mod literal_bound;
 mod rename;
 
 pub(crate) use cache::{ContentMeasurer, ContentPair};
 use core_frontier::joined_content;
 use frontier::{
     frontiers_aligned, key_set_jaccard, member_content, member_count, operator_contradiction,
-    positional_agreement, MemberContent, Population,
+    positional_agreement, LiteralText, MemberContent, Population,
 };
 
 use crate::{ast::NormalizedNode, fingerprint::Fingerprint, state::FileId};
@@ -267,7 +268,7 @@ fn pair_gate_evidence<S: BuildHasher>(
     let contradiction =
         pair_contradiction(left, right, sources).unwrap_or(ContentContradiction::None);
     let mut evidence = ContentEvidence {
-        agreement: pair_agreement(Some(left), Some(right)),
+        agreement: pair_agreement(left, right, sources),
         measured: true,
         contradiction,
         ..ContentEvidence::unmeasured()
@@ -295,7 +296,7 @@ fn pair_evidence<S: BuildHasher>(
         pair_contradiction(left, right, sources).unwrap_or(ContentContradiction::None);
     let (rename_consistency, consistent) = rename::rename_axes(left, right, sources, scope);
     ContentEvidence {
-        agreement: pair_agreement(Some(left), Some(right)),
+        agreement: pair_agreement(left, right, sources),
         rename_consistency,
         consistent_rename: contradiction == ContentContradiction::None && consistent,
         literal_fraction: pair_literal_fraction(left, right),
@@ -324,19 +325,26 @@ fn pair_literal_fraction(left: &MemberContent, right: &MemberContent) -> f64 {
     member_count(literals) / member_count(vocabulary)
 }
 
-/// Fraction of aligned authored positions whose raw bytes match.
-fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -> f64 {
-    let (Some(left), Some(right)) = (left, right) else {
-        return 0.0;
-    };
-
+/// Fraction of aligned authored positions whose raw bytes match, two
+/// differing literal texts read by [`literal_bound::literal_text`].
+fn pair_agreement<S: BuildHasher>(
+    left: &MemberContent,
+    right: &MemberContent,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> f64 {
     if left.keys.is_empty() && right.keys.is_empty() {
         return 1.0;
     }
     if !frontiers_aligned(left, right) {
         return key_set_jaccard(&left.keys, &right.keys);
     }
-    positional_agreement(&left.keys, &right.keys)
+    positional_agreement(&left.keys, &right.keys, |index| {
+        frontier::leaf_bytes(left, index, sources)
+            .zip(frontier::leaf_bytes(right, index, sources))
+            .map_or(LiteralText::Different, |(left, right)| {
+                literal_bound::literal_text(left, right)
+            })
+    })
 }
 
 /// Semantic contradictions share one verdict across pair admission and explicit comparison.

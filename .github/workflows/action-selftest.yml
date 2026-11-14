@@ -146,6 +146,8 @@ jobs:
           path: examples/rust
           version: ${{ needs.contract.outputs.version }}
           fail-over: "100"
+          # Seed and warm are two jobs that must share one store. [ACTION-CACHE]
+          cache-scope: cache-selftest
           output: cache-seed-report
           artifact-name: deslop-cache-seed-report
 
@@ -175,6 +177,7 @@ jobs:
           path: examples/rust
           version: ${{ needs.contract.outputs.version }}
           fail-over: "100"
+          cache-scope: cache-selftest
           output: cache-warm-report
           upload-artifact: "false"
 
@@ -190,14 +193,23 @@ jobs:
           test "${CODE}" = "0"
           node --input-type=module -e '
             import assert from "node:assert/strict";
-            import { readFileSync } from "node:fs";
+            import { readdirSync, readFileSync } from "node:fs";
             const parse = (path) => JSON.parse(readFileSync(path, "utf8"));
             const seed = parse("seed/cache-seed-report.json");
             const warm = parse("cache-warm-report.json");
             const { hits, misses } = warm.cache_stats;
             console.log(`warm cache_stats: ${hits} hits / ${misses} misses`);
-            assert.ok(hits > 0, "the warm run restored no blobs — the store did not cross the cache");
-            assert.equal(misses, 0, "a warm run of an unchanged tree must miss nothing");
+            // [OUTPUT-REPORT-REUSE] A restored completed report is reused
+            // whole and keeps the cache_stats of the run that produced it,
+            // so reuse logged by this run is the store crossing too.
+            const reused = readdirSync("logs")
+              .filter((name) => name.startsWith("deslop-") && name.endsWith(".log"))
+              .some((name) => readFileSync(`logs/${name}`, "utf8").includes("reusing completed report calculations"));
+            console.log(`warm run reused the completed report: ${reused}`);
+            assert.ok(
+              reused || (hits > 0 && misses === 0),
+              "the warm run neither reused the restored report nor hit every restored blob — the store did not cross the cache",
+            );
             delete seed.cache_stats;
             delete warm.cache_stats;
             assert.deepStrictEqual(warm, seed, "the restored store changed the report — [ACTION-CACHE] forbids that");

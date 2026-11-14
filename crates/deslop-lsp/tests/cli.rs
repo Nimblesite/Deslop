@@ -59,7 +59,6 @@ const ADVERTISED_FLAGS: &[&str] = &[
     "--worker-threads",
     "--nice",
     "--ipc-transport",
-    "--ranking-structural-only",
     "--stdio",
     "--debug",
     "-h, --help",

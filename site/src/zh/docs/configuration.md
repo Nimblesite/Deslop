@@ -138,18 +138,22 @@ split_by_language = false
 | --- | --- | --- | --- |
 | `split_by_language` | 布尔 | `false` | 将 HTML 报告按语言划分为各自的区段。`--split-by-language` 参数也能开启它 — 任一来源都会生效。 |
 
-## `[ranking]`
+## 排名
 
-克隆按重复质量排名：参考语法树节点数 × 额外可见副本数。类别和置信度不会乘入质量。
+克隆按重复质量排名：参考语法树节点数 × 额外可见副本数。类别和置信度不会乘入质量，也没有任何设置可以调整某一类别的权重或将其隐藏。仅形状匹配排在克隆之后，标注为不计入总量，且永远不会增加重复率。
 
-隐藏仅供参考的形状匹配：
+`[ranking]` 配置节已停用。仍包含该配置节的配置文件会加载失败并给出说明；请删除该配置节。
+
+## `[visibility]`
+
+在排名之前排除已确认的数据表类发现，保留下来的发现质量不变：
 
 ```toml
-[ranking]
-structural_only = "ignore"
+[visibility]
+data_clones = "keep"   # "keep"（默认）| "ignore"
 ```
 
-`structural_only` 接受 `demote`（默认）、`ignore` 或 `keep`。可见的仅形状匹配仍排在克隆之后，重复质量为零；任何设置都不会让它计入重复率。VS Code 设置优先于此文件。`data_clones = "ignore"` 会在排名前排除数据类发现。
+此处不接受 `demote` 和权重系数：排名只依据重复质量。任何配置节中的未知键都会使运行失败，并在错误信息中指出该键，因此已停用的设置不可能悄悄关闭检查门禁。
 
 ## 内置规则（始终生效）
 
@@ -205,10 +209,6 @@ max_duplication_percent = 20
 # 将 HTML 报告按语言拆分。
 [report]
 split_by_language = true
-
-# 隐藏仅供参考的形状匹配。
-[ranking]
-structural_only = "ignore"
 ```
 
 ## 命令行参数

@@ -244,6 +244,8 @@ fn html_report_summary_shows_diagnostic_severity_and_cards_carry_the_kind() -> R
     Ok(())
 }
 
+#[path = "bucket_groups/counted.rs"]
+mod counted;
 #[path = "bucket_groups/information.rs"]
 pub(super) mod information;
 

@@ -31,6 +31,8 @@ pub mod skip_contract;
 pub mod skip_policy;
 mod syntax;
 pub mod test_target_parity;
+mod workspace_bin;
+pub use workspace_bin::workspace_bin;
 
 use std::{
     fs,
@@ -42,6 +44,25 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+
+/// Recursively copies the tree at `src` into `dst`, creating directories
+/// as needed: how every suite seeds a mutable scan root from a fixture.
+///
+/// # Errors
+///
+/// Returns an error naming the path that could not be read or copied.
+pub fn copy_tree(src: &Path, dst: &Path) -> Result<()> {
+    if !src.is_dir() {
+        let _bytes = fs::copy(src, dst).with_context(|| format!("copy {}", src.display()))?;
+        return Ok(());
+    }
+    fs::create_dir_all(dst).with_context(|| format!("mkdir {}", dst.display()))?;
+    for entry in fs::read_dir(src).with_context(|| format!("read_dir {}", src.display()))? {
+        let entry = entry.context("dir entry")?;
+        copy_tree(&entry.path(), &dst.join(entry.file_name()))?;
+    }
+    Ok(())
+}
 
 /// Reads `path` as UTF-8 text, naming the file when it cannot be read.
 ///
@@ -149,7 +170,7 @@ fn read_lsp_content_length(reader: &mut impl BufRead) -> Result<usize> {
 ///
 /// Returns an error if the child process fails to spawn.
 pub fn spawn_deslop_lsp(root: &Path, stderr: Stdio) -> Result<Child> {
-    let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
+    let bin = workspace_bin("deslop-lsp");
     Ok(Command::new(bin)
         .arg(root)
         .stdin(Stdio::piped())

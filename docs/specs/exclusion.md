@@ -8,7 +8,7 @@ Deslop ships with conservative built-in defaults, and a `.deslop.toml` in the sc
 - `exclude` — matching files are dropped in [PIPELINE-DISCOVER-FILES] before parsing. They are not counted in `files_analysed`, never fingerprinted, never embedded, and cannot appear in any cluster. Use for third-party vendored code you do not want analysed at all.
 - `report_hide` — matching files **are analysed** and can contribute to clustering, but each occurrence is flagged `hidden = true` at render time. A cluster where **every** occurrence is hidden is dropped from the rendered `clusters` list and counted under `clusters_hidden`. A cluster with at least one non-hidden occurrence is kept intact so the user sees "regular code duplicates generated code." This is the default tier for generated output like `*.g.cs`, `*.generated.cs`, OpenAPI clients, protobuf output.
 
-**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN], excludes bundled and minified build artifacts per [CONFIG-EXCLUDE-MINIFIED], and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`), and any file that opens with a generator's banner ([EXCLUSION-GENERATED-BANNER]). Project config adds to these defaults.
+**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN], excludes bundled and minified build artifacts per [CONFIG-EXCLUDE-MINIFIED], excludes `tree-sitter generate` output per [CONFIG-EXCLUDE-TREE-SITTER], and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`), and any file that opens with a generator's banner ([EXCLUSION-GENERATED-BANNER]). Project config adds to these defaults.
 
 **File format.** TOML. Parsed via the `toml` crate. Minimal, familiar, diffable:
 
@@ -24,7 +24,7 @@ report_hide = ["**/Migrations/**/*.cs"]
 report_hide = ["**/target/**"]
 ```
 
-**Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
+**Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root. A trailing slash matches a directory and applies to its contents. A file exception inside a matched directory only takes effect if the directory itself is reopened.
 
 **Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.
 
@@ -39,7 +39,7 @@ report_hide = ["**/target/**"]
 data_clones = "keep"        # "keep" (default) | "ignore"
 ```
 
-`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted.
+`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted. The whole `[ranking]` section is retired with them: a config that still carries one fails to load with "the [ranking] section is retired", and the language server refuses its former `--ranking-structural-only` flag, so a setting nothing reads is never accepted and ignored (`crates/deslop-core/src/config/visibility.rs`; `rank_structural_only_policy.rs`, `issue_190_data_table_demote.rs`).
 
 **`[tuning]` section.** Every detection, admission, category and suppression threshold is configurable here. Existing defaults are listed in [FUSED-TUNING-LEVERS]; the new category defaults are in [CLONE-BUCKETS-THRESHOLDS](taxonomy.md#clone-buckets-thresholds-defaults-and-toml-settings). No unnamed or hard-coded category cutoff is permitted. Omitted keys use their named defaults; all surfaces receive the same resolved settings.
 
@@ -137,6 +137,16 @@ The shape test reads a bounded prefix of files above a size floor, so discovery'
 **Size is never the signal.** A 53 KB file of ordinary source is analysed; a 17 KB artifact is not. Excluding on size would drop real code from the report with nothing to say it had, which is a false negative — the one outcome this project treats as worse than any other. A file that cannot be read is not excluded, for the same reason: the rule can only ever remove code from the analysis, so when it cannot tell, it declines to.
 
 Excluded, not report-hidden: the memory is spent at parse time, so the file has to leave before [PIPELINE-DISCOVER-FILES] hands it on. It is not counted in `files_analysed` and can appear in no cluster.
+
+### [CONFIG-EXCLUDE-TREE-SITTER] Generated grammar output is not source
+
+`tree-sitter generate` writes `src/parser.c`, `src/grammar.json` and `src/node-types.json`, and copies its runtime headers to `src/tree_sitter/`. Older releases write no banner, so [EXCLUSION-GENERATED-BANNER] never sees the parser. In Osprey one such `parser.c` (164k lines) supplied 46,965 of 76,538 duplicated lines, and the copied headers reported as 100% duplicates of each other (gh #621).
+
+The layout is the signal. A directory named `src` that holds `parser.c`, `grammar.json` and `tree_sitter/parser.h` is a grammar's generated output. Inside it, `parser.c`, `grammar.json`, `node-types.json` and every `tree_sitter/*.h` are excluded. Everything else stays, including the hand-written `scanner.c`. A `src/parser.c` with no `grammar.json` beside it is an ordinary C file and is analysed.
+
+Excluded, not report-hidden, for the reason [CONFIG-EXCLUDE-MINIFIED] gives: the cost is paid at parse time. A file whose neighbours cannot be read is not excluded.
+
+Code: `crates/deslop-core/src/config/tree_sitter_output.rs`. Tests: `crates/deslop/tests/tree_sitter_output_exclusion.rs`.
 
 ### [CONFIG-EXCLUDE-BUILTIN] Built-in component exclusion
 

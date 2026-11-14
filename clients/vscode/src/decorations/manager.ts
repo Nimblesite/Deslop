@@ -27,7 +27,7 @@ import {
   Report,
   ReportCluster,
   ReportOccurrence,
-  isKindExcluded,
+  isCloneKindLeftOut,
   occurrenceCount,
 } from "../types/report";
 
@@ -105,7 +105,7 @@ export function decoratableClusters(report: Report): ReportCluster[] {
   const totalIncludes = report.metrics.total_includes;
   if (totalIncludes === undefined) return report.clusters;
   return report.clusters.filter(
-    (cluster) => !isKindExcluded(cluster.kind, totalIncludes),
+    (cluster) => !isCloneKindLeftOut(cluster.kind, totalIncludes),
   );
 }
 

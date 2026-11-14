@@ -17,5 +17,5 @@ import assert from "node:assert/strict";
 
 import { total } from "../lib/contract-harness.mjs";
 
-assert.ok(total() >= 39, `the suite ran ${total()} checks — a module stopped importing`);
+assert.ok(total() >= 48, `the suite ran ${total()} checks — a module stopped importing`);
 console.log(`\naction contract: ${total()} checks passed`);

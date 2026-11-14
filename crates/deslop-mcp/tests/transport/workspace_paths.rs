@@ -3,8 +3,8 @@
 use std::{collections::BTreeSet, fs, path::Path, process::Command};
 
 use anyhow::{ensure, Context, Result};
-use assert_cmd::cargo::cargo_bin;
 use deslop_core::{report::ReportCluster, Report};
+use deslop_test_support::workspace_bin;
 use serde_json::{json, Value};
 
 use crate::common::{
@@ -147,7 +147,7 @@ fn move_fixture(parent: &Path, workspace: &Path) -> Result<()> {
 
 /// Renders the CLI's canonical JSON report for this exact workspace.
 fn cli_report(workspace: &Path) -> Result<Report> {
-    let output = Command::new(cargo_bin("deslop"))
+    let output = Command::new(workspace_bin("deslop"))
         .arg(workspace)
         .arg("--output")
         .arg(workspace.join(BASELINE))

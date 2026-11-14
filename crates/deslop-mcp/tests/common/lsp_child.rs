@@ -12,7 +12,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use assert_cmd::cargo::cargo_bin;
+use deslop_test_support::workspace_bin;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -29,7 +29,7 @@ pub fn spawn_lsp_and_initialize(root: &Path) -> Result<Child> {
 /// `initialize`+`initialized` handshake, and returns the running
 /// process.
 pub fn spawn_lsp_with_args(root: &Path, extra_args: &[&str]) -> Result<Child> {
-    let bin = cargo_bin("deslop-lsp");
+    let bin = workspace_bin("deslop-lsp");
     let mut child = Command::new(bin)
         .arg(root)
         .args(extra_args)

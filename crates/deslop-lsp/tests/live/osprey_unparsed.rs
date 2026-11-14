@@ -24,7 +24,7 @@ use crate::{
             assert_initialize_contract, assert_report_shell, assert_report_shell_without_clusters,
             cluster_paths, report_clusters, REPORT_TIMEOUT,
         },
-        spawn_lsp_guarded, workspace_file_uri, write_frame, LspGuard,
+        spawn_lsp_guarded, whole_buffer_change, workspace_file_uri, write_frame, LspGuard,
     },
     notifications::{recv_method, request_response, FrameResult},
 };
@@ -54,7 +54,6 @@ const REPORT_GET: &str = "deslop/reportGet";
 const REPORT_DELTA: &str = "deslop/reportDelta";
 const REPORT_CHANGED: &str = "deslop/reportChanged";
 const DID_OPEN: &str = "textDocument/didOpen";
-const DID_CHANGE: &str = "textDocument/didChange";
 const DID_CLOSE: &str = "textDocument/didClose";
 const RESULT: &str = "result";
 const FILES_ANALYSED: &str = "files_analysed";
@@ -262,17 +261,6 @@ fn did_open(uri: &str, text: &str) -> Result<String> {
     )
 }
 
-/// A whole-buffer `textDocument/didChange`.
-fn did_change(uri: &str, version: i64, text: &str) -> Result<String> {
-    notification(
-        DID_CHANGE,
-        &json!({
-            "textDocument": { "uri": uri, "version": version },
-            "contentChanges": [{ "text": text }]
-        }),
-    )
-}
-
 /// The `textDocument/didClose` for `uri`.
 fn did_close(uri: &str) -> Result<String> {
     notification(DID_CLOSE, &json!({ "textDocument": { "uri": uri } }))
@@ -340,7 +328,7 @@ fn broken_osprey_ml_file_is_skipped_without_killing_the_live_server() -> Result<
         &mut stdin,
         &frames,
         previous,
-        &did_change(&uri, SECOND_VERSION, MALFORMED_ML)?,
+        &whole_buffer_change(&uri, SECOND_VERSION, MALFORMED_ML)?,
     )?;
     assert_state(&edited_broken, TWO_FILES, &alpha_skipped, &two_good)?;
     previous = next;
@@ -349,7 +337,7 @@ fn broken_osprey_ml_file_is_skipped_without_killing_the_live_server() -> Result<
         &mut stdin,
         &frames,
         previous,
-        &did_change(&uri, THIRD_VERSION, &valid)?,
+        &whole_buffer_change(&uri, THIRD_VERSION, &valid)?,
     )?;
     assert_state(&edited_valid, THREE_FILES, &[], &all_three)?;
     previous = next;

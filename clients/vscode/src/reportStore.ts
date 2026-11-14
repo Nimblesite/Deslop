@@ -109,7 +109,6 @@ export class ReportStore implements vscode.Disposable {
   private readonly _facetFilter = signal<FacetFilter>({ severities: [] });
   private readonly _severityOverrides = signal<SeverityOverrides>({});
   private readonly _retractedClusters = signal<ReadonlySet<string>>(new Set());
-
   private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
     projectDiagnosticSeverity(projectVisible(this._report.value, this._dirtyFiles.value), this._severityOverrides.value),
   );
@@ -218,12 +217,12 @@ export class ReportStore implements vscode.Disposable {
    * snapshot bumps `revision`, so even a same-generation replacement
    * invalidates answers dispatched before it.
    */
-  setSnapshot(report: Report, generation: number, analysedBuffer?: AnalysedBuffer | null): boolean {
+  setSnapshot(report: Report, generation: number): boolean {
     if (generation < this._generation.value) return false;
     batch(() => {
       this._report.value = report;
       this._generation.value = generation;
-      this.acknowledgeBuffer(analysedBuffer);
+      this.acknowledgeBuffers(report.analysed_buffers);
       this._revision.value += 1;
       // A full snapshot re-states the whole corpus, so every earlier
       // retraction is settled by it — a cluster still absent here is
@@ -261,7 +260,7 @@ export class ReportStore implements vscode.Disposable {
    * A restatement (`from_generation` 0) replaces the cluster list instead of
    * merging into it ([LIVE-DELTA]).
    */
-  applyDelta(delta: ReportDelta, analysedBuffer?: AnalysedBuffer | null): boolean {
+  applyDelta(delta: ReportDelta): boolean {
     const current = this._report.value;
     if (!current) return false;
     // A restatement carries the server's own current generation, so it is
@@ -308,7 +307,7 @@ export class ReportStore implements vscode.Disposable {
         tool_version: delta.tool_version,
       };
       this._generation.value = delta.to_generation;
-      this.acknowledgeBuffer(analysedBuffer);
+      this.acknowledgeBuffers(delta.analysed_buffers);
       this._revision.value += 1;
       // Same rule as setSnapshot: only a non-empty result settles the
       // lifecycle; an emptied report waits for the server's idle signal.
@@ -343,9 +342,19 @@ export class ReportStore implements vscode.Disposable {
     return this._dirtyFiles.value.has(normalisePath(path));
   }
 
+  /**
+   * [LIVE-OPEN-BUFFERS] Releases each buffer version the landing report
+   * names as analysed. The versions ride on the report itself, read under
+   * the server lock that produced it, so applying a report and releasing
+   * the edits it describes are one step.
+   */
+  private acknowledgeBuffers(buffers: readonly AnalysedBuffer[] | undefined): void {
+    for (const buffer of buffers ?? []) this.acknowledgeBuffer(buffer);
+  }
+
   /** [LIVE-OPEN-BUFFERS] Reveal only the editor version this report analysed. */
-  private acknowledgeBuffer(buffer?: AnalysedBuffer | null): void {
-    if (!buffer || this._dirtyFiles.value.get(normalisePath(buffer.path)) !== buffer.version) return;
+  private acknowledgeBuffer(buffer: AnalysedBuffer): void {
+    if (this._dirtyFiles.value.get(normalisePath(buffer.path)) !== buffer.version) return;
     this.clearFileDirty(buffer.path);
   }
 

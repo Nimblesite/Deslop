@@ -7,7 +7,9 @@
 
 import { render } from "preact";
 
-import { report, wireMessagePump } from "../store";
+import { signal } from "@preact/signals";
+
+import { post, report, wireMessagePump } from "../store";
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { MetricHeading } from "../components/MetricHeading";
 import { MetricContext } from "../components/MetricContext";
@@ -16,6 +18,13 @@ import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
 import { formatPercent } from "../../../src/types/format";
 
 const MONOSPACE_CLASS = "mono";
+/** Styled in `GLOBAL_CSS`: pointer cursor, hover and focus highlight. */
+const ROW_CLASS = "duplication-row";
+const ACTIVATION_KEYS: readonly string[] = ["Enter", " "];
+const ROW_PADDING_PX = 8;
+const ROW_INDENT_PX = 18;
+const FOLDER_OPEN_GLYPH = "📂";
+const FOLDER_CLOSED_GLYPH = "📁";
 
 function percentColor(percent: number): string {
   if (percent >= 30) return "#e5534b";
@@ -27,39 +36,86 @@ function leafName(path: string): string {
   return path.split(/[/\\]/).filter(Boolean).pop() ?? path;
 }
 
+/** [VSIX-METRICS-REPORT-NAVIGATE] Folders the reader has collapsed, by
+ * path. Held outside the report signal, so a live refresh re-renders the
+ * rows without reopening what was closed. */
+const collapsedFolders = signal<ReadonlySet<string>>(new Set());
+
+function toggleFolder(path: string): void {
+  const next = new Set(collapsedFolders.value);
+  if (!next.delete(path)) next.add(path);
+  collapsedFolders.value = next;
+}
+
+/** Activating a row: a folder folds or unfolds, a file opens in the
+ * editor at its highest-ranked duplicate (resolved by the host). */
+function activate(child: RollupChild): void {
+  if (child.kind === "folder") toggleFolder(child.folder.path);
+  else post({ kind: "open/file", path: child.file.path });
+}
+
+function onRowKey(event: KeyboardEvent, child: RollupChild): void {
+  if (!ACTIVATION_KEYS.includes(event.key)) return;
+  event.preventDefault();
+  activate(child);
+}
+
+function rowStyle(depth: number): Record<string, string> {
+  return {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) auto auto",
+    gap: "16px",
+    alignItems: "center",
+    padding: "6px 8px",
+    paddingLeft: `${ROW_PADDING_PX + depth * ROW_INDENT_PX}px`,
+    borderTop: `1px solid ${COLOR.surfaceContainerLow}`,
+  };
+}
+
+function RowName({ child, open }: { child: RollupChild; open: boolean }) {
+  const isFolder = child.kind === "folder";
+  return (
+    <span
+      style={{
+        fontFamily: isFolder ? FONT.ui : FONT.mono,
+        fontWeight: isFolder ? 600 : 400,
+        fontSize: "13px",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+      title={isFolder ? child.folder.path : child.file.path}
+    >
+      {isFolder ? (
+        `${open ? FOLDER_OPEN_GLYPH : FOLDER_CLOSED_GLYPH} `
+      ) : (
+        <LanguageBadge path={child.file.path} selected={child.file.language} />
+      )}
+      {isFolder ? child.folder.label : leafName(child.file.path)}
+    </span>
+  );
+}
+
 function Row({ child, depth }: { child: RollupChild; depth: number }) {
   const isFolder = child.kind === "folder";
-  const name = isFolder ? child.folder.label : leafName(child.file.path);
+  const open = isFolder && !collapsedFolders.value.has(child.folder.path);
   const detail = isFolder
     ? `${child.folder.duplicatedLoc}/${child.folder.analysedLoc} LOC`
     : `${child.file.duplicated_loc}/${child.file.analysed_loc} LOC`;
   return (
     <>
       <li
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0,1fr) auto auto",
-          gap: "16px",
-          alignItems: "center",
-          padding: "6px 8px",
-          paddingLeft: `${8 + depth * 18}px`,
-          borderTop: `1px solid ${COLOR.surfaceContainerLow}`,
-        }}
+        class={ROW_CLASS}
+        role="treeitem"
+        tabIndex={0}
+        aria-level={depth + 1}
+        aria-expanded={isFolder ? open : undefined}
+        data-path={isFolder ? child.folder.path : child.file.path}
+        onClick={() => activate(child)}
+        onKeyDown={(event) => onRowKey(event, child)}
+        style={rowStyle(depth)}
       >
-        <span
-          style={{
-            fontFamily: isFolder ? FONT.ui : FONT.mono,
-            fontWeight: isFolder ? 600 : 400,
-            fontSize: "13px",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-          title={isFolder ? child.folder.path : child.file.path}
-        >
-          {child.kind === "folder" ? "📁 " : <LanguageBadge path={child.file.path} selected={child.file.language} />}
-          {name}
-        </span>
+        <RowName child={child} open={open} />
         <span class={MONOSPACE_CLASS} style={{ fontSize: "11px", color: COLOR.onSurfaceMuted }}>
           {detail}
         </span>
@@ -76,7 +132,7 @@ function Row({ child, depth }: { child: RollupChild; depth: number }) {
           {formatPercent(child.percent)}
         </span>
       </li>
-      {isFolder
+      {open
         ? child.folder.children.map((grandchild, index) => (
             <Row key={index} child={grandchild} depth={depth + 1} />
           ))
@@ -114,7 +170,7 @@ function DuplicationApp() {
       {rows.length === 0 ? (
         <p style={{ color: COLOR.onSurfaceMuted }}>No duplication detected.</p>
       ) : (
-        <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        <ol role="tree" style={{ margin: 0, padding: 0, listStyle: "none" }}>
           {rows.map((child, index) => (
             <Row key={index} child={child} depth={0} />
           ))}

@@ -286,34 +286,30 @@ fn assert_table_cluster_is_honest(root: &Path, cluster: &Value) -> Result<()> {
     Ok(())
 }
 
-/// The retired `data_clones` / `data_clone_weight` knobs still parse for
-/// backwards compatibility but [RANK-STRUCTURAL-ONLY] forbids them from
-/// changing weight: every legacy body must render the identical report.
+/// The retired `[ranking]` knobs are refused, not read and ignored: a
+/// corpus that publishes real tables cannot be re-ranked or thinned by a
+/// section nothing consumes ([RANK-MASS-SUM]).
 #[test]
-fn retired_data_clone_knobs_do_not_change_the_report() -> Result<()> {
+fn retired_data_clone_knobs_are_refused_on_a_corpus_with_tables() -> Result<()> {
+    const RANKING_RETIRED: &str = "the [ranking] section is retired";
+    const TABLE_MIN_NODES: &str = "20";
     let (_baseline_workspace, _baseline_root, baseline) = tables_report(None)?;
-    let ranked_baseline = rankable(&baseline);
-    for (body, label) in [
-        (
-            "[ranking]\ndata_clones = \"ignore\"\n",
-            "data_clones ignore",
-        ),
-        ("[ranking]\ndata_clone_weight = 1.0\n", "data_clone_weight"),
+    assert_ne!(rankable(&baseline), Vec::new());
+    for body in [
+        "[ranking]\ndata_clones = \"ignore\"\n",
+        "[ranking]\ndata_clone_weight = 1.0\n",
     ] {
-        let (_workspace, _root, report) = tables_report(Some(body))?;
-        assert_eq!(
-            rankable(&report),
-            ranked_baseline,
-            "{label}: the retired {label} knob must not change mass or order — \
-             weight means mass and nothing else ([RANK-STRUCTURAL-ONLY]): {report:#}"
-        );
-        assert_eq!(
-            field(&report, "clusters_hidden").as_u64(),
-            Some(0),
-            "{label}: the retired knob must not hide the table family: {report:#}"
-        );
+        let (tmp, root) = temp_scan_dir("src")?;
+        for (file_name, source) in fsharp_tables_corpus() {
+            std::fs::write(root.join(file_name), source)?;
+        }
+        std::fs::write(root.join(".deslop.toml"), body)?;
+        let _assertion = deslop_cmd(&root, &tmp.path().join("report"))?
+            .args(["--min-nodes", TABLE_MIN_NODES, "--embeddings", "off"])
+            .assert()
+            .failure()
+            .stderr(predicates::str::contains(RANKING_RETIRED));
     }
-    assert_ne!(ranked_baseline, Vec::new());
     Ok(())
 }
 

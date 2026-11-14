@@ -1,13 +1,3 @@
-WEBVTT
-
-00:00.000 --> 00:15.050
-Ask the agent before writing
-
-00:15.050 --> 00:30.493
-Let the agent check Deslop
-
-00:30.493 --> 00:47.364
-Review the returned files
-
-00:47.364 --> 01:03.057
-Check the source yourself
+version https://git-lfs.github.com/spec/v1
+oid sha256:7cf78693a42d36ebab13de639369d116f8df23d3e1a9f2fe06dcc944323fbd05
+size 215

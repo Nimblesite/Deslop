@@ -8,25 +8,68 @@
 //!   `deslop/reportChanged` notification so any listener can react
 //!   without polling tool calls.
 //!
-//! Both frames are written under a single mutex acquisition so they
-//! always arrive back-to-back.  Errors are silently swallowed — the
-//! notification path must never crash the analysis or embedding threads.
+//! When both frames are sent, they arrive back-to-back under one lock.
 
 use std::{
-    io::Write,
+    fmt,
+    io::{self, Write},
     sync::{Arc, Mutex},
 };
 
 use serde_json::{json, Value};
 
-use crate::protocol::JSONRPC_VERSION;
+use crate::{protocol::JSONRPC_VERSION, resources::REPORT_URI};
 
 /// Cloneable handle for pushing JSON-RPC notifications to the client.
 ///
-/// The `Arc<Mutex<…>>` lets the server loop and background worker
-/// threads share the same writer while serialising all writes under
-/// one lock so frames never interleave on the wire.
-pub type NotificationSender = Arc<Mutex<Box<dyn Write + Send>>>;
+/// Responses and notifications share a writer and subscription state so
+/// a report update cannot overtake the reply that changes the subscription.
+#[derive(Clone)]
+pub struct NotificationSender(Arc<Mutex<ClientOutput>>);
+
+impl fmt::Debug for NotificationSender {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NotificationSender")
+            .finish_non_exhaustive()
+    }
+}
+
+/// Output and subscription for a single MCP connection.
+struct ClientOutput {
+    /// Destination for JSON-RPC frames.
+    writer: Box<dyn Write + Send>,
+    /// Whether this connection requested standard updates for the report.
+    report_subscribed: bool,
+}
+
+impl NotificationSender {
+    /// Starts a connection with its report subscription off.
+    pub(crate) fn new(writer: impl Write + Send + 'static) -> Self {
+        Self(Arc::new(Mutex::new(ClientOutput {
+            writer: Box::new(writer),
+            report_subscribed: false,
+        })))
+    }
+
+    /// Flushes the reply before applying its subscription change under the same lock.
+    pub(crate) fn write_response(
+        &self,
+        bytes: &[u8],
+        subscription: Option<bool>,
+    ) -> io::Result<()> {
+        let mut output = self
+            .0
+            .lock()
+            .map_err(|_| io::Error::other("mcp stdout mutex poisoned"))?;
+        output.writer.write_all(bytes)?;
+        output.writer.flush()?;
+        if let Some(subscribed) = subscription {
+            output.report_subscribed = subscribed;
+        }
+        Ok(())
+    }
+}
 
 /// MCP standard resource-updated notification method.
 const METHOD_RESOURCES_UPDATED: &str = "notifications/resources/updated";
@@ -34,31 +77,31 @@ const METHOD_RESOURCES_UPDATED: &str = "notifications/resources/updated";
 /// Custom report-changed notification (mirrors LSP `deslop/reportChanged`).
 const METHOD_REPORT_CHANGED: &str = "notifications/deslop/reportChanged";
 
-/// URI of the primary MCP resource ([MCP-RESOURCES]).
-const DESLOP_REPORT_URI: &str = "deslop://report";
-
-/// Pushes `notifications/resources/updated` and
-/// `notifications/deslop/reportChanged` to the connected MCP client.
-///
-/// Both frames are written under one mutex acquisition so they arrive
-/// consecutively without interleaving with responses or other
-/// notifications from background threads.
+/// Pushes the custom report change and, for subscribers, the standard update.
 pub(crate) fn push_report_changed(sender: &NotificationSender, generation: u64) {
-    let resources_updated = json!({
-        "jsonrpc": JSONRPC_VERSION,
-        "method": METHOD_RESOURCES_UPDATED,
-        "params": { "uri": DESLOP_REPORT_URI }
-    });
-    let report_changed = json!({
-        "jsonrpc": JSONRPC_VERSION,
-        "method": METHOD_REPORT_CHANGED,
-        "params": { "generation": generation }
-    });
-    let Ok(mut writer) = sender.lock() else {
+    let Ok(mut output) = sender.0.lock() else {
         return;
     };
-    write_frame(&mut **writer, &resources_updated);
-    write_frame(&mut **writer, &report_changed);
+    if output.report_subscribed {
+        write_notification(
+            &mut *output.writer,
+            METHOD_RESOURCES_UPDATED,
+            &json!({ "uri": REPORT_URI }),
+        );
+    }
+    write_notification(
+        &mut *output.writer,
+        METHOD_REPORT_CHANGED,
+        &json!({ "generation": generation }),
+    );
+}
+
+/// Writes one JSON-RPC notification frame.
+fn write_notification(writer: &mut dyn Write, method: &str, params: &Value) {
+    write_frame(
+        writer,
+        &json!({ "jsonrpc": JSONRPC_VERSION, "method": method, "params": params }),
+    );
 }
 
 /// Serialises `value` as a newline-terminated JSON frame and flushes `writer`.

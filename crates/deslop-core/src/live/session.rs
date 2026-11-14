@@ -99,6 +99,9 @@ pub struct AnalysisSession {
     /// Latest editor version per path edited while no pass could analyse it.
     /// Acknowledged by the cold pass that replays them ([LIVE-OPEN-BUFFERS]).
     pub(super) deferred_acknowledgements: BTreeMap<PathBuf, i32>,
+    /// Editor version per open path that the current report analysed,
+    /// served with every live report read ([LIVE-OPEN-BUFFERS]).
+    pub(super) analysed_versions: BTreeMap<PathBuf, i32>,
 }
 
 impl std::fmt::Debug for AnalysisSession {

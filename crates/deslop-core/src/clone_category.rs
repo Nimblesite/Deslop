@@ -4,8 +4,8 @@
 //! the bucket says *how similar* the copies are, the category says *whether
 //! the repetition is extractable logic or un-refactorable data*. Detection of
 //! the `data` category lives in [`crate::cluster_filters`]
-//! ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]); the ranking policy that consumes
-//! it lives in [`crate::config::RankingPolicy`].
+//! ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]). No ranking policy consumes it:
+//! clones rank by duplicated mass alone ([RANK-MASS-SUM]).
 //!
 //! This module is the single source of truth for the wire label, the
 //! human-readable chip, and the category-specific action hint, so every

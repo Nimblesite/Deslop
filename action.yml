@@ -76,6 +76,12 @@ inputs:
       cache untouched.
     required: false
     default: "true"
+  cache-scope:
+    description: >-
+      Names this job's parse store. Defaults to the job id, so each job keeps
+      its own store. Give two jobs the same value to make them share one.
+    required: false
+    default: ""
   output:
     description: Report path prefix; `.json`, `.txt` and `.html` are appended.
     required: false
@@ -250,14 +256,28 @@ runs:
     # re-parse on any mismatch (pipeline.md [PIPELINE-INCREMENTAL-INTEGRITY]),
     # and the CLI's post-pass retention sweep bounds every save at 2 GiB
     # ([PIPELINE-INCREMENTAL-RETENTION]).
+    #
+    # The key also names the scan root and the job. Several jobs of one run
+    # would otherwise race for one name: only the first to save keeps its
+    # store, and the next run restores a store built for another scan (#619).
+    - name: Name the parse store
+      id: store-key
+      if: inputs.cache != 'false'
+      shell: bash
+      run: node "${GITHUB_ACTION_PATH}/scripts/actions/action-cache-key.mjs" "${VERSION}" "${RUNNER_OS}" "${SCAN_PATH}" "${CACHE_SCOPE:-${GITHUB_JOB}}" "${GITHUB_RUN_ID}"
+      env:
+        VERSION: ${{ steps.resolve.outputs.version }}
+        SCAN_PATH: ${{ inputs.path }}
+        CACHE_SCOPE: ${{ inputs.cache-scope }}
+
     - name: Restore the parse store
       if: inputs.cache != 'false'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ inputs.path }}/.deslop/cache
-        key: deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-${{ github.run_id }}
+        key: ${{ steps.store-key.outputs.key }}
         restore-keys: |
-          deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-
+          ${{ steps.store-key.outputs.restore-prefix }}
 
     # A non-zero deslop status is the product, not a failure of this step.
     # GitHub runs composite `shell: bash` steps under an injected `-e`
@@ -318,7 +338,7 @@ runs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ inputs.path }}/.deslop/cache
-        key: deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-${{ github.run_id }}
+        key: ${{ steps.store-key.outputs.key }}
 
     # Skipped under `nojson`, which leaves every report-derived output empty.
     - name: Read the report

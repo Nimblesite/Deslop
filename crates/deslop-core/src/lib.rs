@@ -69,9 +69,7 @@ pub mod wire_generated;
 
 pub use clone_category::CloneCategory;
 pub use cluster_filters::ParseCache;
-pub use config::{
-    BoilerplateImportsMode, ClonePolicy, ExclusionConfig, RankingPolicy, DEFAULT_CONFIG_FILENAME,
-};
+pub use config::{BoilerplateImportsMode, ExclusionConfig, DEFAULT_CONFIG_FILENAME};
 pub use delta::ReportDelta;
 pub use diff_scope::{apply_only_changed, parse_unified_diff, DiffScope, ParsedDiff};
 pub use embedding::{

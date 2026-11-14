@@ -57,34 +57,39 @@ impl LspBackend {
         change: impl SessionChange,
         analysed_buffer: Option<AnalysedBuffer>,
     ) {
-        let outcome = self
-            .session_change_notification(change, analysed_buffer)
-            .await;
-        match outcome {
-            Ok(Some(notification)) => self.publish_change(notification).await,
+        let session = self.service.session();
+        let mut guard = session.lock().await;
+        match self
+            .commit_change(&mut guard, change, analysed_buffer)
+            .await
+        {
+            Ok(Some(notification)) => {
+                self.client
+                    .send_notification::<ReportChangedLspNotification>(notification)
+                    .await;
+                drop(guard);
+                self.diagnostics.refresh(&self.client).await;
+            }
             Ok(None) => {}
             Err(error) => tracing::error!(%error, "failed to apply session change"),
         }
     }
 
-    /// Refreshes every editor surface after a committed session change.
-    async fn publish_change(&self, notification: ReportChangedNotification) {
-        self.client
-            .send_notification::<ReportChangedLspNotification>(notification)
-            .await;
-        self.diagnostics.refresh(&self.client).await;
-    }
-
-    /// Applies `change` and converts a non-empty delta into an LSP
-    /// notification.
-    async fn session_change_notification(
+    /// Applies `change`, remembers the delta baseline, and converts a
+    /// non-empty delta into an LSP notification.
+    async fn commit_change(
         &self,
+        session: &mut AnalysisSession,
         change: impl SessionChange,
         analysed_buffer: Option<AnalysedBuffer>,
     ) -> Result<Option<ReportChangedNotification>, LiveError> {
-        let (delta, analysed_buffer) = self
-            .apply_change_and_remember(change, analysed_buffer)
-            .await?;
+        let previous_generation = session.generation();
+        let previous_report = session.report();
+        let delta = change(session)?;
+        let analysed_buffer = analysed_buffer.and_then(|buffer| session.acknowledgement(buffer));
+        self.service
+            .remember_snapshot(previous_generation, previous_report)
+            .await;
         if delta.is_empty() && analysed_buffer.is_none() {
             return Ok(None);
         }
@@ -93,26 +98,5 @@ impl LspBackend {
             summary: ChangeSummary::from_delta(&delta),
             analysed_buffer,
         }))
-    }
-
-    /// Preserves the delta baseline while applying one locked session mutation.
-    async fn apply_change_and_remember(
-        &self,
-        change: impl SessionChange,
-        analysed_buffer: Option<AnalysedBuffer>,
-    ) -> Result<(ReportDelta, Option<AnalysedBuffer>), LiveError> {
-        let session = self.service.session();
-        let (previous_generation, previous_report, delta, analysed_buffer) = {
-            let mut guard = session.lock().await;
-            let previous_generation = guard.generation();
-            let previous_report = guard.report();
-            let delta = change(&mut guard)?;
-            let analysed_buffer = analysed_buffer.and_then(|buffer| guard.acknowledgement(buffer));
-            (previous_generation, previous_report, delta, analysed_buffer)
-        };
-        self.service
-            .remember_snapshot(previous_generation, previous_report)
-            .await;
-        Ok((delta, analysed_buffer))
     }
 }

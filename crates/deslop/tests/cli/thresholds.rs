@@ -1,6 +1,8 @@
 use super::support::*;
 
-use super::total_include::{seed_three_relation_corpus, TOTAL_INCLUDE_MIN_NODES};
+use super::total_include::{
+    scan_three_relation_corpus, seed_three_relation_corpus, TOTAL_INCLUDE_MIN_NODES,
+};
 
 #[path = "thresholds/render.rs"]
 mod render;
@@ -408,14 +410,7 @@ fn kind_limit_above_measured_percent_passes() -> Result<()> {
 // kind's gate reads `none` — the default is no gate at all.
 #[test]
 fn unset_kind_limits_leave_no_gate() -> Result<()> {
-    let (tmp, scan_root) = temp_scan_dir("src")?;
-    seed_three_relation_corpus(&scan_root)?;
-    let out = outputs_under(tmp.path());
-    run_scan(
-        &scan_root,
-        &tmp.path().join(REPORT_OUTPUT_STEM),
-        &[MIN_NODES_FLAG, TOTAL_INCLUDE_MIN_NODES],
-    )?;
+    let (_tmp, out) = scan_three_relation_corpus(None)?;
     let json = read_json_report(&out.json)?;
     for kind in ["identical", "nearly_identical", "loosely_similar"] {
         assert_kind_threshold(&json, kind, NO_SOURCE, false);

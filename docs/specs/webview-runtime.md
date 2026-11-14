@@ -100,6 +100,16 @@ Command `deslop.openReport` opens the live report view and refreshes on report n
 
 Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — carrying `metrics.per_file` and the engine-computed `metrics.folders` rollup ([METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics)), which the webview nests and renders verbatim, never recomputing a figure — so the webview stays dumb and the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4).
 
+### [VSIX-METRICS-REPORT-NAVIGATE] Rows open files and fold folders
+
+Every row of the breakdown acts. A file row opens that file in the editor with the selection on its occurrence in the highest-ranked cluster that touches the file; a file no cluster touches opens at line 1. A folder row hides or shows everything beneath it, and stays as the reader left it across live report refreshes.
+
+Rows are `role="treeitem"` with `tabIndex=0`, a pointer cursor and a hover/focus highlight; Enter or Space activates the focused row, and a folder carries `aria-expanded`.
+
+The webview posts `open/file` with the row's path. The host resolves the occurrence with `topOccurrenceInFile` (`src/tree/rollup.ts`), which reads the engine's `rank` and ranks nothing itself, then runs `deslop.openOccurrence` — the command every occurrence link already uses, so there is one navigation path (gh #634).
+
+Tests: `panels.unit.test.ts` (editor path and line, rank over arrival order, line 1 fallback, malformed rows), `playwright-webview-smoke.spec.ts` (click and Enter on a file, folder fold by click and by keyboard, state kept across a refresh).
+
 ## [VSIX-WEBVIEW-COVERAGE] Webview coverage gate
 
 The webview bundle (`webview-ui/src` → esbuild → `media/webview/*.js`) is **invisible to the `vscode-test --coverage` c8 pass**, which only measures the extension host under `out/**`. That blind spot is real: bug #254 — a runtime value erased by `import type`, which froze every cluster panel on "No cluster selected." — shipped straight through it because the host-side coverage number never touched the bundle.

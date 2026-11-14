@@ -17,7 +17,7 @@ The optional fifth category, **Same behavior, different code**, corresponds to *
 
 ### [CLONE-BUCKETS-STRUCTURAL-ONLY] Shape-only is not duplication
 
-**Shape-only means matching structure with no or negligible content similarity. It is not a clone.** It is always the last category, below Similar, regardless of its size or number of matches.
+**Shape-only means matching structure with no or negligible content similarity. It is not a clone.** It is always the last category, below Similar, regardless of its size or number of matches. Wherever kinds are grouped it carries the same `not counted in total` marker as a clone kind left out of the total, and starts collapsed ([METRICS-TOTAL-COUNTED](pipeline.md#metrics-total-counted-one-marker-for-every-kind-that-does-not-count)).
 
 Shape-only contributes nothing to duplicated lines, duplicated files, clone counts, duplicated mass, repository/file/folder/diff percentages or threshold breaches. Its source lines remain in the analysed-line denominator. Showing it, hiding it or enabling its diagnostics cannot change those figures ([METRICS-REPO](pipeline.md#metrics-repo-repo-wide-duplication-metrics)).
 

@@ -345,8 +345,8 @@ export const REPORT_TYPE_CONFIG = {
       literal_findings_hidden: "usize",
       literal_max_findings: "usize",
     },
-    fieldSerdeAttrs: { files_skipped: ["default"], clusters_outside_diff: ["default", 'skip_serializing_if = "Option::is_none"'], routing: ["default"] },
-    tsOptional: ["clusters_outside_diff"],
+    fieldSerdeAttrs: { files_skipped: ["default"], clusters_outside_diff: ["default", 'skip_serializing_if = "Option::is_none"'], routing: ["default"], analysed_buffers: ["default", 'skip_serializing_if = "Option::is_none"'] },
+    tsOptional: ["clusters_outside_diff", "analysed_buffers"],
     fieldDocs: {
       tool_version: "Producer version.",
       min_nodes: "Configured subtree floor.",
@@ -366,6 +366,7 @@ export const REPORT_TYPE_CONFIG = {
       literal_findings_hidden: "Omitted literal-finding count.",
       literal_findings_capped: "Whether the per-kind cap omitted findings.",
       literal_max_findings: "Configured per-kind cap; zero means unlimited.",
+      analysed_buffers: "[LIVE-OPEN-BUFFERS] Live answers only: the editor version of each open buffer this report analysed.",
     },
   },
   MergeVerdict: {

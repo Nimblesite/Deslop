@@ -165,8 +165,14 @@ mod js_ts_normalization;
 mod js_ts_signatures;
 #[path = "jsx_tsx_components.rs"]
 mod jsx_tsx_components;
+#[path = "judged_string_pair_comparison.rs"]
+mod judged_string_pair_comparison;
+#[path = "judged_string_pairs.rs"]
+mod judged_string_pairs;
 #[path = "jwt_independent_verification_false_positive.rs"]
 mod jwt_independent_verification_false_positive;
+#[path = "literal_carried_endpoints.rs"]
+mod literal_carried_endpoints;
 #[path = "live_session_equivalence.rs"]
 mod live_session_equivalence;
 #[path = "location_rendering.rs"]
@@ -260,6 +266,8 @@ mod rename_needs_an_anchor;
 mod report_golden;
 #[path = "rerun.rs"]
 mod rerun;
+#[path = "rust_escaped_string_literals.rs"]
+mod rust_escaped_string_literals;
 #[path = "rust_issue_147_iter_collect_idiom.rs"]
 mod rust_issue_147_iter_collect_idiom;
 #[path = "rust_issue_150_mod_declarations.rs"]
@@ -289,6 +297,8 @@ mod signature_reuse;
 mod skip_policy_contract;
 #[path = "spec_id_traceability.rs"]
 mod spec_id_traceability;
+#[path = "tree_sitter_output_exclusion.rs"]
+mod tree_sitter_output_exclusion;
 #[path = "ts_issue_283_object_literal_tables.rs"]
 mod ts_issue_283_object_literal_tables;
 #[path = "ts_issue_284_produce_then_assert.rs"]

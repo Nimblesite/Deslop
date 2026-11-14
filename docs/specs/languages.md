@@ -28,6 +28,10 @@ Function bodies are the function-scope unit for the signature-only filters: `fun
 
 Implemented by `crates/deslop-core/src/lang/c.rs`; exercised through the CLI in `crates/deslop/tests/cli/detection/c.rs` with the `c-small`, `c-type3`, `c-dissimilar-functions`, `c-prologue-false-positive` and `c-headers` fixtures, and the C AST golden in `cli/cache_and_debug.rs`. VS Code activation, editor synchronization and JetBrains file matching register `c` and `h`.
 
+## [LANG-CAND-CSHARP] C#
+
+**[LANG-CAND-CSHARP-RAW-STRING]** A C# raw string literal (`"""…"""`) collapses to `__literal__` like every other C# string form. It was left as a structural kind, so its text never reached the content frontier: two different multi-line SQL queries assigned to `CommandText` measured as identical content and reported as Nearly identical, charging every line of both queries as duplicated (DataProvider, gh #581). Implemented by `crates/deslop-core/src/lang/csharp.rs`; pinned by `crates/deslop/tests/literal_carried_endpoints.rs`.
+
 ## [LANG-CAND-DART] Dart
 
 Files ending in `.dart` use the Dart grammar. Identifier leaves collapse to `__ident__`; numeric, boolean, null, symbol, and string literals collapse to `__literal__`; comments disappear. Type wrappers, interpolation expressions, records, and patterns retain their structure. Renamed declaration signatures are scaffolding, not proof of copied bodies.
@@ -51,6 +55,10 @@ Implemented by `lang/javascript.rs` and `lang/ecmascript.rs` in `deslop-core`; e
 `.ts` files use the TypeScript grammar; `.tsx` files use its TSX entry point. Both share the JavaScript normalization table. Identifier and literal spelling is erased while type annotations, qualified names, JSX structure, and interpolated expressions remain structural.
 
 Implemented by `lang/typescript.rs` and `lang/ecmascript.rs` in `deslop-core`; exercised by `typescript_features.rs`, `jsx_tsx_components.rs`, `js_ts_signatures.rs`, and the TypeScript/TSX AST goldens in `deslop`'s CLI suite.
+
+## [LANG-CAND-RUST] Rust
+
+**[LANG-CAND-RUST-STRING-PARTS]** A Rust string collapses to `__literal__`; its `string_content` and `escape_sequence` parts stay structural kinds beneath it. Collapsing the parts too raised token overlap on every string-bearing pair and dropped two judged Serde token-run clones (gh #640), so the parts are left alone and unrelated escape-heavy strings are refused by [FUSED-CONTENT-GATE-LITERAL-BOUND] instead (Osprey, gh #626). Implemented by `crates/deslop-core/src/lang/rust_lang.rs`; pinned by `crates/deslop/tests/rust_escaped_string_literals.rs`, which holds the Serde token runs at their exact members and ranks.
 
 ## [LANG-CAND-KOTLIN] Kotlin is not registered
 

@@ -149,6 +149,7 @@ mod python_module_preamble;
 mod python_orm;
 mod role_compat;
 mod rust;
+mod rust_constant_values;
 mod signature_only;
 mod snippets;
 mod structural_families;

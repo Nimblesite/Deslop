@@ -60,6 +60,21 @@ impl PipelineSession {
         })
     }
 
+    /// [FUSED-CONTENT-GATE-LITERAL-BOUND] Whether a literal-carried
+    /// endpoint is paired with different text.
+    fn literal_bound_differs(
+        &self,
+        pair: &ResolvedPair<'_>,
+        trees: &HashMap<FileId, &NormalizedNode>,
+    ) -> bool {
+        use crate::content::literal_bound::{carried_text_differs, heaviest_literal};
+        carried_text_differs(
+            heaviest_literal(trees, pair.left.fingerprint),
+            heaviest_literal(trees, pair.right.fingerprint),
+            &self.sources,
+        )
+    }
+
     /// Measures every pair-owned axis and applies the admission algebra.
     fn measure_pair(
         &self,
@@ -140,6 +155,7 @@ impl PipelineSession {
             ),
             merkle_equal,
             text,
+            literal_bound: self.literal_bound_differs(pair, &axes.shared.trees),
         };
         let smaller_nodes = pair
             .left
@@ -358,6 +374,9 @@ struct Measurements {
     merkle_equal: bool,
     /// How far the two raw source ranges are the same text.
     text: SourceIdentity,
+    /// [FUSED-CONTENT-GATE-LITERAL-BOUND] One literal carries an endpoint
+    /// and the two texts differ.
+    literal_bound: bool,
 }
 
 /// A copied core may additionally prove a bounded async call-selector edit.

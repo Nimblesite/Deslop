@@ -12,9 +12,10 @@
 //!
 //! [RANK-STRUCTURAL-ONLY] retired the `structural_only_weight`,
 //! `data_clone_weight` and `demote` ranking modes: weight means mass and
-//! nothing else. The legacy config keys still parse (backwards
-//! compatibility) but must not change the ranking — that is what the
-//! retired-knob test below pins.
+//! nothing else. A `.deslop.toml` that still carries a `[ranking]` section
+//! fails the load and says why, rather than being read and ignored; the
+//! `[visibility]` choices that remain change no clone's rank, mass or
+//! percentage.
 //!
 //! Black-box E2E: drive the CLI against generated fixture repos and
 //! assert against the rendered JSON report only.
@@ -22,7 +23,6 @@
 use std::{fmt::Write as _, fs, path::Path};
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
 use crate::common::{
@@ -235,69 +235,89 @@ fn mass_ranks_family_first_and_pair_second() -> Result<()> {
     Ok(())
 }
 
-/// The retired `structural_only` / `data_clone_weight` knobs still parse
-/// for backwards compatibility but [RANK-STRUCTURAL-ONLY] forbids them
-/// from changing weight: every legacy body must render the identical
-/// report (same ids, same masses, same order).
-#[test]
-fn retired_structural_only_knobs_do_not_change_the_ranking() -> Result<()> {
-    let baseline = report_for_config(None)?;
-    let ranked_baseline = rankable(&baseline);
-    for (body, label) in [
-        ("[ranking]\nstructural_only = \"keep\"\n", "keep"),
-        ("[ranking]\nstructural_only_weight = 1.0\n", "unit weight"),
-        ("[ranking]\nstructural_only = \"ignore\"\n", "ignore"),
-        ("[ranking]\ndata_clone_weight = 0.5\n", "data clone weight"),
-    ] {
-        let report = report_for_config(Some(body))?;
-        assert_eq!(
-            rankable(&report),
-            ranked_baseline,
-            "{label}: the retired {label} knob must not change mass or order — \
-             weight means mass and nothing else ([RANK-STRUCTURAL-ONLY]): {report:#}"
-        );
-        assert_eq!(
-            field(&report, "clusters_hidden").as_u64(),
-            Some(0),
-            "{label}: the retired knob must not hide the family: {report:#}"
-        );
-    }
-    assert!(
-        !ranked_baseline.is_empty(),
-        "the mass-only ranking must be non-empty"
-    );
-    Ok(())
-}
+/// What a config that still carries `[ranking]` is told.
+const RANKING_RETIRED: &str = "the [ranking] section is retired";
+const CONFIG_FILE: &str = ".deslop.toml";
+/// Every body the section used to accept, valid or not.
+const RETIRED_RANKING_BODIES: [&str; 8] = [
+    "[ranking]\nstructural_only = \"keep\"\n",
+    "[ranking]\nstructural_only = \"ignore\"\n",
+    "[ranking]\nstructural_only = \"demote\"\n",
+    "[ranking]\nstructural_only_weight = 1.0\n",
+    "[ranking]\nstructural_only_weight = 2.5\n",
+    "[ranking]\nstructural_only_weight = nan\n",
+    "[ranking]\ndata_clone_weight = 0.5\n",
+    "[ranking]\n",
+];
 
-/// An out-of-range `structural_only_weight` still fails the load with a
-/// diagnostic naming the key — the legacy keys are parsed and validated
-/// even though they no longer feed ranking.
+/// A retired setting is refused, never accepted and ignored: the run fails,
+/// names the section and the file, and writes no report.
 #[test]
-fn invalid_structural_only_weight_is_rejected_with_a_clear_error() -> Result<()> {
-    let (_tmp, src) = temp_scan_dir("src")?;
-    write_fixture(&src)?;
-    for (body, fragment) in [
-        (
-            "[ranking]\nstructural_only_weight = 2.5\n",
-            "range (0.0, 1.0]",
-        ),
-        (
-            "[ranking]\nstructural_only_weight = 0.0\n",
-            "range (0.0, 1.0]",
-        ),
-        (
-            "[ranking]\nstructural_only_weight = nan\n",
-            "must be finite",
-        ),
-    ] {
-        fs::write(src.join(".deslop.toml"), body)?;
-        let _assertion = Command::cargo_bin("deslop")?
-            .arg(&src)
+fn retired_ranking_settings_fail_the_load_and_say_why() -> Result<()> {
+    for body in RETIRED_RANKING_BODIES {
+        let (tmp, src) = temp_scan_dir("src")?;
+        write_fixture(&src)?;
+        fs::write(src.join(CONFIG_FILE), body)?;
+        let output = tmp.path().join("report");
+        let _assertion = deslop_cmd(&src, &output)?
             .args(["--min-nodes", "30", "--embeddings", "off"])
             .assert()
             .failure()
-            .stderr(predicates::str::contains("structural_only_weight"))
-            .stderr(predicates::str::contains(fragment));
+            .stderr(predicates::str::contains(RANKING_RETIRED))
+            .stderr(predicates::str::contains(CONFIG_FILE));
+        assert!(
+            !output.with_extension("json").exists(),
+            "{body:?}: a refused config must not produce a report"
+        );
+    }
+    Ok(())
+}
+
+/// The clone-only figures a visibility choice must leave untouched.
+#[derive(Debug, PartialEq)]
+struct CloneFigures<'report> {
+    /// Every cluster's rank, id and mass.
+    ranked: Vec<(u64, &'report str, u64)>,
+    duplicated_loc: Option<u64>,
+    duplication_percent: Option<f64>,
+}
+
+fn clone_figures(report: &Value) -> CloneFigures<'_> {
+    let metrics = field(report, "metrics");
+    CloneFigures {
+        ranked: rankable(report),
+        duplicated_loc: field(metrics, "duplicated_loc").as_u64(),
+        duplication_percent: field(metrics, "duplication_percent").as_f64(),
+    }
+}
+
+/// [EXCLUSION-CONFIG] Neither `[visibility]` choice moves a clone: the same
+/// ids, ranks, masses, duplicated lines and percentage as with no config.
+#[test]
+fn visibility_choices_leave_clone_rank_mass_and_percentage_untouched() -> Result<()> {
+    let baseline = report_for_config(None)?;
+    let expected = clone_figures(&baseline);
+    assert!(
+        !expected.ranked.is_empty(),
+        "the mass-only ranking must be non-empty"
+    );
+    assert!(
+        expected.duplicated_loc > Some(0),
+        "the fixture holds real duplicated lines"
+    );
+    for choice in ["keep", "ignore"] {
+        let body = format!("[visibility]\ndata_clones = \"{choice}\"\n");
+        let report = report_for_config(Some(&body))?;
+        assert_eq!(
+            clone_figures(&report),
+            expected,
+            "data_clones = {choice}: no clone may change rank, mass or percentage: {report:#}"
+        );
+        assert_eq!(
+            field(&report, "clusters_hidden").as_u64(),
+            field(&baseline, "clusters_hidden").as_u64(),
+            "data_clones = {choice}: the family holds no data table to hide"
+        );
     }
     Ok(())
 }

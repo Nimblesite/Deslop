@@ -74,12 +74,24 @@ fn pair_one_to_one(first: &[Fingerprint], second: &[Fingerprint]) -> bool {
 /// `inner` copy lies in exactly one `outer` copy. A window that holds two
 /// copies where another holds one cannot stand in for them.
 fn holds_evenly(outer: &[Fingerprint], inner: &[Fingerprint]) -> bool {
+    if !copies_in_distinct_files(outer) {
+        return false;
+    }
     let mut counts = outer.iter().map(|copy| held_by(copy, inner));
     counts.next().is_some_and(|first| {
         first > 0
             && counts.all(|count| count == first)
             && inner.iter().all(|member| holders_of(member, outer) == 1)
     })
+}
+
+/// Whether every copy lies in a file of its own. Two wider copies in one
+/// file are two places in it, and the copies each holds repeat inside that
+/// file beside the pair: the blocks repeated inside each of two vite HMR
+/// tests are judged CLEARLY IN beside the test pair (corpus register).
+fn copies_in_distinct_files(copies: &[Fingerprint]) -> bool {
+    let files: std::collections::BTreeSet<_> = copies.iter().map(|copy| copy.file_id).collect();
+    files.len() == copies.len()
 }
 
 /// How many of `members` lie inside `copy`.

@@ -20,6 +20,7 @@ use crate::{
     delta::ReportDelta,
     embedding::{EmbeddingProvider, ProviderRegistry, RegistryError},
     report::{EmbeddingProvenance, PairComparison, PairComparisonParams, Report, ReportCluster},
+    wire_generated::AnalysedBuffer,
 };
 
 /// Pseudo-provider accepted by `deslop/embeddingSetModel` to disable embeddings.
@@ -150,6 +151,15 @@ impl LiveService {
         Arc::clone(&self.inner)
     }
 
+    /// [LIVE-OPEN-BUFFERS] The current report together with the editor
+    /// version of each open buffer it analysed, read under one lock so the
+    /// versions describe exactly this report.
+    pub async fn report_with_buffers(&self) -> (Arc<Report>, Vec<AnalysedBuffer>) {
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
+        (guard.report(), guard.analysed_versions())
+    }
+
     /// Records the latest snapshot so `report/delta` can answer
     /// queries from past generations.
     pub async fn remember_snapshot(&self, generation: u64, report: Arc<Report>) {
@@ -197,10 +207,14 @@ impl LiveApi for LiveService {
     }
 
     async fn report_delta(&self, since: u64) -> Option<ReportDelta> {
-        let (current_gen, current_report) = {
+        let (current_gen, current_report, analysed) = {
             let mut guard = self.inner.lock().await;
             guard.refresh_if_stale();
-            (guard.generation(), guard.report())
+            (
+                guard.generation(),
+                guard.report(),
+                guard.analysed_versions(),
+            )
         };
         if since == current_gen {
             return None;
@@ -209,12 +223,14 @@ impl LiveApi for LiveService {
         let prev = history
             .get(&since)
             .map(|report| (since, report.as_ref().clone()));
-        Some(ReportDelta::between(
+        let mut delta = ReportDelta::between(
             prev.as_ref()
                 .map(|(generation, report)| (*generation, report)),
             current_gen,
             current_report.as_ref(),
-        ))
+        );
+        delta.analysed_buffers = Some(analysed);
+        Some(delta)
     }
 
     async fn report_for_file(&self, path: &Path) -> FileReport {

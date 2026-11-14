@@ -3,10 +3,15 @@ import * as vscode from "vscode";
 import { FileNode, FolderNode } from "../../tree/providers";
 import { KindGroupNode, Node } from "../../tree/nodes";
 import { ReportStore } from "../../reportStore";
-import { CLUSTER_KINDS, kindTitle } from "../../types/report";
+import { CLUSTER_KINDS, INFORMATIONAL_FINDING, kindTitle } from "../../types/report";
 import { cluster, iconColorId, labelText, report, storeWith, tooltipText, topOffenders, withGroupBy } from "./tree.helpers";
 import { KIND_THEME_COLOR } from "../../design";
 import { DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_KIND, STRUCTURAL_ONLY_KIND, HIGHEST_CLUSTER_MASS, HIGH_CLUSTER_MASS, MEDIUM_CLUSTER_MASS, TIED_CLUSTER_MASS, FILE_GROUPING_MODE, MIXED_FILE_PATH, REPO_A_PATH, REPO_B_PATH, ALPHA_FILE_PATH, FIRST_CLUSTER_ID, SECOND_CLUSTER_ID, BETA_FILE_PATH, CLUSTER_ROOT_REQUIRED, HEAVY_CLUSTER_ID, WHOLE_NUMBER_MASS, TWO_DECIMAL_MASS, FOLDER_GROUPING_MODE, THIRD_ITEM_INDEX, PAIR_COUNT, FILE_ROOT_COUNT, firstRootIn } from "./tree.topOffenders.fixtures";
+
+const NOT_COUNTED_MARKER = "not counted in total";
+const NOT_COUNTED_ICON_COLOR = "disabledForeground";
+const COUNTED_TOOLTIP = "*Counted in the duplication total.*";
+const NOT_COUNTED_TOOLTIP = "*Not counted in the duplication total.*";
 
 suite("TopOffendersProvider groups", () => {
   test("file mode roots are FileNodes sorted by max cluster weight desc", async () => {
@@ -181,7 +186,11 @@ suite("TopOffendersProvider groups", () => {
       const [identicalGroup, structuralGroup] = groups;
       assert.ok(structuralGroup && identicalGroup);
       assert.equal(iconColorId(identicalGroup), KIND_THEME_COLOR[IDENTICAL_KIND]);
-      assert.equal(iconColorId(structuralGroup), KIND_THEME_COLOR[STRUCTURAL_ONLY_KIND]);
+      // [METRICS-TOTAL-COUNTED] Shape-only never counts toward the total,
+      // so its group is greyed and marked like any kind the total leaves out.
+      assert.equal(iconColorId(structuralGroup), NOT_COUNTED_ICON_COLOR);
+      assert.equal(structuralGroup.description, NOT_COUNTED_MARKER);
+      assert.equal(identicalGroup.description, undefined);
 
       // Both grouping axes read the one registry, so the same repository
       // cannot order its categories differently depending on which axis
@@ -359,12 +368,12 @@ suite("TopOffendersProvider groups", () => {
     assert.ok(identicalGroup instanceof KindGroupNode);
     assert.ok(similarGroup instanceof KindGroupNode);
     assert.equal(identicalGroup.description, undefined);
-    assert.equal(similarGroup.description, "excluded");
+    assert.equal(similarGroup.description, NOT_COUNTED_MARKER);
     assert.equal(iconColorId(identicalGroup), KIND_THEME_COLOR.identical);
     assert.equal(iconColorId(similarGroup), "disabledForeground");
 
     const similarChildren = provider.getChildren(similarGroup);
-    assert.ok(String(similarChildren[0]?.description ?? "").includes("excluded"));
+    assert.ok(String(similarChildren[0]?.description ?? "").endsWith(`· ${NOT_COUNTED_MARKER}`));
     assert.equal(iconColorId(similarChildren[0] as vscode.TreeItem), "disabledForeground");
     assert.equal(
       identicalGroup.collapsibleState,
@@ -376,5 +385,44 @@ suite("TopOffendersProvider groups", () => {
       vscode.TreeItemCollapsibleState.Collapsed,
       "excluded noise groups start collapsed so the default view leads with signal",
     );
+  });
+
+  test("[METRICS-TOTAL-COUNTED] every kind group says the same way whether it counts", () => {
+    const store = storeWith(
+      report(
+        [
+          cluster("c1", HIGH_CLUSTER_MASS, ALPHA_FILE_PATH, 0, 20, "information", 1, "identical"),
+          cluster("c2", MEDIUM_CLUSTER_MASS, BETA_FILE_PATH, 0, 20, "information", 2, "loosely_similar"),
+          cluster("c3", TIED_CLUSTER_MASS, MIXED_FILE_PATH, 0, 20, "information", 3, STRUCTURAL_ONLY_KIND),
+        ],
+        { total_includes: ["loosely_similar"] },
+      ),
+    );
+    const provider = topOffenders(store);
+    const roots = provider.getChildren() as KindGroupNode[];
+    assert.deepEqual(
+      roots.map((group) => group.kind),
+      ["loosely_similar", IDENTICAL_KIND, STRUCTURAL_ONLY_KIND],
+      "the kind the total counts leads; the rest keep the category display order",
+    );
+    const [counted, ...notCounted] = roots;
+    assert.ok(counted);
+    assert.equal(counted.description, undefined);
+    assert.equal(counted.collapsibleState, vscode.TreeItemCollapsibleState.Expanded);
+    assert.equal(iconColorId(counted), KIND_THEME_COLOR.loosely_similar);
+    assert.ok(tooltipText(counted).endsWith(COUNTED_TOOLTIP));
+    assert.equal(notCounted.length, PAIR_COUNT);
+    for (const group of notCounted) {
+      assert.equal(group.description, NOT_COUNTED_MARKER, group.kind);
+      assert.equal(group.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed, group.kind);
+      assert.equal(iconColorId(group), NOT_COUNTED_ICON_COLOR, group.kind);
+      assert.ok(tooltipText(group).endsWith(NOT_COUNTED_TOOLTIP), group.kind);
+      // A clone row repeats the marker; a shape-only row already says
+      // what it is ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+      const [row] = provider.getChildren(group);
+      const description = String(row?.description ?? "");
+      if (group.kind === STRUCTURAL_ONLY_KIND) assert.equal(description, INFORMATIONAL_FINDING);
+      else assert.ok(description.endsWith(`· ${NOT_COUNTED_MARKER}`), group.kind);
+    }
   });
 });

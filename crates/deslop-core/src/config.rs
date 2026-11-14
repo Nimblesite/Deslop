@@ -30,15 +30,13 @@ use builtin::{built_in_report_hidden, corpus_built_in_excluded, is_minified_arti
 pub(crate) use generated_banner::opens_with_generated_banner;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 pub use paths::{is_config_path, watched_config_paths, ConfigBaseline};
-use ranking::resolve_ranking_policy;
-pub use ranking::{
-    ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,
-};
 use raw::{
     resolve_kind_thresholds, resolve_threshold, resolve_total_include, PersistedProcessing,
     RawConfig,
 };
 use serde::Deserialize;
+use tree_sitter_output::is_tree_sitter_output;
+use visibility::{reject_retired_ranking, validate_visibility};
 
 use crate::{
     buckets::{ClusterKind, TotalInclude},
@@ -49,11 +47,12 @@ use crate::{
 mod builtin;
 mod generated_banner;
 mod kind_thresholds;
+mod tree_sitter_output;
 pub use kind_thresholds::KindThresholds;
 mod paths;
-mod ranking;
 mod raw;
 mod tuning;
+mod visibility;
 pub use tuning::RoutingTuning;
 
 /// Default configuration file name searched for next to the scan root.
@@ -124,8 +123,6 @@ pub struct ExclusionConfig {
     /// Whether the HTML report splits clusters into per-language
     /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Defaults off.
     split_by_language: bool,
-    /// Compiled clone-category ranking policy ([RANK-CATEGORY]).
-    ranking_policy: RankingPolicy,
     /// [CLONE-BUCKETS-THRESHOLDS] Effective validated category thresholds.
     routing: RoutingTuning,
 }
@@ -168,7 +165,6 @@ impl ExclusionConfig {
             max_average_line_bytes: DEFAULT_MAX_AVERAGE_LINE_BYTES,
             incremental: PersistedProcessing::Enabled,
             split_by_language: false,
-            ranking_policy: RankingPolicy::default().with_global_override(),
             routing: RoutingTuning::default(),
         }
     }
@@ -250,8 +246,8 @@ impl ExclusionConfig {
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
         let total_include = resolve_total_include(path, raw.total.as_ref())?;
         let kind_thresholds = resolve_kind_thresholds(path, raw.threshold.as_ref())?;
-        let ranking_policy =
-            resolve_ranking_policy(path, &raw.ranking, &raw.visibility)?.with_global_override();
+        reject_retired_ranking(path, raw.ranking.is_some())?;
+        validate_visibility(path, &raw.visibility)?;
         Ok(Self {
             source: path.to_path_buf(),
             scan_root: scan_root.map(Path::to_path_buf),
@@ -267,7 +263,6 @@ impl ExclusionConfig {
             max_average_line_bytes: raw.analysis.max_average_line_bytes,
             incremental: PersistedProcessing::from_key(raw.analysis.incremental),
             split_by_language: raw.report.split_by_language,
-            ranking_policy,
             routing: raw.tuning.routing.validate(path)?,
         })
     }
@@ -347,12 +342,6 @@ impl ExclusionConfig {
         self.split_by_language
     }
 
-    /// Returns the compiled clone-category ranking policy ([RANK-CATEGORY]).
-    #[must_use]
-    pub const fn ranking_policy(&self) -> RankingPolicy {
-        self.ranking_policy
-    }
-
     /// Returns the source path this config was loaded from, or an empty
     /// path for [`ExclusionConfig::empty`]. Diagnostic only.
     #[must_use]
@@ -369,7 +358,7 @@ impl ExclusionConfig {
         if corpus_built_in_excluded(path, self.scan_root.as_deref(), self.include_dependencies) {
             return true;
         }
-        if is_minified_artifact(path, self.max_average_line_bytes) {
+        if is_minified_artifact(path, self.max_average_line_bytes) || is_tree_sitter_output(path) {
             return true;
         }
         if matches(&self.default_exclude, path) {
@@ -411,11 +400,22 @@ impl ExclusionConfig {
     }
 }
 
-/// Returns `true` when `matcher` classifies `path` as ignored (i.e., the
-/// pattern matched). Directories are matched as files here because we
-/// only ever feed per-file paths to [`ExclusionConfig::is_excluded`].
+/// Matches the file and its directories within the matcher root. A file
+/// exception cannot reopen an excluded parent directory ([EXCLUSION-CONFIG]).
 fn matches(matcher: &Gitignore, path: &Path) -> bool {
+    if matcher.is_empty() {
+        return false;
+    }
+    let root = matcher.path();
+    let parents = path.ancestors().skip(1).take_while(|parent| {
+        !parent.as_os_str().is_empty()
+            && *parent != root
+            && (!path.has_root() || parent.starts_with(root))
+    });
     matcher.matched(path, false).is_ignore()
+        || parents
+            .into_iter()
+            .any(|parent| matcher.matched(parent, true).is_ignore())
 }
 
 /// Compiles a list of glob patterns into an [`ignore::gitignore::Gitignore`]

@@ -217,6 +217,14 @@ One tool, three actions, replacing three plumbing tools:
 
 Content refreshes on every `resources/read` — always whatever the LSP's in-memory `latest_report` says right now.
 
+#### [MCP-RESOURCES-TEMPLATES] Template discovery
+
+Deslop serves two fixed resources. `resources/templates/list` returns `{ "resourceTemplates": [] }`, and the same connection can list and read both fixed resources.
+
+#### [MCP-RESOURCES-SUBSCRIPTIONS] Report subscriptions
+
+`resources/subscribe` and `resources/unsubscribe` accept `deslop://report` and return `{}`. Each connection starts unsubscribed. The report is the only resource that changes, so requests to subscribe to another URI return `InvalidParams`. After a successful unsubscribe response, the connection stops receiving standard resource updates.
+
 ### [MCP-IPC-CLIENT] IPC client (single source of truth)
 
 Every read tool issues exactly one JSON-RPC request over the LSP's IPC endpoint. The MCP holds **no on-disk cache** and **no in-memory `Report` cache** — caching layers are exactly what create the staleness window the IPC architecture exists to eliminate. Per-call cost is one local IPC round-trip (Unix socket, or TCP loopback per [LIVE-IPC-TCP]; sub-millisecond either way), bounded entirely by the LSP's `LiveService` lock contention. If the socket is missing or the LSP exits mid-call, every read returns `LspNotRunning`; the MCP does **not** fall back to a second pipeline. CI / one-shot audits are the `deslop` CLI's job, not the MCP's.
@@ -231,12 +239,12 @@ The MCP and the LSP are two binaries, and they can come from two builds: an exte
 
 ### [MCP-NOTIFICATIONS] Notifications (server → client)
 
-On startup, the MCP opens a single long-lived `report/subscribe` connection on the LSP socket ([LIVE-IPC-SOCKET]). The LSP keeps that connection open and writes one `report/changed` notification frame per generation bump. For each frame the MCP pushes two MCP notifications under one mutex lock:
+On startup, the MCP opens a single long-lived `report/subscribe` connection on the LSP socket ([LIVE-IPC-SOCKET]). The LSP keeps that connection open and writes one `report/changed` notification frame per generation bump. For each frame the MCP pushes notifications under one mutex lock:
 
-- `notifications/resources/updated` — standard MCP; payload `{ uri: "deslop://report" }`.
+- `notifications/resources/updated` — standard MCP. Subscribed connections receive `{ uri: "deslop://report" }`.
 - `notifications/deslop/reportChanged` — custom; payload `{ generation: <u64> }`.
 
-Both frames always arrive consecutively on the wire. Agents reconcile against the `generation` cursor. There is no file watcher; the MCP never observes the filesystem.
+When both frames are sent, they arrive consecutively in the order shown. Agents reconcile against the `generation` cursor. The MCP receives file changes through the LSP.
 
 ### [MCP-AGENT-PROMPT-GUIDANCE] Tool descriptions are prompt engineering
 
@@ -271,5 +279,5 @@ A small tool list is itself prompt engineering: every extra tool is a descriptio
 - `schema-doc` returns the same markdown as `resources/read deslop://schema`; pages omit inline `schema_doc`.
 - `find-similar` keystone cases remain: snippet match, unparseable input, below-min-nodes, and limit handling.
 - `compare-pair` requires two concrete endpoints and returns only that pair's `S`, `J`, `E`, `A`, `R`, literal fraction, admission result, and classification.
-- `resources/read deslop://report` returns valid canonical JSON; a follow-up file-change triggers `notifications/resources/updated`.
+- `resources/read deslop://report` returns valid canonical JSON. A file change triggers `notifications/resources/updated` only while the connection has subscribed to the report.
 - A report served by another Deslop build is refused with the [MCP-IPC-WIRE-MISMATCH] message from `duplicates` and `cluster-by-id` alike, with no result page.

@@ -8,9 +8,7 @@
 //! same constants the parser matches on, so a flag cannot change without its
 //! help entry changing with it.
 
-use crate::app::{
-    IPC_TRANSPORT_FLAG, NICE_FLAG, RANKING_STRUCTURAL_ONLY_FLAG, WORKER_THREADS_FLAG,
-};
+use crate::app::{IPC_TRANSPORT_FLAG, NICE_FLAG, WORKER_THREADS_FLAG};
 
 /// Component id printed by `--version` and named in usage text.
 pub(crate) const BINARY_NAME: &str = "deslop-lsp";
@@ -53,12 +51,6 @@ const OPTIONS: &[(&str, &str, &str, &str)] = &[
         IPC_TRANSPORT_FLAG,
         "<unix|tcp>",
         "Transport for the MCP bridge [default: platform]",
-    ),
-    (
-        "",
-        RANKING_STRUCTURAL_ONLY_FLAG,
-        "<POLICY>",
-        "Restrict ranking to structural evidence [default: .deslop.toml]",
     ),
     (
         "",

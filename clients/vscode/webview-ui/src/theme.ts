@@ -16,6 +16,8 @@ export const GLOBAL_CSS = `
   .clone-group > summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
   .clone-group--excluded > summary { color: ${COLOR.onSurfaceMuted}; }
   .threshold-verdict--breached { color: ${COLOR.primary}; }
+  .duplication-row { cursor: pointer; }
+  .duplication-row:hover, .duplication-row:focus-visible { background: ${COLOR.surfaceContainerHighest}; outline: none; }
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   html, body {
