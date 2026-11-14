@@ -408,6 +408,12 @@ _coverage-run: _guard-path-binaries _typediagram-gen
 	@echo "==> Coverage test collection (instrumented release)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	cargo llvm-cov clean --workspace
+	@# [CI-COVERAGE-ONCE] Cargo 1.100 builds every artifact under
+	@# release/build/<pkg>/<hash>/. A restored cache still carries the old
+	@# release/deps and release/.fingerprint trees, whose stale test binaries
+	@# the report would read beside the new ones and score against today's
+	@# profiles. Nothing writes there any more, so they go.
+	rm -rf target/llvm-cov-target/release/deps target/llvm-cov-target/release/.fingerprint
 	$(GUARDED_PATH) cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
 
 _coverage-report:
