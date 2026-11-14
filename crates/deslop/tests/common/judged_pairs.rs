@@ -15,6 +15,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+pub(crate) use deslop_test_support::copy_tree;
 use deslop_test_support::corpus_score::{
     score_repo, RepoScore, ScoredEntry, CLEARLY_IN, CLEARLY_OUT,
 };
@@ -24,7 +25,7 @@ use super::{clusters, field, fixture, load_json, occurrence_line_span, occurrenc
 
 /// The fixture tree of judged excerpts.
 pub(crate) const JUDGED_FIXTURE: &str = "judged-string-pairs";
-/// The register file inside it, never scanned.
+/// The register file beside the excerpts.
 const REGISTER_FILE: &str = "register.json";
 /// The node floor every corpus-style scan here runs at.
 pub(crate) const MIN_NODES: u32 = 30;
@@ -88,22 +89,6 @@ pub(crate) fn register_for(register: &Value, repos: &[&str]) -> Value {
         CLEARLY_OUT: keep(CLEARLY_OUT),
         "not_clear": [],
     })
-}
-
-/// Copies every file under `src` to `dst`, keeping relative paths and
-/// leaving out the register.
-pub(crate) fn copy_tree(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let target = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_tree(&entry.path(), &target)?;
-        } else if entry.file_name() != REGISTER_FILE {
-            let _bytes = fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
 }
 
 /// Copies the named repositories of the fixture into `scan_root`.
@@ -183,6 +168,18 @@ pub(crate) fn assert_every_judgment_holds(score: &RepoScore, scenario: &str) {
     }
 }
 
+/// The reported cluster that answered one judged entry.
+pub(crate) fn answering_cluster<'a>(report: &'a Value, entry: &ScoredEntry) -> Result<&'a Value> {
+    let id = entry
+        .cluster
+        .as_deref()
+        .with_context(|| format!("judged pair is not reported: {:?}", entry.occurrences))?;
+    clusters(report)
+        .iter()
+        .find(|cluster| field(cluster, "id").as_str() == Some(id))
+        .with_context(|| format!("cluster {id} is not in the report"))
+}
+
 /// For each judged entry, the line spans of the cluster that answered it,
 /// in register order; the shape two equivalent scans must share.
 pub(crate) fn answering_spans(report: &Value, score: &RepoScore) -> Result<Vec<Vec<(u64, u64)>>> {
@@ -190,14 +187,7 @@ pub(crate) fn answering_spans(report: &Value, score: &RepoScore) -> Result<Vec<V
         .entries
         .iter()
         .map(|entry| {
-            let id = entry
-                .cluster
-                .as_deref()
-                .context("entry answered by no cluster")?;
-            let cluster = clusters(report)
-                .iter()
-                .find(|cluster| field(cluster, "id").as_str() == Some(id))
-                .with_context(|| format!("cluster {id} is not in the report"))?;
+            let cluster = answering_cluster(report, entry)?;
             let mut spans: Vec<(u64, u64)> = occurrences(cluster)
                 .iter()
                 .map(occurrence_line_span)

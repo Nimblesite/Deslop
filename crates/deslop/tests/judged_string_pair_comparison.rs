@@ -21,8 +21,11 @@ use deslop_test_support::corpus_score::{Range, ScoredEntry};
 use serde_json::Value;
 
 use crate::common::{
-    clusters, field, fixture,
-    judged_pairs::{all_repos, register, scan_and_score, seed_repos, JUDGED_FIXTURE, MIN_NODES},
+    field, fixture,
+    judged_pairs::{
+        all_repos, answering_cluster, register, scan_and_score, seed_repos, JUDGED_FIXTURE,
+        MIN_NODES,
+    },
     occurrence_line_span, occurrences,
     signals::{compare_endpoints, compare_pair},
     temp_scan_dir,
@@ -84,14 +87,7 @@ fn answering_occurrence<'a>(cluster: &'a Value, side: &Range) -> Result<&'a Valu
 /// order: the exact extents a report renders, each comparable by
 /// [PAIR-COMPARE-CLI].
 fn answering_pair<'a>(report: &'a Value, entry: &ScoredEntry) -> Result<[&'a Value; 2]> {
-    let id = entry
-        .cluster
-        .as_deref()
-        .with_context(|| format!("judged pair is not reported: {:?}", entry.occurrences))?;
-    let cluster = clusters(report)
-        .iter()
-        .find(|cluster| field(cluster, "id").as_str() == Some(id))
-        .with_context(|| format!("cluster {id} is not in the report"))?;
+    let cluster = answering_cluster(report, entry)?;
     let sides: Vec<Range> = entry
         .occurrences
         .iter()
