@@ -26,12 +26,12 @@ use crate::common::{
     spawn_lsp_on_fixture_guarded, wait_for_report_matching, workspace_file_uri, write_frame,
 };
 
+#[path = "open_buffers/analysed_versions.rs"]
+mod analysed_versions;
 #[path = "open_buffers/deletion.rs"]
 mod deletion;
 #[path = "open_buffers/embedding.rs"]
 mod embedding;
-#[path = "open_buffers/analysed_versions.rs"]
-mod analysed_versions;
 
 /// The two-file C# workspace whose one clone spans both files.
 const FIXTURE: &str = "csharp-small";
