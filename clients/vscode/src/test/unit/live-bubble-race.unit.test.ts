@@ -230,8 +230,9 @@ suite("LiveBubble probe answered before the acknowledging refresh", () => {
       assert.equal(requests.length, 1, "one probe so far");
       assert.equal(capture.visible(), undefined, "a hidden cluster paints nothing");
 
+      store.noteAnalysedBuffer(2, { path, version });
       assert.equal(
-        store.setSnapshot(probeReport(), 2, { path, version }),
+        store.setSnapshot(probeReport(), 2),
         true,
         "the refresh acknowledging this buffer version is accepted",
       );

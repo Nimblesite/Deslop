@@ -107,6 +107,10 @@ export async function refreshAfterChange(
   // accepted by the rollback guard and then lock out the new session's
   // generation 1.
   const epoch = store.current.sessionEpoch;
+  // [LIVE-OPEN-BUFFERS] Noted before any await: an earlier notification's
+  // refresh may fetch the report that analysed this buffer, and must
+  // acknowledge it as that report lands.
+  store.noteAnalysedBuffer(payload.generation, payload.analysed_buffer);
   // Pull the delta spanning the store's own baseline (#230). Without a
   // `since_generation` the server defaults to `current - 1`, which only spans
   // one generation — so a client that missed a `reportChanged` (lagged
@@ -119,12 +123,12 @@ export async function refreshAfterChange(
   // applyDelta rejects (returns false) when no report is seeded yet or the
   // delta's baseline does not match the store's generation. Either way fall
   // back to the full snapshot so the store converges to the live engine.
-  if (delta && delta.to_generation >= payload.generation && store.applyDelta(delta, payload.analysed_buffer)) return;
+  if (delta && delta.to_generation >= payload.generation && store.applyDelta(delta)) return;
   const snapshot = await c.sendRequest<Report>("deslop/reportGet");
   if (store.current.sessionEpoch !== epoch) return;
   // The store refuses a generation rollback: a newer snapshot has already
   // landed, so this completion is stale and the store is already converged.
-  if (!store.setSnapshot(snapshot, payload.generation, payload.analysed_buffer)) {
+  if (!store.setSnapshot(snapshot, payload.generation)) {
     log("discarded stale report snapshot", { generation: payload.generation });
   }
 }
