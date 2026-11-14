@@ -190,7 +190,10 @@ fn near_identical_string_exports_are_duplicates() -> Result<()> {
     let report = run_report(&root, MIN_NODES)?;
     assert_eq!(field(&report, "files_analysed").as_u64(), Some(ONE_FILE));
     let [exports] = clusters(&report) else {
-        anyhow::bail!("exactly the two exports are reported: {:?}", reported(&report));
+        anyhow::bail!(
+            "exactly the two exports are reported: {:?}",
+            reported(&report)
+        );
     };
     assert_eq!(cluster_kind(exports), NEARLY_IDENTICAL_KIND);
     assert_eq!(occurrence_files(exports), [EXPORTS_FILE, EXPORTS_FILE]);
