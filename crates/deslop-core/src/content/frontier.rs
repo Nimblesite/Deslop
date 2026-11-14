@@ -286,28 +286,38 @@ pub(super) fn positional_agreement(
 ) -> f64 {
     let (matched, measured) = canonical.iter().zip(member.iter()).enumerate().fold(
         (0_usize, 0_usize),
-        |(matched, measured), (index, (left, right))| {
-            let differing_literals = left != right
-                && left.population == Population::Literal
-                && right.population == Population::Literal;
-            let text = differing_literals.then(|| literal_text(index));
-            if text == Some(LiteralText::Documents) {
-                return (matched, measured);
-            }
-            let agrees = left == right || text == Some(LiteralText::NearCopies);
-            if agrees && !left.population.is_authored_content() {
-                return (matched, measured);
-            }
-            (
+        |(matched, measured), (index, (left, right))| match position_verdict(left, right, || {
+            literal_text(index)
+        }) {
+            Some(agrees) => (
                 matched.saturating_add(usize::from(agrees)),
                 measured.saturating_add(1),
-            )
+            ),
+            None => (matched, measured),
         },
     );
     if measured == 0 {
         return 1.0;
     }
     member_count(matched) / member_count(measured)
+}
+
+/// One aligned position's verdict: `Some(agrees)` when it is measured,
+/// `None` when neither side counts it — a matching operator, or two
+/// differing embedded documents left to [FUSED-CONTENT-GATE-LITERAL-BOUND].
+fn position_verdict(
+    left: &LeafKey,
+    right: &LeafKey,
+    literal_text: impl FnOnce() -> LiteralText,
+) -> Option<bool> {
+    let differing_literals = left != right
+        && left.population == Population::Literal
+        && right.population == Population::Literal;
+    let text = differing_literals.then(literal_text);
+    let agrees = left == right || text == Some(LiteralText::NearCopies);
+    let unmeasured =
+        text == Some(LiteralText::Documents) || (agrees && !left.population.is_authored_content());
+    (!unmeasured).then_some(agrees)
 }
 
 /// One member's resolved content frontier: a key and its source range
