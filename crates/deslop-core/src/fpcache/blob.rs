@@ -53,40 +53,19 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// fingerprinting and signature construction. Each names this constant
 /// in its failure message, so the change that must bump it is also the
 /// change that is told to.
-/// Epoch 2: [PIPELINE-NORMALIZE-AST-OPERATOR] keeps behaviour-bearing
-/// anonymous tokens as operator leaves, so the normalised tree of an
-/// unchanged file changed meaning.
 ///
-/// Epoch 3: the same section stopped collapsing those leaves to one
-/// `__op__` kind and gave each one its own token (`__op__+`). Epoch 2
-/// alone is not enough to cover it — a store warmed under epoch 2 holds
-/// trees in which `base + fee` and `base - fee` still hash identically,
-/// so a warm run would keep certifying an operator swap as duplication
-/// long after the normalisation that produced it was replaced.
-///
-/// Epoch 4: the same section stopped emitting an operator leaf when the
-/// parent production makes the token framing rather than behaviour —
-/// `Vec<T>`'s angle brackets, a Rust closure's `|` binding pipes, a JSX
-/// tag's `<`/`>`. A store warmed under epoch 3 holds trees carrying those
-/// leaves, so a warm run would keep both the inflated node counts and the
-/// LSH bands they shifted, and would go on publishing the gh #147
-/// `Vec<&str>` type annotations as `identical` at `fused 1.00`.
-///
-/// Epoch 5: [PIPELINE-FINGERPRINT-MERKLE-ROOT] stopped emitting the
-/// synthetic file root as a view when the file carries the prologue its
-/// language mandates — Go's `package` clause. A store warmed under epoch
-/// 4 holds a whole-file fingerprint for every Go file, so a warm run would
-/// keep publishing `alpha.go:1-13` against `beta.go:1-13`, `package`
-/// clause included, after the cold run had stopped.
-///
-/// Epoch 6: [PIPELINE-SIGNATURE-FOLD] identifies same-range grammar
-/// wrappers and sibling windows by their structural mass before building
-/// token signatures. An epoch-5 blob holds range-only signatures for
-/// those fingerprints, so a warm scan could disagree with a cold scan.
-///
-/// Epoch 7: [LANG-CAND-CSHARP-RAW-STRING] collapses C# raw string
-/// literals to `__literal__`. An epoch-6 blob holds them as structural
-/// kinds, so a warm scan would keep their text out of the content frontier.
+/// Each bump below would otherwise let a warm scan disagree with a cold one:
+/// - 2: [PIPELINE-NORMALIZE-AST-OPERATOR] keeps behaviour-bearing tokens.
+/// - 3: each operator leaf gets its own token (`__op__+`), so `base + fee`
+///   and `base - fee` stop hashing identically.
+/// - 4: framing tokens (`Vec<T>` brackets, closure pipes, JSX `<`/`>`) emit
+///   no operator leaf (gh #147 `Vec<&str>` annotations).
+/// - 5: [PIPELINE-FINGERPRINT-MERKLE-ROOT] drops the file-root view of a Go
+///   file carrying its mandated `package` clause.
+/// - 6: [PIPELINE-SIGNATURE-FOLD] folds same-range wrappers and sibling
+///   windows by structural mass before building token signatures.
+/// - 7: [LANG-CAND-CSHARP-RAW-STRING] collapses C# raw strings to
+///   `__literal__`, putting their text in the content frontier.
 pub(super) const SEMANTIC_EPOCH: u32 = 7;
 
 /// Bytes of blob header preceding the payload: the magic plus the

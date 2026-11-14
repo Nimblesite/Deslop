@@ -25,9 +25,8 @@
 //! Suppressed **only** when the members differ in declaration bytes, so
 //! copied bindings stay visible even when their enclosing module names
 //! differ. Other languages compare the whole matched range. Any right-hand
-//! side that is not a plain literal
-//! — a call, a name, an attribute, an interpolated string — takes the
-//! member out of the shape and keeps the cluster visible.
+//! side that is not a plain literal — a call, a name, an attribute, an
+//! interpolated string — takes the member out of the shape.
 //! F# module and namespace bindings use the same rule, with XML docs and
 //! comments treated as trivia ([ACCURACY-RECOVERY-PLAN-LITERAL-TABLE]).
 
