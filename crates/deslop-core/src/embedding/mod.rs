@@ -10,9 +10,8 @@
 //! other file in this module is a concrete collaborator implementing
 //! that surface (provider implementation, on-disk cache, ANN index).
 //!
-//! The deterministic BLAKE3 shim formerly known as `StubProvider`
-//! lives under [`test_support`] now and is gated behind the
-//! `test-support` Cargo feature so it never ships in the production
+//! The deterministic BLAKE3 test provider lives under [`test_support`],
+//! gated behind the `test-support` Cargo feature so it never ships in the production
 //! VSIX, LSP, or MCP binaries.
 
 pub mod cache;

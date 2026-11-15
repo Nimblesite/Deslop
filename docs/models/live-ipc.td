@@ -91,7 +91,6 @@ type AnalysedBuffer {
 type ReportChangedNotification {
   generation: Int
   summary: ChangeSummary
-  analysed_buffer: Option<AnalysedBuffer>
 }
 
 union EmbeddingPhase {

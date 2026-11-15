@@ -144,12 +144,9 @@ export const CORE_TYPE_CONFIG = {
     docs: "Wire payload for the `report/changed` notification.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { generation: "u64" },
-    fieldSerdeAttrs: { analysed_buffer: ["default", 'skip_serializing_if = "Option::is_none"'] },
-    tsOptional: ["analysed_buffer"],
     fieldDocs: {
       generation: "New generation that produced the change.",
       summary: "Compact summary suitable for status indicators.",
-      analysed_buffer: "Editor version analysed by this generation, absent for disk changes.",
     },
   },
   EmbeddingPhase: {
@@ -226,7 +223,7 @@ export const CORE_TYPE_CONFIG = {
     },
     fieldDocs: {
       path: "Source path, relative to the scan root when possible.",
-      language: "Engine-selected parser identity ([LANG-CAND-OSPREY]); absent for folders and older reports.",
+      language: "Engine-selected parser identity ([LANG-CAND-OSPREY]); absent for folders.",
       analysed_loc: "Physical lines in this file.",
       duplicated_loc: "Lines in this file covered by `>= 2` non-hidden clone occurrences.",
       duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc` for this file.",
@@ -270,8 +267,6 @@ export const CORE_TYPE_CONFIG = {
       duplicated_files: "usize",
     },
     fieldSerdeAttrs: {
-      per_file: ["default"],
-      folders: ["default"],
       diff: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
     tsOptional: ["diff"],
@@ -284,7 +279,7 @@ export const CORE_TYPE_CONFIG = {
       duplicated_files: "Count of files with at least one non-hidden clone occurrence of an included kind.",
       threshold: "Resolved fail-over threshold.",
       total_includes:
-        "The kinds whose lines `duplicated_loc` counts ([METRICS-TOTAL-INCLUDE]), in category display order. Defaults to every clone kind for reports predating the field, preserving their measured total. An explicit empty list excludes every clone kind.",
+        "The kinds whose lines `duplicated_loc` counts ([METRICS-TOTAL-INCLUDE]), in category display order. An explicit empty list excludes every clone kind.",
       per_kind:
         "One row per clone kind with a non-hidden cluster, in category display order, each carrying its own figures whatever the include set ([METRICS-TOTAL-INCLUDE]). Empty on reports produced before this field existed.",
       per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",

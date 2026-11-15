@@ -170,7 +170,6 @@ export async function activate(
       reportStore.setFacetFilter(readTopOffendersFilter());
       topOffenders.refresh();
     }),
-    reportStore.onDidChange(() => syncReportReadyContext(reportStore)),
   );
 
   try {

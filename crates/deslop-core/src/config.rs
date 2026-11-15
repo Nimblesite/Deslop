@@ -36,7 +36,7 @@ use raw::{
 };
 use serde::Deserialize;
 use tree_sitter_output::is_tree_sitter_output;
-use visibility::{reject_retired_ranking, validate_visibility};
+use visibility::validate_visibility;
 
 use crate::{
     buckets::{ClusterKind, TotalInclude},
@@ -246,7 +246,6 @@ impl ExclusionConfig {
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
         let total_include = resolve_total_include(path, raw.total.as_ref())?;
         let kind_thresholds = resolve_kind_thresholds(path, raw.threshold.as_ref())?;
-        reject_retired_ranking(path, raw.ranking.is_some())?;
         validate_visibility(path, &raw.visibility)?;
         Ok(Self {
             source: path.to_path_buf(),

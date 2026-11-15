@@ -56,7 +56,7 @@ internal data class OffenderCluster(
     val occurrenceCount: Int,
     val bucket: String,
     val category: String?,
-    /** The engine's language id for the cluster ([PIPELINE-LANG-TRAIT]); empty on older reports. */
+    /** The engine's language id for the cluster ([PIPELINE-LANG-TRAIT]). */
     val language: String,
     val occurrences: List<OffenderOccurrence>,
 ) {

@@ -39,10 +39,6 @@ pub(super) struct RawConfig {
     /// Report-rendering toggles.
     #[serde(default)]
     pub(super) report: RawReport,
-    /// The retired `[ranking]` section. Still recognised, so its presence
-    /// fails the load with a reason instead of an unknown-field error.
-    #[serde(default)]
-    pub(super) ranking: Option<serde::de::IgnoredAny>,
     /// [EXCLUSION-CONFIG] Pre-ranking visibility of proven data tables.
     #[serde(default)]
     pub(super) visibility: RawVisibility,

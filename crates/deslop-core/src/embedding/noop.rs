@@ -11,8 +11,7 @@
 //! The noop is never registered in [`crate::embedding::ProviderRegistry`]
 //! and never appears in `embedding/listModels`. Production code that
 //! finds Ollama unreachable installs this placeholder and downgrades
-//! the session mode to `Off` instead of falling back to the legacy
-//! BLAKE3 stub.
+//! the session mode to `Off`.
 
 use crate::embedding::provider::{EmbeddingProvider, EmbeddingSpec, ProviderError};
 

@@ -72,11 +72,9 @@ pub struct RunCost {
     /// binary is unidentified is not comparable.
     pub binary_sha256: String,
     /// [CORPUS-MEASURE-HOST] The one-minute load average when the scan
-    /// started, absent in a record written before it was kept.
-    #[serde(default)]
+    /// started.
     pub load_at_start: Option<f64>,
     /// The logical cores that load is read against.
-    #[serde(default)]
     pub logical_cores: Option<usize>,
 }
 
