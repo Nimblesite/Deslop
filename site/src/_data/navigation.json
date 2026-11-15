@@ -64,7 +64,7 @@
         {
           "text": "Getting Started",
           "i18nKey": "footer.gettingStarted",
-          "url": "/docs/"
+          "url": "/docs/getting-started/"
         },
         {
           "text": "AI Agents",

@@ -1,6 +1,6 @@
 import { expect, test } from "./helpers/issues.js";
 
-const DOCS_LINK_COUNT = 12;
+const DOCS_LINK_COUNT = 13;
 
 // The org-level Priority field options and lane labels — see scripts/issues/rules.py.
 const PRIORITY_LADDER = ["showstopper", "critical", "normal", "low", "unset"];
@@ -119,21 +119,16 @@ test.describe("documentation navigation", () => {
     await expect(page).toHaveURL(/\/issues\/$/);
   });
 
-  test("gives every issue document the same collapsible docs sidebar", async ({ page }) => {
+  test("gives every issue document the same docs sidebar beside the workspace", async ({ page }) => {
     for (const path of ["/issues/", "/issues/planner/"]) {
       await page.goto(path);
       await expect(page.locator("body")).toHaveClass(/is-docs/);
       await expect(page.locator(".docs-sidebar__nav a")).toHaveCount(DOCS_LINK_COUNT);
-      await expect(page.getByRole("button", { name: "Collapse documentation sidebar" })).toBeVisible();
+      await expect(page.locator(".docs-sidebar__nav")).toBeVisible();
+      const sidebar = await page.locator(".docs-sidebar").boundingBox();
+      const workspace = await page.locator(".docs-workspace").boundingBox();
+      expect(workspace.x, "the workspace sits to the right of the sidebar").toBeGreaterThanOrEqual(sidebar.x + sidebar.width);
     }
-
-    const shell = page.locator(".docs-shell");
-    const workspace = page.locator(".docs-workspace");
-    const expandedWidth = (await workspace.boundingBox()).width;
-    await page.getByRole("button", { name: "Collapse documentation sidebar" }).click();
-    await expect(shell).toHaveClass(/is-sidebar-collapsed/);
-    await expect(page.getByRole("button", { name: "Expand documentation sidebar" })).toHaveAttribute("aria-expanded", "false");
-    expect((await workspace.boundingBox()).width).toBeGreaterThan(expandedWidth);
   });
 
   test("redirects the retired statistics route into the planner tab", async ({ page }) => {

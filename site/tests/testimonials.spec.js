@@ -33,6 +33,21 @@ const SECTION_ORDER = ["hero", "langs", "testimonials", "editors", "community"];
 const SECTION_HEADING = { en: "Findings that ship.", zh: "可以直接合并的发现。" };
 const SECTION_EYEBROW = { en: "Field report", zh: "实地反馈" };
 
+// John Kattenhorn's post, reproduced verbatim: the quote and three excerpts.
+const SECOND = {
+  author: "John Kattenhorn",
+  authorUrl: "https://x.com/johnjkattenhorn",
+  handle: "@johnjkattenhorn",
+  quote: 'I gave Claude Code a hook it was about to write, and find-similar pointed it straight at the existing copy. That\'s the "don\'t write a third one" loop I want in every agent session.',
+  sourceUrl: "https://x.com/johnjkattenhorn/status/2121504625878536264",
+  sourceDate: "2026-11-14",
+  points: [
+    "341 files in about 6 seconds, ranked worst first, with HTML, JSON and text reports.",
+    "One response-handling block was copied across three API routes, and one data-polling hook was copied in two views. Both fold into a single function.",
+    "It found something the plain scan couldn't: two versions of the same git helper in two different reporters, written in different styles.",
+  ],
+};
+
 const chipText = (pullRequest, lang) =>
   `${pullRequest.repo} ${MINUS}${pullRequest.linesRemoved} ${LOC_LABEL[lang]}`;
 
@@ -60,6 +75,22 @@ for (const lang of ["en", "zh"]) {
     const reaction = testimonial.locator(".testimonial__reaction");
     await expect(reaction).toHaveText(REACTION);
     await expect(reaction).toHaveAttribute("href", REACTION_SOURCE_URL);
+  });
+
+  test(`quotes ${SECOND.author} verbatim with the findings from the same post (${lang})`, async ({ page }) => {
+    await page.goto(HOME_ROUTE[lang]);
+    const testimonial = page.locator(".testimonial").nth(1);
+    const quote = testimonial.locator(".testimonial__quote");
+    await expect(quote, "the quote must be reproduced word for word, untranslated").toHaveText(SECOND.quote);
+    await expect(quote).toHaveAttribute("cite", SECOND.sourceUrl);
+    await expect(testimonial.locator(".testimonial__author")).toHaveText(SECOND.author);
+    await expect(testimonial.locator(".testimonial__author")).toHaveAttribute("href", SECOND.authorUrl);
+    const source = testimonial.locator(".testimonial__source");
+    await expect(source).toHaveAttribute("href", SECOND.sourceUrl);
+    await expect(source).toContainText(SECOND.handle);
+    await expect(source).toContainText(SECOND.sourceDate);
+    await expect(testimonial.locator(".testimonial__points li"), "each finding is quoted verbatim").toHaveText(SECOND.points);
+    await expect(testimonial.locator(".pr-chip")).toHaveCount(0);
   });
 
   test(`lists every merged pull request with the lines it removed (${lang})`, async ({ page }) => {
@@ -103,8 +134,8 @@ for (const lang of ["en", "zh"]) {
     const links = page.locator(".testimonials a");
 
     const count = await links.count();
-    expect(count, "the band cites the author, both posts, and every pull request").toBe(
-      MERGED_PULL_REQUESTS.length + 3,
+    expect(count, "the band cites each author, every post, and every pull request").toBe(
+      MERGED_PULL_REQUESTS.length + 3 + 2,
     );
     for (let index = 0; index < count; index += 1) {
       const link = links.nth(index);

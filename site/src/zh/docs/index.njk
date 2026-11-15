@@ -1,0 +1,13 @@
+---
+layout: layouts/docs.njk
+title: Deslop 文档
+description: Deslop 文档——安装、清理重复代码、连接编码智能体、为 CI 设门禁，以及准确率如何衡量。
+lang: zh
+---
+{#- [SITE-DOCS-INDEX] /zh/docs/ lists every documentation page, so mobile readers see the menu first. -#}
+{% set currentLang = lang | default('en') %}
+{% set navPages = collections.all | eleventyNavigation %}
+<h1>文档</h1>
+<nav class="docs-index" aria-label="文档目录">
+  {% include "partials/docs-nav-groups.njk" %}
+</nav>

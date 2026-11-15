@@ -106,7 +106,7 @@ The dangerous state is accidental duplication: two copies that *should* change t
 
 ## Try it on a Go repository
 
-Install Deslop from the [Getting Started guide](/docs/), open a Go workspace, and run:
+Install Deslop from the [Getting Started guide](/docs/getting-started/), open a Go workspace, and run:
 
 ```bash
 deslop .

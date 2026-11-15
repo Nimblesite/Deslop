@@ -164,7 +164,7 @@ data_clones = "keep"             # "keep" | "ignore"
 
 </div>
 
-`--fail-over <PERCENT>` 在单次运行中覆盖 `max_duplication_percent`；`--no-fail-over` 清除所有门禁。配合 `--diff` 和 `--only-changed` 时，门禁读取限定在 diff 内的百分比，旧债不会让合并前检查失败。操作指南：[用重复阈值把关 CI](/zh/docs/#gate-ci-on-a-duplication-threshold) 与 [GitHub Action](/zh/docs/github-action/)。
+`--fail-over <PERCENT>` 在单次运行中覆盖 `max_duplication_percent`；`--no-fail-over` 清除所有门禁。配合 `--diff` 和 `--only-changed` 时，门禁读取限定在 diff 内的百分比，旧债不会让合并前检查失败。操作指南：[用重复阈值把关 CI](/zh/docs/getting-started/#gate-ci-on-a-duplication-threshold) 与 [GitHub Action](/zh/docs/github-action/)。
 
 <span id="other-settings"></span>
 

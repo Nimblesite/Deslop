@@ -1,0 +1,12 @@
+---
+layout: layouts/docs.njk
+title: Deslop Documentation
+description: Deslop documentation — install it, clean up duplicate code, connect coding agents, gate CI and see how accuracy is measured.
+---
+{#- [SITE-DOCS-INDEX] /docs/ lists every documentation page, so mobile readers see the menu first. -#}
+{% set currentLang = lang | default('en') %}
+{% set navPages = collections.all | eleventyNavigation %}
+<h1>Documentation</h1>
+<nav class="docs-index" aria-label="Documentation index">
+  {% include "partials/docs-nav-groups.njk" %}
+</nav>

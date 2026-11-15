@@ -1,11 +1,11 @@
-// Installer-snippet fail-closed contract. [DEPLOY-DOCS-INSTALLER-FAILCLOSED]
+// Installer fail-closed contract. [DEPLOY-DOCS-INSTALLER-FAILCLOSED]
 //
-// The curl installer published on the docs pages must never extract or install
-// an archive whose SHA-256 verification failed. Each test extracts the exact
-// snippet from the published page, runs it against a local fixture release
-// (no network: `DESLOP_RELEASE_BASE` points at a file:// mirror and
-// `DESLOP_TAG` pins the version — both honored by the published snippet), and
-// asserts on the recorded `tar`/`sudo` invocations. Run with `node --test`.
+// `install.sh`, which the docs pages tell readers to pipe into bash, must never
+// extract or install an archive whose SHA-256 verification failed. Each test
+// runs the script exactly as the published command does (`bash` reading it on
+// stdin) against a local fixture release (no network: `DESLOP_RELEASE_BASE`
+// points at a file:// mirror and `DESLOP_TAG` pins the version), and asserts on
+// the recorded `tar`/`sudo` invocations. Run with `node --test`.
 //
 // The snippet chooses its archive from `uname`, so `uname` is stubbed too and
 // the platform under test is chosen by the test rather than by whichever
@@ -30,10 +30,10 @@ import { writeFileAt } from "../lib/write-file.mjs";
 const TAG = "v9.9.9";
 const VERSION = "9.9.9";
 const BINARIES = ["deslop", "deslop-lsp", "deslop-mcp"];
-const PAGES = [
-  { name: "en", path: "site/src/docs/index.md", heading: "### macOS / Linux (curl)" },
-  { name: "zh", path: "site/src/zh/docs/index.md", heading: "### macOS / Linux（curl）" },
-];
+const SCRIPT = { name: "install.sh", path: "install.sh" };
+const PUBLISHED_COMMAND =
+  "curl -fsSL https://raw.githubusercontent.com/Nimblesite/Deslop/main/install.sh | bash";
+const PAGES = ["site/src/docs/getting-started.md", "site/src/zh/docs/getting-started.md"];
 
 /** The shell that runs the published snippet, whatever this host is. */
 const BASH = posixShell();
@@ -54,18 +54,6 @@ const DEFAULT_TARGET = PLATFORMS[0];
 
 /** A `uname` answer no release is published for. */
 const UNSUPPORTED_TARGET = { system: "Plan9", machine: "sparc", platform: undefined };
-
-// Fence extraction by exact line matching — no pattern matching on the code.
-function extractSnippet(page) {
-  const lines = readFileSync(resolve(repoRoot, page.path), "utf8").split("\n");
-  const headingAt = lines.indexOf(page.heading);
-  assert.ok(headingAt >= 0, `${page.path}: heading not found: ${page.heading}`);
-  const open = lines.indexOf("```bash", headingAt);
-  assert.ok(open >= 0, `${page.path}: no bash fence after the curl heading`);
-  const close = lines.indexOf("```", open + 1);
-  assert.ok(close > open, `${page.path}: unterminated bash fence`);
-  return lines.slice(open + 1, close).join("\n");
-}
 
 function sha256Of(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
@@ -130,8 +118,9 @@ function writeUnameStub(stubBin, target) {
   );
 }
 
-function runSnippet(snippet, sandbox) {
-  return spawnSync(BASH, ["-c", snippet], {
+function runSnippet(sandbox, extraEnv) {
+  return spawnSync(BASH, [], {
+    input: readFileSync(resolve(repoRoot, SCRIPT.path), "utf8"),
     cwd: join(sandbox, "cwd"),
     encoding: "utf8",
     env: {
@@ -143,11 +132,12 @@ function runSnippet(snippet, sandbox) {
       DESLOP_TAG: TAG,
       DESLOP_RELEASE_BASE: pathToFileURL(join(sandbox, "fixtures")).href,
       TMPDIR: shellPath(join(sandbox, "tmp")),
+      ...extraEnv,
     },
   });
 }
 
-function setupAndRun(page, goodChecksum, target = DEFAULT_TARGET) {
+function setupAndRun(page, goodChecksum, target = DEFAULT_TARGET, envFor = () => ({})) {
   const sandbox = mkdtempSync(join(tmpdir(), "deslop-installer-"));
   const platform = target.platform;
   const log = join(sandbox, "recorder.log");
@@ -156,7 +146,7 @@ function setupAndRun(page, goodChecksum, target = DEFAULT_TARGET) {
   if (platform) writeFixtureRelease(join(sandbox, "fixtures"), platform, goodChecksum);
   else mkdirSync(join(sandbox, "fixtures"), { recursive: true });
   writeStubs(join(sandbox, "stub-bin"), log, target);
-  const result = runSnippet(extractSnippet(page), sandbox);
+  const result = runSnippet(sandbox, envFor(sandbox));
   return { result, sandbox, platform, log };
 }
 
@@ -201,37 +191,34 @@ function assertSudoInstallsAllBinaries(page, sudoLine, platform) {
   }
 }
 
-function withoutTrailingComment(line) {
-  const at = line.indexOf(" #");
-  return at < 0 ? line : line.slice(0, at).trimEnd();
-}
-
-test("EN and ZH installer snippets are functionally identical (comments are the only translated lines)", () => {
-  const [en, zh] = PAGES.map((page) => extractSnippet(page).split("\n").map(withoutTrailingComment));
-  assert.deepEqual(en, zh, "EN and ZH installer snippets diverge outside comments");
-});
-
-test("both pages' no-sudo alternative creates ~/.local/bin before installing", () => {
+test("both docs pages publish the same one-line install command for install.sh", () => {
   for (const page of PAGES) {
-    const text = readFileSync(resolve(repoRoot, page.path), "utf8");
-    assert.ok(
-      text.includes('mkdir -p ~/.local/bin && install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} ~/.local/bin/'),
-      `${page.path}: the no-sudo alternative must mkdir -p ~/.local/bin first`,
-    );
+    const lines = readFileSync(resolve(repoRoot, page), "utf8").split("\n");
+    assert.ok(lines.includes(PUBLISHED_COMMAND), `${page}: must publish exactly: ${PUBLISHED_COMMAND}`);
   }
 });
 
-for (const page of PAGES) {
-  test(`${page.name}: a bad checksum aborts before extraction and installation`, () => assertFailsClosed(page));
-  test(`${page.name}: a good checksum extracts, installs all three binaries, and cleans up`, () => assertInstalls(page));
-}
+test("DESLOP_INSTALL_DIR installs all three binaries there without sudo", () => {
+  const installDirIn = (sandbox) => join(sandbox, "home", ".local", "bin");
+  const { result, sandbox, log } = setupAndRun(SCRIPT, true, DEFAULT_TARGET, (root) => ({
+    DESLOP_INSTALL_DIR: shellPath(installDirIn(root)),
+  }));
+  const installDir = installDirIn(sandbox);
+  assert.equal(result.status, 0, `user-local install failed:\n${result.stderr}`);
+  assert.deepEqual(readdirSync(installDir).sort(), [...BINARIES].sort(), "every binary lands in DESLOP_INSTALL_DIR");
+  assert.ok(!recordedLines(log).some((line) => line.startsWith("sudo ")), "a user-local install never calls sudo");
+  rmSync(sandbox, { recursive: true, force: true });
+});
+
+test("a bad checksum aborts before extraction and installation", () => assertFailsClosed(SCRIPT));
+test("a good checksum extracts, installs all three binaries, and cleans up", () => assertInstalls(SCRIPT));
 
 // [DEPLOY-DOCS-INSTALLER-FAILCLOSED] The snippet picks its archive from
 // `uname`, and picking the wrong one is a 404 for the user rather than an
 // install. Every published platform is exercised, not just this host's.
 for (const target of PLATFORMS) {
   test(`${target.system}-${target.machine} installs the ${target.platform} archive`, () => {
-    assertInstalls(PAGES[0], target);
+    assertInstalls(SCRIPT, target);
   });
 }
 
@@ -240,7 +227,7 @@ for (const target of PLATFORMS) {
 // not fetch a URL that does not exist and report whatever curl said.
 test("an unsupported platform aborts before anything is downloaded or installed", () => {
   const named = `${UNSUPPORTED_TARGET.system}-${UNSUPPORTED_TARGET.machine}`;
-  for (const page of PAGES) {
+  for (const page of [SCRIPT]) {
     const { result, sandbox, log } = setupAndRun(page, true, UNSUPPORTED_TARGET);
     const output = `${result.stdout}\n${result.stderr}`;
     assert.notEqual(result.status, 0, `${page.name}: snippet exited 0 on ${named}`);

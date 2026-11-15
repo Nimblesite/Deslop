@@ -52,10 +52,10 @@ async function expectDesktop(page) {
 test('desktop navigation has accessible targets and current-page states', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   for (const theme of ['dark', 'light']) {
-    await page.goto('/docs/');
+    await page.goto('/docs/getting-started/');
     await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
     await expectDesktop(page);
-    await expect(page.locator('.nav-link.active')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.nav-link.active'), 'Docs is the section, not this page').toHaveAttribute('aria-current', 'location');
     await expect(page.locator('.docs-sidebar__link.is-active')).toHaveAttribute('aria-current', 'page');
     const guides = page.locator('[data-docs-group="guides"]');
     for (const group of await page.locator('.docs-nav-group').all()) {
@@ -67,9 +67,8 @@ test('desktop navigation has accessible targets and current-page states', async 
     await page.keyboard.press('Enter');
     await expect(guides).toHaveAttribute('open', '');
     await expectTargets(page, '.docs-sidebar__link:visible, .docs-nav-group__summary');
-    await page.getByRole('button', { name: 'Collapse documentation sidebar' }).click();
-    await expect(page.locator('.docs-sidebar__nav')).toBeHidden();
-    await page.getByRole('button', { name: 'Expand documentation sidebar' }).click();
+    await expect(page.locator('.docs-sidebar__nav'), 'the desktop sidebar is always open').toBeVisible();
+    await expect(page.locator('.docs-sidebar button'), 'the sidebar has no collapse control').toHaveCount(0);
     await expect(guides.locator('a').first()).toBeVisible();
   }
 });
@@ -77,7 +76,7 @@ test('desktop navigation has accessible targets and current-page states', async 
 test('desktop destinations share one surface and drawer rows retain their own slots', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   for (const theme of ['dark', 'light']) {
-    await page.goto('/docs/');
+    await page.goto('/docs/getting-started/');
     await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
 
     const group = await slotStyle(page, '.nav-links');
@@ -140,4 +139,23 @@ test('mobile navigation fits and respects reduced motion', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await expect(page.locator('.site-header .nav-link')).toHaveCount(3);
   await expect(page.locator('.docs-sidebar .nav-link')).toHaveCount(0);
+});
+
+// [SITE-DOCS-INDEX] /docs/ is the documentation menu: on a phone every page
+// link is on screen without opening the drawer, and Getting Started has its own page.
+test('the docs root lists every documentation page on mobile without opening the drawer', async ({ page }) => {
+  await page.setViewportSize(MOBILE);
+  for (const [route, start] of [['/docs/', '/docs/getting-started/'], ['/zh/docs/', '/zh/docs/getting-started/']]) {
+    await page.goto(route);
+    const index = page.locator('.docs-index');
+    await expect(index, `${route}: the index is in the page, not the drawer`).toBeVisible();
+    await expect(page.locator('body')).not.toHaveClass(/menu-open/);
+    const indexLinks = await index.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
+    const sidebarLinks = await page.locator('.docs-sidebar__nav a').evaluateAll(links => links.map(link => link.getAttribute('href')));
+    expect(indexLinks, `${route}: the index and the sidebar list the same pages`).toEqual(sidebarLinks);
+    await expect(index.locator(`a[href="${start}"]`)).toBeVisible();
+    await index.locator(`a[href="${start}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`${start}$`));
+    await expect(page.locator('.doc-film video')).toHaveCount(1);
+  }
 });

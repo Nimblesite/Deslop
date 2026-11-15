@@ -986,12 +986,11 @@ jobs:
         run: bash scripts/repository/taxonomy-gate.sh
 
       # Installer fail-closed contract ([DEPLOY-DOCS-INSTALLER-FAILCLOSED]).
-      # The snippet under test IS site content (site/src/docs/index.md and
-      # its zh twin), so a site-only PR can change it while the `ci` job —
-      # where `make lint` normally runs this — is skipped. The one test
-      # written to protect the security-sensitive snippet must run wherever
-      # that snippet can change: this step fires on every PR that touched
-      # site content, and `make lint` covers the rest.
+      # The install command the test checks is site content
+      # (site/src/docs/getting-started.md and its zh twin), so a site-only PR
+      # can change it while the `ci` job — where `make lint` runs this — is
+      # skipped. This step fires on every PR that touched site content;
+      # `make lint` covers install.sh itself.
       - name: Installer snippet contract
         if: needs.changes.outputs.site == 'true'
         run: node --test scripts/deployment/installer-snippet.test.mjs

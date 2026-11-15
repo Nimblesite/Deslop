@@ -15,7 +15,7 @@ Deslop finds duplicate code across a codebase and ranks it worst first, so the c
 
 - **VS Code:** install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) and open your repo. Top Offenders lists the clusters to remove, and each copy can be diffed against the canonical one before you refactor.
 - **JetBrains:** install the plugin zip from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) from disk, with [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij). It is not on the JetBrains Marketplace yet.
-- **CLI:** `brew install nimblesite/tap/deslop`, or on Windows `scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket` then `scoop install deslop`. For a [checksum-verified `curl` install](https://deslop.live/docs/#macos--linux-curl), see the docs.
+- **CLI:** `brew install nimblesite/tap/deslop`, or on Windows `scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket` then `scoop install deslop`. Without Homebrew on macOS or Linux, run [`install.sh`](install.sh): `curl -fsSL https://raw.githubusercontent.com/Nimblesite/Deslop/main/install.sh | bash`.
 
 ```bash
 deslop                         # scan the current directory

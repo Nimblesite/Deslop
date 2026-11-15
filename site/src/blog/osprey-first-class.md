@@ -114,4 +114,4 @@ The project `flavor` setting accepts `default`, `ml` or `python` and overrides t
 
 Effects that make dependencies explicit. Handlers you can keep and reuse. Types the checker works out. Native compilation. Osprey brings a compelling combination, and we want its tooling to match that ambition.
 
-Explore [Osprey](https://www.ospreylang.dev/), then [install Deslop](/docs/) and put it to work.
+Explore [Osprey](https://www.ospreylang.dev/), then [install Deslop](/docs/getting-started/) and put it to work.

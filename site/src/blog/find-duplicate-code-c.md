@@ -85,7 +85,7 @@ These rules keep normal C noise out of the report so the clusters that remain ar
 
 ## Scan your C project
 
-[Install Deslop](/docs/), then run this from the root of your project:
+[Install Deslop](/docs/getting-started/), then run this from the root of your project:
 
 ```bash
 deslop .

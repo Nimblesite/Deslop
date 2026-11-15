@@ -86,7 +86,7 @@ Deslop 使用 tree-sitter 的 C 语法解析每个文件，比较的是规范化
 
 ## 扫描你的 C 项目
 
-[安装 Deslop](/zh/docs/)，然后在项目根目录运行：
+[安装 Deslop](/zh/docs/getting-started/)，然后在项目根目录运行：
 
 ```bash
 deslop .

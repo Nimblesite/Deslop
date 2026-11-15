@@ -151,7 +151,7 @@ Deslop exits `0` unless you opt into a gate. Any breached gate exits `3`, and th
 
 </div>
 
-`--fail-over <PERCENT>` overrides `max_duplication_percent` for one run; `--no-fail-over` clears every gate. With `--diff` and `--only-changed`, the gate reads the diff-scoped percentage, so old debt cannot fail a pre-merge check. Walkthrough: [Gate CI on a duplication threshold](/docs/#gate-ci-on-a-duplication-threshold) and the [GitHub Action](/docs/github-action/).
+`--fail-over <PERCENT>` overrides `max_duplication_percent` for one run; `--no-fail-over` clears every gate. With `--diff` and `--only-changed`, the gate reads the diff-scoped percentage, so old debt cannot fail a pre-merge check. Walkthrough: [Gate CI on a duplication threshold](/docs/getting-started/#gate-ci-on-a-duplication-threshold) and the [GitHub Action](/docs/github-action/).
 
 ## Other settings
 
