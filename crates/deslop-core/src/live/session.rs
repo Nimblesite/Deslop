@@ -459,17 +459,17 @@ pub fn read_analysed_buffers(handle: &RwLock<Arc<OpenBuffers>>) -> Arc<OpenBuffe
     )
 }
 
-/// Collects the parser ids a report's occurrences record. Used as a fallback for `parser_ids` during the
-/// cache-seed window before the background pipeline installs. Deriving from
-/// the parser registry (not a hand-maintained extension map) keeps the seeded
-/// language set from drifting when a language is added ([PIPELINE-LANG-TRAIT],
-/// ).
+/// Collects the parser ids a report's occurrences record, deduplicated and
+/// sorted. Used as a fallback for `parser_ids` during the cache-seed window
+/// before the background pipeline installs ([PIPELINE-LANG-TRAIT]).
 fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
-    let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
-    for cluster in &report.clusters {
-        for occurrence in &cluster.occurrences {
-            let _inserted = seen.insert(occurrence.language.as_str());
-        }
-    }
-    seen.into_iter().map(str::to_owned).collect()
+    report
+        .clusters
+        .iter()
+        .flat_map(|cluster| &cluster.occurrences)
+        .map(|occurrence| occurrence.language.as_str())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }
