@@ -218,8 +218,8 @@ export function kindCountsTowardTotal(
   kind: ClusterKind,
   totalIncludes: readonly ClusterKind[] | undefined,
 ): boolean {
-  if (totalIncludes === undefined) return true;
-  return kind !== "structural_only" && totalIncludes.includes(kind);
+  if (kind === "structural_only") return false;
+  return totalIncludes === undefined || totalIncludes.includes(kind);
 }
 
 /** [VSIX-TOP-OFFENDERS-EXCLUDED] True when a clone kind is left out of the

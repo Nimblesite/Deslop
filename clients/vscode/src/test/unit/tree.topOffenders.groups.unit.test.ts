@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { FileNode, FolderNode } from "../../tree/providers";
 import { KindGroupNode, Node } from "../../tree/nodes";
 import { ReportStore } from "../../reportStore";
-import { CLUSTER_KINDS, INFORMATIONAL_FINDING, kindTitle } from "../../types/report";
+import { CLUSTER_KINDS, INFORMATIONAL_FINDING, kindTitle, type RepoMetrics } from "../../types/report";
 import { cluster, iconColorId, labelText, report, storeWith, tooltipText, topOffenders, withGroupBy } from "./tree.helpers";
 import { KIND_THEME_COLOR } from "../../design";
 import { DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_KIND, STRUCTURAL_ONLY_KIND, HIGHEST_CLUSTER_MASS, HIGH_CLUSTER_MASS, MEDIUM_CLUSTER_MASS, TIED_CLUSTER_MASS, FILE_GROUPING_MODE, MIXED_FILE_PATH, REPO_A_PATH, REPO_B_PATH, ALPHA_FILE_PATH, FIRST_CLUSTER_ID, SECOND_CLUSTER_ID, BETA_FILE_PATH, CLUSTER_ROOT_REQUIRED, HEAVY_CLUSTER_ID, WHOLE_NUMBER_MASS, TWO_DECIMAL_MASS, FOLDER_GROUPING_MODE, THIRD_ITEM_INDEX, PAIR_COUNT, FILE_ROOT_COUNT, firstRootIn } from "./tree.topOffenders.fixtures";
@@ -424,5 +424,29 @@ suite("TopOffendersProvider groups", () => {
       if (group.kind === STRUCTURAL_ONLY_KIND) assert.equal(description, INFORMATIONAL_FINDING);
       else assert.ok(description.endsWith(`· ${NOT_COUNTED_MARKER}`), group.kind);
     }
+  });
+
+  test("[METRICS-TOTAL-COUNTED] shape-only stays out of the total when the report names no include set", () => {
+    // A report written before `total_includes` existed claims nothing about
+    // clone kinds, but shape-only never counts ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+    const store = storeWith(
+      report(
+        [
+          cluster("c1", HIGH_CLUSTER_MASS, ALPHA_FILE_PATH, 0, 20, "information", 1, IDENTICAL_KIND),
+          cluster("c2", MEDIUM_CLUSTER_MASS, BETA_FILE_PATH, 0, 20, "information", 2, STRUCTURAL_ONLY_KIND),
+        ],
+        { total_includes: undefined } as unknown as Partial<RepoMetrics>,
+      ),
+    );
+    const roots = topOffenders(store).getChildren() as KindGroupNode[];
+    const [identicalGroup, structuralGroup] = roots;
+    assert.ok(identicalGroup && structuralGroup);
+    assert.equal(identicalGroup.kind, IDENTICAL_KIND);
+    assert.equal(identicalGroup.description, undefined, "a clone kind is not marked when no set is named");
+    assert.equal(structuralGroup.kind, STRUCTURAL_ONLY_KIND);
+    assert.equal(structuralGroup.description, NOT_COUNTED_MARKER);
+    assert.equal(structuralGroup.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+    assert.equal(iconColorId(structuralGroup), NOT_COUNTED_ICON_COLOR);
+    assert.ok(tooltipText(structuralGroup).endsWith(NOT_COUNTED_TOOLTIP), tooltipText(structuralGroup));
   });
 });
