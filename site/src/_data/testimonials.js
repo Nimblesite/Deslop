@@ -2,9 +2,9 @@
 // for the homepage testimonial band (partials/testimonials.njk). Quotes are
 // reproduced verbatim from the linked public post and are never translated;
 // only `role` and `evidence.note` are localised, keyed by page language.
-// `linesRemoved` is the figure stated by the author in that same post, one
-// entry per merged pull request, so every number on the page is checkable
-// against the link beside it.
+// Evidence is either `pullRequests` (the figure stated by the author, one
+// entry per merged pull request) or `points` (verbatim excerpts of the same
+// post), so every claim on the page is checkable against the link beside it.
 export default [
   {
     id: "kevmoo",
@@ -32,6 +32,30 @@ export default [
       ],
       quote: "AMAZING! SUPER useful! wow!",
       sourceUrl: "https://x.com/kevmoo/status/2084863688184578520",
+    },
+  },
+  {
+    id: "johnjkattenhorn",
+    author: "John Kattenhorn",
+    authorUrl: "https://x.com/johnjkattenhorn",
+    handle: "@johnjkattenhorn",
+    role: {
+      en: "Builds companies, teams and systems",
+      zh: "公司、团队与系统的构建者",
+    },
+    quote: "I gave Claude Code a hook it was about to write, and find-similar pointed it straight at the existing copy. That's the \"don't write a third one\" loop I want in every agent session.",
+    sourceUrl: "https://x.com/johnjkattenhorn/status/2121504625878536264",
+    sourceDate: "2026-11-14",
+    evidence: {
+      note: {
+        en: "Run on his 61k-line TypeScript and Python monorepo:",
+        zh: "在他 6.1 万行的 TypeScript 与 Python monorepo 上运行：",
+      },
+      points: [
+        "341 files in about 6 seconds, ranked worst first, with HTML, JSON and text reports.",
+        "One response-handling block was copied across three API routes, and one data-polling hook was copied in two views. Both fold into a single function.",
+        "It found something the plain scan couldn't: two versions of the same git helper in two different reporters, written in different styles.",
+      ],
     },
   },
 ];

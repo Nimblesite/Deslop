@@ -115,4 +115,4 @@ Python 入口文件和列出的文件会加入 Osprey。路径是相对于清单
 
 让依赖显式化的效应。可以保留并复用的处理器。检查器自行推断的类型。原生编译。Osprey 带来了一个引人注目的组合，我们希望它的工具链配得上这份雄心。
 
-探索 [Osprey](https://www.ospreylang.dev/)，然后[安装 Deslop](/zh/docs/)并让它开始工作。
+探索 [Osprey](https://www.ospreylang.dev/)，然后[安装 Deslop](/zh/docs/getting-started/)并让它开始工作。

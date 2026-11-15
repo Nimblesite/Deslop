@@ -75,7 +75,7 @@ Flutter has a lot of necessary repetition, and reporting it would bury the real 
 - **Generated Dart.** Files ending in `.g.dart`, `.freezed.dart`, `.gr.dart`, `.config.dart`, `.gen.dart`, `.mocks.dart` and the protobuf `.pb*.dart` family are analysed but hidden from the report, along with files that open with a generator banner such as `// GENERATED CODE - DO NOT MODIFY BY HAND`.
 - **Tooling and dependencies.** `.dart_tool` is always excluded, and `.pub-cache` is excluded unless you opt in.
 
-Hidden generated files still count when *your* code duplicates them. If a hand-written mapper copies what `json_serializable` already generates, that cluster survives. See [Configuration](/docs/configuration/#built-in-rules-always-on) for the full list.
+Hidden generated files still count when *your* code duplicates them. If a hand-written mapper copies what `json_serializable` already generates, that cluster survives. See [Configuration](/docs/configuration/#built-in-rules) for the full list.
 
 ## What a Dart duplicate-code check should look for
 

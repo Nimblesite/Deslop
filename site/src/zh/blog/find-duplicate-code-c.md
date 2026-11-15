@@ -86,7 +86,7 @@ Deslop 使用 tree-sitter 的 C 语法解析每个文件，比较的是规范化
 
 ## 扫描你的 C 项目
 
-[安装 Deslop](/zh/docs/)，然后在项目根目录运行：
+[安装 Deslop](/zh/docs/getting-started/)，然后在项目根目录运行：
 
 ```bash
 deslop .
@@ -100,7 +100,7 @@ deslop .
 
 现有的重复代码分诊完毕后，更省力的做法是在新的副本合入之前就发现它们。以下两种方式很适合 C 项目：
 
-- **CI 门禁。**[GitHub Action](/zh/docs/github-action/) 会在拉取请求中运行同一个 CLI。设置[重复率阈值](/zh/docs/configuration/#threshold--ci-)，在重复率上升时让任务失败；也可以只测量不设门禁，同时逐步清理。
+- **CI 门禁。**[GitHub Action](/zh/docs/github-action/) 会在拉取请求中运行同一个 CLI。设置[重复率阈值](/zh/docs/configuration/#ci-gate)，在重复率上升时让任务失败；也可以只测量不设门禁，同时逐步清理。
 - **编码代理检查。**如果你在 C 代码库上使用 Claude Code、Codex 或其他 MCP 客户端，可以让代理在编写新的清理路径之前先调用 Deslop 的 `find-similar` 工具。如果已存在匹配的函数，代理可以直接调用它，而不是再添加一个副本。[AI Agents](/zh/docs/ai-integration/) 介绍了具体设置。
 
 一旦知道所有副本的位置，修复被复制的清理路径就很容易了。

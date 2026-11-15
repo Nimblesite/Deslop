@@ -1,0 +1,8 @@
+{
+  "name": "deslop-compare-jscpd",
+  "private": true,
+  "description": "Scores Deslop and jscpd against the judged clone registers",
+  "dependencies": {
+    "jscpd": "^5.4.3"
+  }
+}

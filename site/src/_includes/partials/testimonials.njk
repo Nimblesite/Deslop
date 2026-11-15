@@ -1,6 +1,6 @@
 {#- Testimonial band — shared by the en (/) and zh (/zh/) home pages so the
     markup lives in exactly one place. Quotes, attribution and the merged
-    pull-request evidence come from _data/testimonials.js (single source of
+    evidence (merged pull requests or verbatim excerpts) come from _data/testimonials.js (single source of
     truth); section copy comes from i18n.json (testimonials.*) keyed by the
     page language. Quotes stay in the language they were written in. -#}
 {% set currentLang = lang | default('en') %}
@@ -25,6 +25,7 @@
       </figure>
       <div class="testimonial__evidence">
         <p class="testimonial__note">{{ item.evidence.note[currentLang] | default(item.evidence.note.en) }}</p>
+        {% if item.evidence.pullRequests %}
         <ul class="testimonial__prs">
           {% for pullRequest in item.evidence.pullRequests %}
           <li>
@@ -35,7 +36,15 @@
           </li>
           {% endfor %}
         </ul>
+        {% endif %}
+        {% if item.evidence.points %}
+        <ul class="testimonial__points">
+          {% for point in item.evidence.points %}<li>{{ point }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if item.evidence.quote %}
         <a class="testimonial__reaction" href="{{ item.evidence.sourceUrl }}" target="_blank" rel="noopener noreferrer">{{ item.evidence.quote }}</a>
+        {% endif %}
       </div>
     </li>
     {% endfor %}

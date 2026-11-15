@@ -304,8 +304,8 @@ test("homepage demo plays on demand with captions on desktop and mobile", async 
         '@type': 'VideoObject',
         contentUrl: 'https://deslop.live/assets/video/deslop-demo.mp4',
         thumbnailUrl: 'https://deslop.live/assets/img/deslop-demo-poster.webp',
-        duration: 'PT34S',
-        uploadDate: '2026-11-08',
+        duration: 'PT35S',
+        uploadDate: '2026-11-15',
         inLanguage: 'en',
       });
       await video.evaluate(element => { element.muted = true; return element.play(); });

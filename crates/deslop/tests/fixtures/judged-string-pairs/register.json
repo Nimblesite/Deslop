@@ -184,6 +184,22 @@
         "viper/internal/encoding/yaml/codec_test.go:3-64"
       ],
       "judged_at": "https://github.com/spf13/viper.git@528f7416c4b56a4948673984b190bf8713f0c3c4: internal/encoding/yaml/codec_test.go:75-95 internal/encoding/yaml/codec_test.go:11-72"
+    },
+    {
+      "why": "The code beginning with `public function testSectionOutputDoesntClearIfTableIsntRendered()` is repeated unchanged apart from comments or formatting. The surrounding edits do not remove that copied core.",
+      "occurrences": [
+        "console/Tests/Helper/TableTest.php:40-66",
+        "console/Tests/Helper/TableTest.php:68-101"
+      ],
+      "judged_at": "https://github.com/symfony/console.git@dc3c284882e545b47f590c392e7be0da4184b6e2: Tests/Helper/TableTest.php:1853-1879 Tests/Helper/TableTest.php:1881-1914"
+    },
+    {
+      "why": "The code beginning with `$sections = [];` is repeated unchanged apart from comments or formatting.",
+      "occurrences": [
+        "console/Tests/Helper/TableTest.php:42-50",
+        "console/Tests/Helper/TableTest.php:7-15"
+      ],
+      "judged_at": "https://github.com/symfony/console.git@dc3c284882e545b47f590c392e7be0da4184b6e2: Tests/Helper/TableTest.php:1855-1863 Tests/Helper/TableTest.php:1532-1540"
     }
   ],
   "clearly_out": [],

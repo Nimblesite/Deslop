@@ -52,7 +52,7 @@ The *reference* copy is the cluster's canonical occurrence. Copies in a cluster 
 
 Two copies of a function contain one redundant implementation. Five copies contain four. The formula counts the copies you could remove: if every copy were replaced by a call to one shared function, `visible_members − 1` is how many would go.
 
-That is also why the count uses *visible* copies. If you mark generated code with `report_hide`, those occurrences stay in the analysis but no longer count towards mass. A cluster where your hand-written code duplicates a generated file still shows up, because it still has a visible copy you wrote. A cluster that only duplicates generated output drops to zero. [Configuration](/docs/configuration/#exclude-vs-report_hide--the-core-idea) explains the difference between excluding and hiding.
+That is also why the count uses *visible* copies. If you mark generated code with `report_hide`, those occurrences stay in the analysis but no longer count towards mass. A cluster where your hand-written code duplicates a generated file still shows up, because it still has a visible copy you wrote. A cluster that only duplicates generated output drops to zero. [Configuration](/docs/configuration/#exclude-vs-report_hide) explains the difference between excluding and hiding.
 
 ## What mass deliberately leaves out
 
@@ -80,7 +80,7 @@ The two figures answer different questions:
 | Mass | Which cluster should I look at first? | Syntax-tree nodes × extra copies |
 | Duplication percentage | How much of the analysed code is covered by reported clones? | Lines, overlapping ranges counted once |
 
-The percentage is `100 × duplicated_loc / analysed_loc`, where duplicated lines are the per-file union of visible clone ranges. It is the number a [CI threshold](/docs/configuration/#threshold--the-ci-gate) checks. Mass only orders the list. A repository can have a low percentage with one very high-mass cluster, and that cluster is still the right place to start.
+The percentage is `100 × duplicated_loc / analysed_loc`, where duplicated lines are the per-file union of visible clone ranges. It is the number a [CI threshold](/docs/configuration/#ci-gate) checks. Mass only orders the list. A repository can have a low percentage with one very high-mass cluster, and that cluster is still the right place to start.
 
 ## Ranking for humans and AI agents
 

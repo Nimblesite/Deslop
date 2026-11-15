@@ -285,34 +285,28 @@
 }
 .testimonials__list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
   gap: var(--space-6);
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-/* Quote on the left, the pull requests it turned into on the right. */
+/* One card per person: quote and attribution, then the evidence beneath. */
 .testimonial {
   background: var(--surface-container-low);
   border-radius: var(--radius-sm);
   padding: var(--space-8);
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-8);
-}
-@media (min-width: 900px) {
-  .testimonial { grid-template-columns: 1.15fr 1fr; gap: var(--space-12); }
-  .testimonial__evidence {
-    border-left: 1px solid var(--outline-variant);
-    padding-left: var(--space-12);
-  }
 }
 
 .testimonial__figure { margin: 0; display: flex; flex-direction: column; gap: var(--space-6); }
 .testimonial__quote {
   margin: 0;
   color: var(--on-surface);
-  font-size: clamp(1.125rem, 2vw, 1.5rem);
+  font-size: clamp(1.125rem, 1.6vw, 1.3rem);
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.45;
@@ -344,7 +338,23 @@
 .testimonial__source:hover { color: var(--on-surface); }
 .testimonial__mark { display: block; }
 
-.testimonial__evidence { display: flex; flex-direction: column; gap: var(--space-4); }
+.testimonial__evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  border-top: 1px solid var(--outline-variant);
+  padding-top: var(--space-6);
+}
+.testimonial__points {
+  margin: 0;
+  padding-left: var(--space-6);
+  display: grid;
+  gap: var(--space-2);
+  color: var(--on-surface);
+  font-size: var(--type-body-md);
+  line-height: 1.6;
+}
 .testimonial__note {
   margin: 0;
   color: var(--on-surface-variant);

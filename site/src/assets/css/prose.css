@@ -48,20 +48,13 @@ body.menu-open .docs-sidebar { visibility: visible; transform: translateX(0); }
     background: var(--surface);
     z-index: 40;
   }
-  .docs-shell.is-sidebar-collapsed .docs-sidebar { width: 3.5rem; flex-basis: 3.5rem; }
-  .docs-shell.is-sidebar-collapsed .docs-sidebar__nav,
-  .docs-shell.is-sidebar-collapsed .docs-sidebar__foot { display: none; }
   .docs-shell--workspace .docs-sidebar {
     position: relative;
     top: 0;
     height: 100%;
   }
 }
-.docs-sidebar__collapse { display: none; }
-@media (min-width: 768px) {
-  .docs-sidebar__collapse { width: 2.75rem; height: 2.75rem; margin: var(--space-2) var(--space-2) 0 auto; border: 0; display: grid; place-items: center; cursor: pointer; border-radius: var(--radius-md); background: transparent; color: var(--on-surface-variant); font: 1.2rem/1 var(--font-body); }
-  .docs-shell.is-sidebar-collapsed .docs-sidebar__collapse { margin-inline: auto; }
-}
+.prose .docs-index .docs-sidebar__link { text-decoration: none; }
 .docs-workspace { width: 0; min-width: 0; min-height: 0; flex: 1 1 0; overflow: hidden; }
 .docs-sidebar__nav {
   display: flex;
@@ -105,7 +98,6 @@ body.menu-open .docs-sidebar { visibility: visible; transform: translateX(0); }
   to { opacity: 1; transform: translateY(0); }
 }
 .docs-nav-group__summary:hover,
-.docs-sidebar__collapse:hover { color: var(--on-surface); background: var(--surface-container-low); }
 .docs-nav-group__items { padding: 0 0 var(--space-2); display: grid; }
 /* [SITE-NAV-HIERARCHY] Reserve the sidebar fill for hover and selection. */
 .docs-sidebar__link {
@@ -467,15 +459,21 @@ body.menu-open .docs-sidebar { visibility: visible; transform: translateX(0); }
 /* Tables scroll horizontally instead of overflowing narrow screens. */
 .prose table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.9375rem; }
 .prose th, .prose td { padding: var(--space-3) var(--space-4); text-align: left; vertical-align: top; }
-.prose .mcp-tool-table td:first-child > code { white-space: nowrap; }
+.prose td:first-child > code { white-space: nowrap; }
 .prose thead th { color: var(--on-surface); font-weight: 700; background: var(--surface-container-low); }
 .prose tbody td { color: var(--on-surface-variant); }
 .prose tbody tr:nth-child(even) td { background: var(--surface-container-low); }
+/* Key tables stack each row on narrow screens: key, then default beside its effect. */
 @media (max-width: 767.98px) {
-  .prose .mcp-tool-table :is(th, td) { padding-inline: var(--space-2); }
+  .prose .key-table :is(table, tbody) { display: block; }
+  .prose .key-table thead { display: none; }
+  .prose .key-table tr { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); padding: var(--space-3); }
+  .prose .key-table tbody tr:nth-child(even) { background: var(--surface-container-low); }
+  .prose .key-table td { padding: 0; background: none; }
+  .prose .key-table td:first-child, .prose .key-table td:nth-child(2):last-child { grid-column: 1 / -1; }
 }
 
 .doc-film-transcript summary { cursor: pointer; padding: var(--space-3) 0; font-weight: 600; }
-.doc-film-transcript section { margin-top: var(--space-5); }
+.doc-film-transcript section { margin-top: var(--space-6); }
 .doc-film-transcript h3 { font-size: 1rem; margin-bottom: var(--space-2); }
 .doc-film-transcript time { color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }

@@ -13,8 +13,6 @@ const desktop = window.matchMedia("(min-width: 768px)");
 const toggle = document.getElementById('mobile-menu-toggle');
 const scrim = document.querySelector('.drawer-scrim');
 const drawers = document.querySelectorAll('.docs-sidebar, .nav-links');
-const docsShell = document.querySelector('.docs-shell');
-const docsCollapse = document.querySelector('[data-docs-sidebar-collapse]');
 const siteLinks = document.querySelector('.nav-links');
 const headerActions = document.querySelector('.nav-actions');
 const docsNav = document.querySelector('.docs-sidebar__nav');
@@ -28,13 +26,6 @@ function placeSiteLinks() {
 
 placeSiteLinks();
 desktop.addEventListener('change', placeSiteLinks);
-
-docsCollapse?.addEventListener('click', () => {
-  const collapsed = docsShell.classList.toggle('is-sidebar-collapsed');
-  docsCollapse.setAttribute('aria-expanded', String(!collapsed));
-  docsCollapse.setAttribute('aria-label', collapsed ? 'Expand documentation sidebar' : 'Collapse documentation sidebar');
-  docsCollapse.querySelector('span').textContent = collapsed ? '›' : '‹';
-});
 
 function closeDrawer() {
   if (!document.body.classList.contains('menu-open')) return;

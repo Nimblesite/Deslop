@@ -130,7 +130,7 @@ By default the action writes `deslop-report.json`, `deslop-report.txt` and `desl
           nohtml: "true"        # JSON + text only
 ```
 
-The HTML report is the one to open as a human; the JSON report is the one to parse. See [Report output](/docs/configuration/#report-output) for the shape of each.
+The HTML report is the one to open as a human; the JSON report is the one to parse. See [Report output](/docs/reports/) for the shape of each.
 
 ## Supported runners
 

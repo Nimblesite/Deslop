@@ -131,7 +131,7 @@ jobs:
           nohtml: "true"        # 仅 JSON + 文本
 ```
 
-HTML 报告是给人看的；JSON 报告是用来解析的。各自的结构见[报告输出](/zh/docs/configuration/#report-output)。
+HTML 报告是给人看的；JSON 报告是用来解析的。各自的结构见[报告输出](/zh/docs/reports/)。
 
 ## 受支持的运行器
 

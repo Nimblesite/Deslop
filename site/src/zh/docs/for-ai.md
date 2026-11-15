@@ -95,7 +95,7 @@ deslop --version
 
 MCP 的每个回答都来自编辑器的实时分析，并随文件变化而更新，没有批处理步骤。每个工具在 `tools/list` 中都有自己的说明；它们的配合方式如下：
 
-<div class="mcp-tool-table">
+<div class="key-table">
 
 | 工具 | 用途 |
 | --- | --- |
@@ -221,7 +221,7 @@ jq -r '.clusters[] | select(.kind == "identical")
 
 ## 读取 JSON
 
-解析 JSON，不要解析文本或 HTML。普通报告中的 `schema_doc` 可能为空；通过 MCP 调用一次 `schema-doc`，离线时参考下面的字段说明和[报告文档](/zh/docs/configuration/#report-output)。
+解析 JSON，不要解析文本或 HTML。普通报告中的 `schema_doc` 可能为空；通过 MCP 调用一次 `schema-doc`，离线时参考下面的字段说明和[报告文档](/zh/docs/reports/)。
 
 | 字段 | 含义 |
 | --- | --- |

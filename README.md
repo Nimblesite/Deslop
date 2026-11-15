@@ -1,67 +1,43 @@
 # Deslop
 
-Find duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. Deslop ranks what to remove
-first, warns in the editor as you type, and tells Claude Code, Cursor and GitHub
-Copilot when similar code already exists.
+**Clean up the duplicate code in your repo, and stop your coding agents from writing more.**
+
+Deslop finds duplicate code across a codebase and ranks it worst first, so the cleanup that matters most comes first. While you or Claude Code, Cursor or GitHub Copilot edit, it flags new code that copies something that already exists. It is an open-source alternative to jscpd that also runs live in the editor and inside the agent loop.
 
 [Install for VS Code](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) ·
 [Add to GitHub Actions](https://deslop.live/docs/github-action/) ·
-[Documentation](https://deslop.live/docs/) ·
-[Releases](https://deslop.live/releases/)
+[Supported languages](https://deslop.live/#languages) ·
+[Documentation](https://deslop.live/docs/)
 
 [![Deslop showing a duplicate cluster, its two locations and canonical comparison actions.](site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
 
-## Install in your IDE
+## Clean up what's there
 
-### VS Code
-
-Install [Deslop Live from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live),
-then open a supported codebase. Deslop starts automatically and updates its
-findings as the code changes.
-
-You can also install a platform-specific VSIX from the
-[releases page](https://deslop.live/releases/):
+- **VS Code:** install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) and open your repo. Top Offenders lists the clusters to remove, and each copy can be diffed against the canonical one before you refactor.
+- **JetBrains:** install the plugin zip from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) from disk, with [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij). It is not on the JetBrains Marketplace yet.
+- **CLI:** `brew install nimblesite/tap/deslop`, or on Windows `scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket` then `scoop install deslop`. Without Homebrew on macOS or Linux, run [`install.sh`](install.sh): `curl -fsSL https://raw.githubusercontent.com/Nimblesite/Deslop/main/install.sh | bash`.
 
 ```bash
-code --install-extension deslop-live-X.Y.Z-<target>.vsix
+deslop                         # scan the current directory
+deslop . --output ./report     # write report.json, report.txt, report.html
 ```
 
-The extension bundles the LSP server, MCP server, and CLI.
+Configuration lives in `.deslop.toml` ([reference](https://deslop.live/docs/configuration/)).
 
-### JetBrains IDEs
+## Stop new duplicates
 
-The JetBrains plugin ships as a zip on the
-[releases page](https://github.com/Nimblesite/Deslop/releases/latest) — install
-it from disk, along with
-[LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij). It is not on the
-JetBrains Marketplace yet.
+**Coding agents.** The VS Code extension bundles `deslop-mcp`. Point your agent at it, then add the [Deslop agent instruction](docs/snippets/agents-md-recipe.md) to your repo so the agent calls `find-similar` before writing a function, helper or test setup. Setup for each client: [AI integration](https://deslop.live/docs/ai-integration/).
 
-## Add it to your pipeline
-
-### GitHub Actions
+**CI.** Fail the build when duplication goes over a ceiling:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: Nimblesite/Deslop@vX.Y.Z
+- uses: Nimblesite/Deslop@vX.Y.Z   # the newest release tag
   with:
-    fail-over: "5.0" # fail above 5% duplicated lines
+    fail-over: "5.0"               # fail above 5% duplicated lines
 ```
 
-Substitute the [newest release](https://github.com/Nimblesite/Deslop/releases/latest)
-for `X.Y.Z` — the tag you pin *is* the CLI version the action installs. The
-[Action reference](https://deslop.live/docs/github-action/) renders the current
-number.
-
-The action analyses the workspace, uploads JSON, text, and HTML reports, and
-fails the job if duplication exceeds the threshold. It needs no token and only
-the default `contents: read` permission.
-
-See the [GitHub Action reference](https://deslop.live/docs/github-action/) for
-all inputs, outputs, supported runners, and threshold rules.
-
-### pre-commit and prek
-
-Install the CLI (see below), then add Deslop as a remote hook:
+Anywhere else, run `deslop . --fail-over 5.0`. It exits with code `3` when the ceiling is breached and still writes the reports. For pre-commit or prek, install the CLI and add:
 
 ```yaml
 repos:
@@ -72,86 +48,25 @@ repos:
         args: ["--fail-over", "5.0"]
 ```
 
-The hook scans the whole repository with the `deslop` on your `PATH` and fails
-on exit code `3`, a breached threshold. Any CLI option can go in `args`.
+## How it compares
 
-### Other CI systems
+Deslop parses code with tree-sitter and compares syntax trees, not token streams. That lets it report copies with renamed identifiers, changed literals or inserted statements as well as exact ones. Optional local embeddings through Ollama add copies that behave the same but read differently.
 
-Install the CLI and run:
+Accuracy is checked against [judged clone registers](corpus/register/): pairs from pinned open-source repositories that a reviewer has marked as real copies or not copies. [Accuracy Transparency](https://deslop.live/docs/accuracy-transparency/) explains the scoring. No head-to-head benchmark against jscpd or other detectors has been published, so we make no claim that Deslop is more accurate than they are.
 
-```bash
-deslop . --fail-over 5.0
-```
+## Developing Deslop
 
-Exit code `3` means the duplication threshold was breached. Reports are still
-written so the pipeline can expose the offenders.
+The engine is a Rust workspace under `crates/`. The VS Code client is in `clients/vscode/` and the JetBrains client in `clients/jetbrains/`.
 
 ```bash
-# macOS / Linux
-brew install nimblesite/tap/deslop
-
-# Windows
-scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
-scoop install deslop
+make ci      # build, lint and test everything, as CI does
+make test    # fail-fast tests with coverage thresholds
+make lint    # format and static analysis
 ```
 
-On macOS or Linux without Homebrew, `curl` the latest release archive instead —
-the [install docs](https://deslop.live/docs/#macos--linux-curl) have a
-checksum-verified snippet that always resolves the newest version.
-
-## How it works
-
-Deslop parses code with tree-sitter and compares structure instead of merely
-matching lines. That lets it find exact copies, renamed copies, and similar
-implementations across a repository.
-
-- **In the editor:** the LSP shows live findings and comparisons.
-- **For coding agents:** the MCP server lets an agent call `find-similar` before
-  writing a function, helper, or test setup.
-- **In CI:** the CLI produces ranked reports and enforces a duplication ceiling.
-
-All three surfaces use the same analysis engine. The worst offenders come first
-so the report starts with the cleanup that matters most.
-
-Supported languages: C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go, and Osprey (`.osp`, native `.ospml`, and explicitly selected `.py`). See the [Osprey guide](site/src/docs/osprey.md) for syntax flavors, Python opt-in rules and integration status, and [Osprey in Deslop](site/src/blog/osprey-first-class.md) for the introduction.
-
-## Connect a coding agent
-
-The VS Code extension includes `deslop-mcp`. Point your MCP-capable agent at the
-bundled binary, then add the [Deslop agent instruction](docs/snippets/agents-md-recipe.md)
-to the repository so it checks for similar code before writing.
-
-See [AI integration](https://deslop.live/docs/ai-integration/) for Claude Code,
-Cursor, Copilot, Continue, Codex, and other MCP clients.
-
-## Run a local scan
-
-```bash
-deslop                         # scan the current directory
-deslop ./my-repo               # scan another repository
-deslop . --output ./report     # write report.json, report.txt, report.html
-```
-
-Configuration lives in `.deslop.toml`. See the
-[configuration reference](https://deslop.live/docs/configuration/), and
-[report output](https://deslop.live/docs/configuration/#report-output) for the
-report files.
-
-## Project direction — accuracy first
-
-Accuracy outranks features, languages, UI, and performance: every reported
-cluster must be a real duplicate, and every real duplicate must be reported.
-Fixing code that can cause a false positive or false negative comes before all
-other work.
-
-See [the messaging guide](docs/messaging.md) and
-[the design specification](docs/specs/SPEC.md).
-
-## Contributing
-
-Bug reports with a reproduction are the most useful thing you can send,
-especially inaccurate results. Code contributions are restricted while we audit
-for accuracy — see [CONTRIBUTING.md](CONTRIBUTING.md).
+- Accuracy outranks features, languages, UI and performance. Read [AGENTS.md](AGENTS.md) before changing detection code.
+- Specs live in [docs/specs/](docs/specs/SPEC.md) and the code map in [docs/repo-index.md](docs/repo-index.md).
+- The most useful contribution is a bug report with a reproduction, especially for inaccurate results. Code contributions are restricted while we audit for accuracy: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

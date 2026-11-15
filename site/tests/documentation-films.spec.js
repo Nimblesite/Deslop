@@ -63,7 +63,7 @@ async function assertDownloadLink(video,slug) {
 
 test('getting started fits the reading column without prose CSS', async ({page}) => {
   await page.route('**/assets/css/prose.css', route => route.abort());
-  await page.goto('/docs/');
+  await page.goto('/docs/getting-started/');
   const video = page.locator('.doc-film video');
   const column = page.locator('.prose--docs');
   for (const width of WIDTHS) {

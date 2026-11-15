@@ -20,7 +20,7 @@ This guide covers [0.35.0](/releases/).
 
 ## Find candidate copies
 
-Deslop supports C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It respects `.gitignore` and excludes dependency trees and build artifacts by default. See [Configuration](/docs/configuration/#built-in-rules-always-on) for exclusions.
+Deslop supports C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It respects `.gitignore` and excludes dependency trees and build artifacts by default. See [Configuration](/docs/configuration/#built-in-rules) for exclusions.
 
 For Osprey's `.osp` syntax, Python-flavor opt-in and the native ML integration status, see [Osprey support](/blog/osprey-first-class/).
 
@@ -64,4 +64,4 @@ Embeddings are off by default. `--embeddings auto` uses the configured provider 
 
 Cached parse and signature work can be reused for unchanged files. A live session watches edits, updates the analysis and broadcasts the fresh report to the editor. MCP queries consult that session; the CLI performs a separate scan for CI or a one-off review.
 
-JSON, text and HTML expose the same report. See [Report output](/docs/configuration/#report-output), [Accuracy Transparency](/docs/accuracy-transparency/) and [Research Background](/docs/research-background/) for the contracts and evidence.
+JSON, text and HTML expose the same report. See [Report output](/docs/reports/), [Accuracy Transparency](/docs/accuracy-transparency/) and [Research Background](/docs/research-background/) for the contracts and evidence.

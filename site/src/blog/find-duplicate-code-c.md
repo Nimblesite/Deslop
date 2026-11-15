@@ -85,7 +85,7 @@ These rules keep normal C noise out of the report so the clusters that remain ar
 
 ## Scan your C project
 
-[Install Deslop](/docs/), then run this from the root of your project:
+[Install Deslop](/docs/getting-started/), then run this from the root of your project:
 
 ```bash
 deslop .
@@ -99,7 +99,7 @@ Findings are ranked by [duplicated mass](/blog/ranking-formula/): the size of th
 
 Once the existing duplicates are triaged, the cheaper habit is catching new ones before they merge. Two options work well for C projects:
 
-- **A CI gate.** The [GitHub Action](/docs/github-action/) runs the same CLI in a pull request. Set a [duplication threshold](/docs/configuration/#threshold--the-ci-gate) to fail the job when duplication rises, or measure without gating while you clean up.
+- **A CI gate.** The [GitHub Action](/docs/github-action/) runs the same CLI in a pull request. Set a [duplication threshold](/docs/configuration/#ci-gate) to fail the job when duplication rises, or measure without gating while you clean up.
 - **A coding agent check.** If you use Claude Code, Codex or another MCP client on a C codebase, have the agent call Deslop's `find-similar` tool before it writes a new cleanup path. If a matching function exists, the agent can call it instead of adding another copy. [AI Agents](/docs/ai-integration/) shows the setup.
 
 A copied cleanup path is easy to fix once you know where all its copies are.

@@ -92,7 +92,7 @@ Both install `deslop`, `deslop-lsp` and `deslop-mcp` onto `PATH` at the same ver
 
 Every MCP answer comes from the editor's live analysis, which updates as files change. There is no batch step. Each tool describes itself in `tools/list`; this is how they fit together:
 
-<div class="mcp-tool-table">
+<div class="key-table">
 
 | Tool | Use it to |
 | --- | --- |
@@ -218,7 +218,7 @@ Do not make findings disappear by other means. Do not add `exclude` or `report_h
 
 ## Read the JSON
 
-Parse the JSON, never the text or HTML. `schema_doc` can be empty in ordinary reports. Over MCP, call `schema-doc` once; offline, use [the report reference](/docs/configuration/#report-output) and the field guide below.
+Parse the JSON, never the text or HTML. `schema_doc` can be empty in ordinary reports. Over MCP, call `schema-doc` once; offline, use [the report reference](/docs/reports/) and the field guide below.
 
 | Field | Meaning |
 | --- | --- |

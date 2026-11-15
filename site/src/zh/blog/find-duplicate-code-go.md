@@ -107,7 +107,7 @@ MCP 配置请参阅 [AI 集成](/zh/docs/ai-integration/)，完整的预防模�
 
 ## 在 Go 仓库上试试
 
-按照[入门指南](/zh/docs/)安装 Deslop，打开一个 Go 工作区，然后运行：
+按照[入门指南](/zh/docs/getting-started/)安装 Deslop，打开一个 Go 工作区，然后运行：
 
 ```bash
 deslop .

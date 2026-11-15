@@ -77,7 +77,7 @@ A cluster in a Deslop report is a decision, not a verdict. The tool reports; you
 
 - **Extract.** The copies are the same abstraction and will change together, so a shared function is the clear answer. Classic [refactoring techniques](https://martinfowler.com/books/refactoring.html) such as Extract Function apply directly. The JSON report includes `action_hints`, a short playbook for each category, so an agent can tell an identical copy from a looser match before it edits anything.
 - **Reuse.** One of the copies is the "real" implementation and the others should call into it. Pick the one with the best tests and delete the others.
-- **Accept.** Some duplication is intentional: test fixtures, bootstrapping, two things that look alike today but will diverge. Use [`report_hide` or `exclude`](/docs/configuration/#exclude-vs-report_hide--the-core-idea) to keep deliberate copies out of the headline. Deslop does not judge; it just keeps score.
+- **Accept.** Some duplication is intentional: test fixtures, bootstrapping, two things that look alike today but will diverge. Use [`report_hide` or `exclude`](/docs/configuration/#exclude-vs-report_hide) to keep deliberate copies out of the headline. Deslop does not judge; it just keeps score.
 
 A cluster that lists the copies, their exact locations and a category gives AI code review something specific to discuss instead of a vague "this looks duplicated" comment.
 

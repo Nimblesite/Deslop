@@ -37,7 +37,9 @@ use crate::{
     ast::ByteRange, cluster::scope::DeclarationScopes, fingerprint::Fingerprint, state::FileId,
 };
 
+mod families;
 mod range_index;
+use families::CopyFamilies;
 use range_index::RangeIndex;
 
 /// One exact clone: the two ranges it occupies in canonical order, and
@@ -60,6 +62,9 @@ pub(crate) struct ExactClones {
     /// Exact pairs by ordered file pair: each lower-side range carries
     /// its higher-side ranges and the nodes each clone claims.
     by_files: HashMap<(FileId, FileId), RangeIndex<RangeIndex<usize>>>,
+    /// The same clones' endpoints grouped by Merkle family, so two copies
+    /// a star never paired still find what they share.
+    families: CopyFamilies,
 }
 
 impl ExactClones {
@@ -70,10 +75,11 @@ impl ExactClones {
         admits: impl Fn(&Fingerprint, &Fingerprint) -> bool,
     ) -> Self {
         Self {
-            by_files: exact_clones_by_files(pairs, fingerprints, admits)
+            by_files: exact_clones_by_files(pairs, fingerprints, &admits)
                 .into_iter()
                 .map(|(key, clones)| (key, nested(clones)))
                 .collect(),
+            families: CopyFamilies::new(admitted_endpoints(pairs, fingerprints, &admits)),
         }
     }
 
@@ -133,16 +139,11 @@ impl ExactClones {
             .max()
     }
 
-    /// Nodes of the largest exact clone the pair encloses, one endpoint
-    /// each — the copied interior two drifted declarations still share
-    /// ([FUSED-SHARED-SUBTREE-SAME-FILE]). `0` when they share none.
+    /// Nodes of the largest exact clone the pair encloses, one copy in
+    /// each endpoint — the copied interior two drifted declarations still
+    /// share ([FUSED-SHARED-SUBTREE-SAME-FILE]). `0` when they share none.
     pub(crate) fn enclosed_nodes(&self, left: &Fingerprint, right: &Fingerprint) -> usize {
-        let (key, first, second) = ordered(left, right);
-        self.others(key, first, second)
-            .filter(|exact| first.covers(exact.first) && second.covers(exact.second))
-            .map(|exact| exact.nodes)
-            .max()
-            .unwrap_or(0)
+        self.families.enclosed_nodes(left, right)
     }
 
     /// The file pair's exact clones whose ranges lie inside the pair's
@@ -184,10 +185,10 @@ fn partners(
 fn exact_clones_by_files(
     pairs: &[CandidatePair],
     fingerprints: &[Fingerprint],
-    admits: impl Fn(&Fingerprint, &Fingerprint) -> bool,
+    admits: &impl Fn(&Fingerprint, &Fingerprint) -> bool,
 ) -> HashMap<(FileId, FileId), Vec<ExactClone>> {
     let mut by_files: HashMap<(FileId, FileId), Vec<ExactClone>> = HashMap::new();
-    for (left, right) in admitted_endpoints(pairs, fingerprints, &admits) {
+    for (left, right) in admitted_endpoints(pairs, fingerprints, admits) {
         let (key, first, second) = ordered(left, right);
         by_files.entry(key).or_default().push(ExactClone {
             first,
