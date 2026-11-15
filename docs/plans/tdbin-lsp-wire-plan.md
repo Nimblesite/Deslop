@@ -24,7 +24,7 @@ Spec: [lsp.md §LSP-CUSTOM-METHODS](../specs/lsp.md), [§LSP-WIRE-BUDGET](../spe
 
 ## What has to be done in typediagram (blocking)
 
-Repo: `../typediagram`. Log each item on its GitHub repo and track the pin. Per [AGENTS.md], Deslop never works around these. Current status is from `docs/specs/tdbin-future-typescript.md` there.
+Tracked upstream: epic [typeDiagram#66](https://github.com/Nimblesite/typeDiagram/issues/66) (#60 crate publish, #61 struct-form variants, #62 TS codec, #63 Kotlin, #64 codec on configured types, #65 `--config` outputs) and the remaining gaps in [typeDiagram#85](https://github.com/Nimblesite/typeDiagram/issues/85). Per [AGENTS.md], Deslop never works around these; bump the pin when each lands.
 
 - [ ] **TS codec release-conformant** (`[TDBIN-FUTURE-TS]`): generated codecs for every schema form Deslop uses, including records, tagged unions, enum-unions inlined as scalars, `List<record|union|enum|String|Int|Float>`, scalar and pointer `Option`, and nested types. Rust ↔ TS byte-identity fixtures both ways, with the same behaviour in Node and the browser.
 - [ ] **Lossless `Int`** in TS (`bigint` or an equivalent) with i64 range checks. Deslop carries `u64` hashes and sizes (21 `u64` overrides today).
