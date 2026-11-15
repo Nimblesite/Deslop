@@ -65,4 +65,4 @@ mass = canonical_node_count × max(visible_members − 1, 0)
 
 未修改文件可以复用缓存的解析和签名结果。实时会话监听编辑、更新分析，并向编辑器广播新报告。MCP 查询读取该会话；CLI 为 CI 或单次检查另行扫描。
 
-JSON、文本和 HTML 展示同一份报告。详见[报告输出](/zh/docs/configuration/#report-output)、[准确性透明度](/zh/docs/accuracy-transparency/)和[研究背景](/zh/docs/research-background/)。
+JSON、文本和 HTML 展示同一份报告。详见[报告输出](/zh/docs/reports/)、[准确性透明度](/zh/docs/accuracy-transparency/)和[研究背景](/zh/docs/research-background/)。

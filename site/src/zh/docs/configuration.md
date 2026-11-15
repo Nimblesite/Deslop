@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 docFilm: configuration
-title: 配置与报告 — .deslop.toml、命令行参数、JSON 输出
-description: 一页列出 Deslop 的全部可调参数、.deslop.toml 配置段与命令行参数：相似度阈值、CI 门禁、排除规则、报告格式与退出码。
+title: 配置 — .deslop.toml、可调参数、命令行参数、退出码
+description: 一页列出 Deslop 的全部可调参数、.deslop.toml 配置段与命令行参数：相似度阈值、CI 门禁、排除规则与退出码。
 eleventyNavigation:
   key: 配置
   order: 6
@@ -11,9 +11,11 @@ docsGroup: reference
 lang: zh
 ---
 
-# 配置与报告
+# 配置
 
 Deslop 从扫描根目录读取 `.deslop.toml`，或读取 `--config` 指定的文件；没有配置文件时使用下文的默认值。命令行参数优先于对应的配置键。未知的配置段或键会让运行失败并指出其名称，拼写错误永远不会悄悄关掉门禁。
+
+报告的内容见[报告](/zh/docs/reports/)。
 
 {% include "partials/doc-film.njk" %}
 
@@ -194,18 +196,6 @@ deslop . --compare "<left-path>:<start-byte>:<end-byte>" --compare "<right-path>
 ```
 
 Deslop 把该代码对的 JSON 判定打印到 stdout。偏移量以字节计，结束位置不包含在内。每个范围必须对应一个已指纹化的出现位置；不接受集群 ID。
-
-<span id="report-output"></span>
-
-## 报告输出
-
-扫描会把 JSON、文本和 HTML 写到 `.deslop/`，除非某种格式被禁用。三者渲染同一份数据，文本或 HTML 中不会出现 JSON 里没有的内容。
-
-- **JSON**（`deslop-report.json`）是智能体和工具解析的规范报告。UTF-8、LF 换行、无 BOM。克隆按 `mass` 降序排列，平局由稳定 ID 决定；shape-only 发现排在其后，不参与排名。逐字段结构见 [For AI → 读取 JSON](/zh/docs/for-ai/#read-the-json)。
-- **文本**（`deslop-report.txt`）用于终端和 CI 日志，按排名列出类型、质量、出现次数和位置。
-- **HTML**（`deslop-report.html`）是单个自包含文件，CSS 内联、无网络请求。它额外提供语法高亮片段、按克隆类型折叠的分组，以及“Run details”页脚。
-
-日志与报告分开：默认写到 `.deslop/logs/` 下带时间戳的文件，使用 `--log-to-console` 时写到 stderr。人类可读的摘要始终写到 stderr。
 
 <span id="exit-codes"></span>
 

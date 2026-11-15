@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 docFilm: configuration
-title: Configuration and Reports — .deslop.toml, flags, output
-description: Every Deslop dial, .deslop.toml section and CLI flag in one reference — similarity thresholds, CI gates, exclusions, report formats and exit codes.
+title: Configuration — .deslop.toml, dials, flags, exit codes
+description: Every Deslop dial, .deslop.toml section and CLI flag in one reference — similarity thresholds, CI gates, exclusions and exit codes.
 eleventyNavigation:
   key: Configuration
   order: 6
@@ -10,9 +10,11 @@ icon: tune
 docsGroup: reference
 ---
 
-# Configuration and Reports
+# Configuration
 
 Deslop reads `.deslop.toml` from the scan root, or the file named by `--config`. Without one it runs on the defaults below. A CLI flag beats the matching key. An unknown section or key fails the run and names the offender, so a typo can never switch a gate off silently.
+
+What the reports contain is described in [Reports](/docs/reports/).
 
 {% include "partials/doc-film.njk" %}
 
@@ -177,16 +179,6 @@ deslop . --compare "<left-path>:<start-byte>:<end-byte>" --compare "<right-path>
 ```
 
 Deslop prints a JSON verdict for that pair to stdout. Offsets are bytes and the end is exclusive. Each range must match a fingerprinted occurrence; a cluster ID is not accepted.
-
-## Report output
-
-A scan writes JSON, text and HTML to `.deslop/` unless a format is suppressed. All three render the same data, and nothing appears in text or HTML that is not in the JSON.
-
-- **JSON** (`deslop-report.json`) is the canonical report that agents and tools parse. It is UTF-8 with LF line endings and no BOM. Clones are sorted by `mass` descending, with stable IDs breaking ties; shape-only findings follow, unranked. Field-by-field shape: [For AI → Read the JSON](/docs/for-ai/#read-the-json).
-- **Text** (`deslop-report.txt`) is for terminals and CI logs. It lists kind, mass, occurrence count and locations in rank order.
-- **HTML** (`deslop-report.html`) is one self-contained file, with inline CSS and no network requests. It adds syntax-highlighted snippets, collapsible groups per clone kind, and a "Run details" footer.
-
-Logs are separate from reports: a timestamped file under `.deslop/logs/`, or stderr with `--log-to-console`. The human summary always goes to stderr.
 
 ## Exit codes
 

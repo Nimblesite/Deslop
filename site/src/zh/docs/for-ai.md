@@ -221,7 +221,7 @@ jq -r '.clusters[] | select(.kind == "identical")
 
 ## 读取 JSON
 
-解析 JSON，不要解析文本或 HTML。普通报告中的 `schema_doc` 可能为空；通过 MCP 调用一次 `schema-doc`，离线时参考下面的字段说明和[报告文档](/zh/docs/configuration/#report-output)。
+解析 JSON，不要解析文本或 HTML。普通报告中的 `schema_doc` 可能为空；通过 MCP 调用一次 `schema-doc`，离线时参考下面的字段说明和[报告文档](/zh/docs/reports/)。
 
 | 字段 | 含义 |
 | --- | --- |
