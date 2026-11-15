@@ -1,10 +1,10 @@
 WEBVTT
 
-00:00.350 --> 00:09.143
-Find duplicate code without leaving VS Code. Deslop keeps your findings beside the code, so you can start with the highest impact match.
+00:00.350 --> 00:10.526
+This is Deslop running on the Express repository in VS Code. It found every duplicate across a hundred and forty two files and ranked them, worst first.
 
-00:10.917 --> 00:20.282
-Open a cluster to see the repeated code and its locations. One copy is marked as canonical, giving every comparison a consistent starting point.
+00:11.783 --> 00:17.790
+Open the worst cluster to see every copy and where it lives. One copy is marked as the one to keep.
 
-00:21.917 --> 00:32.517
-Compare the copies side by side. Review the differences before you refactor, and keep the behavior you need. Install Deslop for VS Code to try it in your workspace.
+00:22.317 --> 00:31.510
+Compare any copy with it side by side, then refactor with confidence. Install Deslop for VS Code and run it on your own repository.

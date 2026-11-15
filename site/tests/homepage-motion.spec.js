@@ -23,9 +23,9 @@ test('the real demo plays, pauses, seeks, exposes captions and stops at its end'
   await expect.poll(() => video.evaluate(element => element.seeking)).toBe(false);
   await expect.poll(() => video.evaluate(element => element.textTracks[0].cues?.length)).toBe(CAPTION_COUNT);
   const captions = await video.evaluate(element => Array.from(element.textTracks[0].cues, cue => cue.text));
-  expect(captions[0]).toContain('Find duplicate code');
-  expect(captions[1]).toContain('canonical');
-  expect(captions[2]).toContain('Compare the copies side by side');
+  expect(captions[0], 'the demo is real footage of a real repository').toContain('Deslop running on the Express repository in VS Code');
+  expect(captions[1]).toContain('Open the worst cluster');
+  expect(captions[2]).toContain('Compare any copy with it side by side');
   expect(await video.evaluate(element => element.currentTime)).toBeCloseTo(SEEK_SECONDS);
   await video.evaluate(element => element.play());
   await expect.poll(() => video.evaluate(element => element.currentTime)).toBeGreaterThan(SEEK_SECONDS);
