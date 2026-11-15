@@ -5,6 +5,7 @@
 // 5.61% while the panel kept showing 10.3%. This drives the real loop —
 // file write → LSP watcher → reportChanged → store signals → the tree view
 // VS Code renders — with the bundled CLI as the oracle at every step.
+import { observeStoreChanges } from "../storeChanges";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -60,7 +61,7 @@ function settled(store: ReportStore): Promise<void> {
       subscription.dispose();
       resolve();
     };
-    const subscription = store.onDidChange(check);
+    const subscription = observeStoreChanges(store, check);
     check();
   });
 }

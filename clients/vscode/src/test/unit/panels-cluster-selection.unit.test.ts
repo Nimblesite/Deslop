@@ -4,6 +4,7 @@
 // keep showing the opened cluster across generations instead of silently
 // blanking to "No cluster selected." once the captured id no longer resolves.
 
+import { languageForPath } from "../../types/languages";
 import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -143,7 +144,7 @@ function fakeCtx(): vscode.ExtensionContext {
 }
 
 function occ(filePath: string, startByte: number, endByte: number): ReportOccurrence {
-  return { path: filePath, start_byte: startByte, end_byte: endByte, start_line: 1, end_line: 2, hidden: false };
+  return { path: filePath, language: languageForPath(filePath), start_byte: startByte, end_byte: endByte, start_line: 1, end_line: 2, hidden: false };
 }
 
 function clusterOf(id: string, mass: number, occurrences: ReportOccurrence[]): ReportCluster {

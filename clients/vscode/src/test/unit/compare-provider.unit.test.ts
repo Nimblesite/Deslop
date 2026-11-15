@@ -1,5 +1,6 @@
 // Unit: compare virtual document URIs and byte-slice provider.
 
+import { languageForPath } from "../../types/languages";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
@@ -16,6 +17,7 @@ import { ReportOccurrence } from "../../types/report";
 function occurrence(sourcePath: string, startByte: number, endByte: number): ReportOccurrence {
   return {
     path: sourcePath,
+    language: languageForPath(sourcePath),
     start_byte: startByte,
     end_byte: endByte,
     start_line: 1,

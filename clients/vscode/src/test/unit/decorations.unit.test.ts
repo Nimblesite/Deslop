@@ -56,7 +56,7 @@ suite("decorations helpers", () => {
       content: "abc\ndef\n",
       language: "plaintext",
     });
-    const targetOccurrence: ReportOccurrence = {path: "/x",
+    const targetOccurrence: ReportOccurrence = {path: "/x", language: "plaintext",
       start_byte: 0,
       end_byte: 9999,
       hidden: false, start_line: 1, end_line: 2};
@@ -68,7 +68,7 @@ suite("decorations helpers", () => {
       content: "hello\nworld\n",
       language: "plaintext",
     });
-    const targetOccurrence: ReportOccurrence = {path: "/x",
+    const targetOccurrence: ReportOccurrence = {path: "/x", language: "plaintext",
       start_byte: 0,
       end_byte: 5,
       hidden: false, start_line: 1, end_line: 2};

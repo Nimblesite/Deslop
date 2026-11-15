@@ -2,6 +2,7 @@
 // store + active editor so the full branch coverage lands without colliding
 // with the real extension's command registrations.
 
+import { languageForPath } from "../../types/languages";
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import * as fs from "node:fs";
@@ -502,6 +503,7 @@ suite("register command implementations", () => {
 function fixtureOccurrence(overrides: Partial<ReportOccurrence> = {}): ReportOccurrence {
   return {
     path: TEST_SOURCE_PATH,
+    language: languageForPath(TEST_SOURCE_PATH),
     start_byte: 0,
     end_byte: DEFAULT_OCCURRENCE_END_BYTE,
     start_line: 1,

@@ -1,3 +1,4 @@
+import { observeStoreChanges } from "../storeChanges";
 import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Unit: ReportStore snapshot + delta wiring. Runs under vscode-test so the
 // transitive `vscode` EventEmitter resolves.
@@ -34,7 +35,7 @@ suite("ReportStore", () => {
   test("setSnapshot fires onDidChange with the stored state", () => {
     const store = new ReportStore();
     let fired = 0;
-    store.onDidChange(() => {
+    observeStoreChanges(store, () => {
       fired += 1;
     });
     store.setSnapshot(emptyReport(), 7);
@@ -123,7 +124,7 @@ suite("ReportStore", () => {
   test("applyDelta is a no-op when there is no seeded report", () => {
     const store = new ReportStore();
     let fired = 0;
-    store.onDidChange(() => {
+    observeStoreChanges(store, () => {
       fired += 1;
     });
     store.applyDelta(
@@ -228,7 +229,7 @@ suite("ReportStore", () => {
   test("setPendingEmbeddingModel exposes the pending id and fires onDidChange", () => {
     const store = new ReportStore();
     let fired = 0;
-    store.onDidChange(() => {
+    observeStoreChanges(store, () => {
       fired += 1;
     });
     store.setPendingEmbeddingModel(EMBEDDING_MODEL_ID);
@@ -246,7 +247,7 @@ suite("ReportStore", () => {
   test("setEmbeddingProgress exposes the latest event and fires onDidChange", () => {
     const store = new ReportStore();
     let fired = 0;
-    store.onDidChange(() => {
+    observeStoreChanges(store, () => {
       fired += 1;
     });
     store.setEmbeddingProgress({

@@ -20,7 +20,7 @@
 //                       webviews — render from this projection.
 
 import * as vscode from "vscode";
-import { signal, batch, effect, computed, ReadonlySignal } from "@preact/signals-core";
+import { signal, batch, computed, ReadonlySignal } from "@preact/signals-core";
 
 import {
   AnalysedBuffer,

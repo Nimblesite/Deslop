@@ -3,6 +3,7 @@ export { buildServerArgs, currentInitializationOptions, syncEmbeddingSettingsToL
 // Deslop VSIX entry point. Per CLAUDE.md: < 500 lines, thin glue,
 // all UI logic split across bubble/, tree/, decorations/, commands/, webview/.
 
+import { effect } from "@preact/signals-core";
 import * as vscode from "vscode";
 import { watchDiagnosticPresentation } from "./diagnosticPresentation";
 import {
@@ -112,7 +113,7 @@ export async function activate(
   // synchronously BEFORE the tree view is created so the title-bar
   // toggles have `when`-clause values to match against on cold start.
   syncTopOffendersContext();
-  syncReportReadyContext(reportStore);
+  context.subscriptions.push({ dispose: effect(() => syncReportReadyContext(reportStore)) });
   // [FACET-TOP-OFFENDERS-FILTER] Seed the store's facet-filter mirror so
   // the status bar and webviews slice correctly from the first render.
   reportStore.setFacetFilter(readTopOffendersFilter());

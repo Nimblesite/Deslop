@@ -1,4 +1,5 @@
 // [LIVE-OPEN-BUFFERS] [VSIX-STATE-DIRTY] Isolate acknowledgement ordering.
+import { observeStoreChanges } from "../storeChanges";
 import * as assert from "node:assert/strict";
 import type { AnalysedBuffer, Report } from "../../types/report";
 import { ReportStore } from "../../reportStore";
@@ -58,7 +59,7 @@ for (const apply of [applySnapshot, applyDelta]) {
       const store = storeWith(SNAPSHOT, INITIAL_GENERATION);
       store.markFileDirty(BUFFER_PATH, CURRENT_VERSION);
       const observations: Report[] = [];
-      store.onDidChange((state) => {
+      observeStoreChanges(store, (state) => {
         if (state.visibleReport) observations.push(state.visibleReport);
       });
       assert.equal(apply(store, SNAPSHOT, { path: BUFFER_PATH, version: CURRENT_VERSION }), true);
@@ -90,7 +91,7 @@ suite("a report names the buffer versions it analysed", () => {
     const store = storeWith(SNAPSHOT, INITIAL_GENERATION);
     store.markFileDirty(BUFFER_PATH, CURRENT_VERSION);
     const observations: boolean[] = [];
-    store.onDidChange((state) => {
+    observeStoreChanges(store, (state) => {
       if (state.generation === ANALYSED_GENERATION) observations.push(store.isFileDirty(BUFFER_PATH));
     });
     assert.equal(store.applyDelta(analysedDelta(SNAPSHOT, ANALYSED_NOW)), true);

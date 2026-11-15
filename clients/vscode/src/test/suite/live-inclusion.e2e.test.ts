@@ -1,4 +1,5 @@
 // [METRICS-TOTAL-INCLUDE] [VSIX-TOP-OFFENDERS-EXCLUDED] Real config watcher → LSP → report store → UI.
+import { observeStoreChanges } from "../storeChanges";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -24,7 +25,7 @@ function settledReport(store: ReportStore): Promise<Report> {
         subscription.dispose(); resolve(visibleReport);
       }
     };
-    const subscription = store.onDidChange(choose);
+    const subscription = observeStoreChanges(store, choose);
     choose();
   });
 }
@@ -32,7 +33,7 @@ function settledReport(store: ReportStore): Promise<Report> {
 function changeConfig(store: ReportStore, configPath: string, content: string | null, includes: readonly string[]): Promise<Report> {
   const before = store.current.generation;
   return new Promise((resolve, reject) => {
-    const subscription = store.onDidChange((state) => {
+    const subscription = observeStoreChanges(store, (state) => {
       const report = state.visibleReport;
       if (state.generation > before && report && JSON.stringify(report.metrics.total_includes) === JSON.stringify(includes)) {
         subscription.dispose(); resolve(report);
