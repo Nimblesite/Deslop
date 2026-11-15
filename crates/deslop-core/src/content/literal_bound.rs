@@ -9,10 +9,11 @@
 //! literal is most of an endpoint's source text — a multi-line SQL query
 //! assigned and given two parameters — the few statements around it are
 //! all two endpoints can share. When both endpoints are carried so, the
-//! pair is a copy only if
-//! the two literals are near-copies of each other: a test whose embedded
-//! program differs from its neighbour's by one name is a copy, two
-//! different queries are not.
+//! pair is a copy only if the two endpoints' texts — each literal with the
+//! code around it — are near-copies: a test whose embedded program differs
+//! from its neighbour's by one name is a copy, and so are two tests whose
+//! expected tables differ by colour escapes inside identical code; two
+//! different queries behind the same setup are not.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -40,15 +41,15 @@ const SHINGLE_BYTES: usize = 8;
 /// The byte that makes a literal an embedded document: it spans lines.
 const NEWLINE: u8 = b'\n';
 
-/// An endpoint's heaviest authored literal.
+/// An endpoint's heaviest authored literal, and the endpoint it sits in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct HeaviestLiteral {
     /// File the literal lives in.
     file: FileId,
-    /// Source bytes of the whole literal.
-    range: ByteRange,
     /// Whether the literal is most of the endpoint, by nodes or by bytes.
     carries_endpoint: bool,
+    /// Source bytes of the whole endpoint: the literal and the code around it.
+    endpoint: ByteRange,
 }
 
 /// The heaviest literal under `fingerprint`, `None` when the endpoint
@@ -64,9 +65,9 @@ pub(crate) fn heaviest_literal(
     }
     heaviest.map(|literal: Weighed| HeaviestLiteral {
         file: fingerprint.file_id,
-        range: literal.range,
         carries_endpoint: is_majority(literal.nodes, fingerprint.node_count)
             || is_majority(span(literal.range), span(fingerprint.byte_range)),
+        endpoint: fingerprint.byte_range,
     })
 }
 
@@ -120,49 +121,33 @@ fn weigh_literals(node: &NormalizedNode, heaviest: &mut Option<Weighed>) {
 }
 
 /// Whether two literal-carried endpoints hold different text: each side
-/// is carried by its heaviest literal and the two are not near-copies.
-/// A side its literal does not carry has code of its own to compare,
-/// and the content gate has compared it.
+/// is carried by its heaviest literal and the two endpoints' texts, the
+/// literal with the code around it, are not near-copies. Identical code
+/// around two differing literals is shared text like any other; a side its
+/// literal does not carry has code of its own, and the content gate has
+/// compared it.
 pub(crate) fn carried_text_differs<S: BuildHasher>(
     left: Option<HeaviestLiteral>,
     right: Option<HeaviestLiteral>,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> bool {
-    let carried = left
-        .zip(right)
-        .is_some_and(|(left, right)| left.carries_endpoint && right.carries_endpoint);
-    let same_text = left.zip(right).is_some_and(|(left, right)| {
-        match (bytes(left, sources), bytes(right, sources)) {
-            (Some(left), Some(right)) => near_copies(left, right),
-            _ => false,
-        }
-    });
-    // ACCURACY QUARANTINE ([FUSED-CONTENT-GATE-LITERAL-BOUND]). Deleted: the
-    // refusal of every pair whose two endpoints are each carried by a literal
-    // whose texts are not near-copies. It judged the pair by the literal alone
-    // and ignored byte-identical code around it, so symfony/console's
-    // `testSectionOutput` / `testSectionOutputWithoutDecoration`, which the
-    // corpus register judges CLEARLY IN and which differ only by ANSI escapes
-    // inside their `<<<TABLE` heredocs, lost their link and the judged pair
-    // fell from 61/61 to 14/61 lines covered against v0.42.0.
-    // Pinned by `judged_string_pairs` (console/Tests/Helper/TableTest.php).
-    assert!(
-        !carried || same_text,
-        "[FUSED-CONTENT-GATE-LITERAL-BOUND] quarantined: refusing literal-carried \
-         pairs on literal text alone drops judged copies whose surrounding code \
-         is identical (judged_string_pairs, console TableTest.php)"
-    );
-    false
+    left.zip(right).is_some_and(|(left, right)| {
+        left.carries_endpoint
+            && right.carries_endpoint
+            && !endpoint_text(left, sources)
+                .zip(endpoint_text(right, sources))
+                .is_some_and(|(left, right)| near_copies(left, right))
+    })
 }
 
-/// Raw source bytes of one literal.
-fn bytes<S: BuildHasher>(
+/// Raw source bytes of one carried endpoint.
+fn endpoint_text<S: BuildHasher>(
     literal: HeaviestLiteral,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> Option<&[u8]> {
     sources
         .get(&literal.file)?
-        .get(literal.range.start..literal.range.end)
+        .get(literal.endpoint.start..literal.endpoint.end)
 }
 
 /// How two differing literal texts compare in positional agreement:
