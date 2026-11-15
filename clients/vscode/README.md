@@ -2,7 +2,7 @@
 
 **Clean up the duplicate code in your repo, and stop your coding agents from writing more.**
 
-Deslop finds copied and near-copied code across your workspace and ranks it worst first, so you know what to remove. While you or your agent edit, it flags new code that duplicates something that already exists.
+Deslop finds copied and near-copied code across your workspace and ranks it worst first, so you know what to remove. While you or your agent edit, it flags new code that duplicates something that already exists. It is an open-source alternative to jscpd that runs live in the editor and inside the agent loop.
 
 [![Deslop demo: inspect a duplicate cluster and compare both copies in VS Code.](https://deslop.live/assets/img/deslop-demo.gif)](https://deslop.live/#demo)
 
@@ -35,11 +35,13 @@ claude mcp add deslop -s user -- \
 
 Update `<VERSION>` whenever the extension updates. Setup for other clients: [AI integration](https://deslop.live/docs/ai-integration/).
 
-## How accurate is it?
+## How it compares
+
+Deslop parses code with tree-sitter and compares syntax trees, not token streams. That lets it report copies with renamed identifiers, changed literals or inserted statements as well as exact ones.
 
 Deslop is tested against [judged clone registers](https://github.com/Nimblesite/Deslop/tree/main/corpus/register): code pairs from pinned open-source repositories that a reviewer has marked as real copies or not copies. A missed real copy counts as a false negative, and a reported non-copy counts as a false positive. [Accuracy Transparency](https://deslop.live/docs/accuracy-transparency/) explains the scoring and how the duplication percentage is calculated.
 
-No head-to-head benchmark against other duplicate detectors has been published yet, so we make no claim that Deslop is more accurate than they are. The register results cover only the judged examples.
+No head-to-head benchmark against jscpd or other duplicate detectors has been published yet, so we make no claim that Deslop is more accurate than they are. The register results cover only the judged examples.
 
 ## Install
 

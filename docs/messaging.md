@@ -66,42 +66,34 @@ Code and Cursor communities, agent-tooling roundups — where the reader already
 has the vocabulary and is searching for exactly that. It never moves to the
 front on the homepage.
 
-## What people search
+## Where the audience is
 
-Google Trends, worldwide, pulled 4 August and 11 November 2026 (Python sets 11 November). Trends scores
-terms only against the others in one comparison set, so never compare numbers
-across sets; the sets are listed under
-[Re-pulling the search data](#re-pulling-the-search-data).
+- **Lead with the outcome people want:** clean up duplicate code in a repo, find
+  duplicate code, duplicate code detection. Give *duplicate code* a scope
+  (*across a codebase*, *in source code*) so it is not read as a single
+  duplicated line in an editor.
+- **Name the agents and the protocol plainly:** Claude Code, Cursor, GitHub
+  Copilot, MCP server. That audience is far larger than the duplicate-code one.
+- **Meet the tools people already use:** jscpd, SonarQube, ReSharper, linters.
+  Position Deslop as the jscpd alternative that also stops agents adding copies.
+- **Adjacent topics carry the readers:** refactoring, code smell, code quality,
+  code review, AI code review, static analysis, technical debt.
+- **Language pages lead with the language:** *duplicate Python code*, *duplicate
+  C# code across a .NET solution*, then work review, refactoring and the
+  language's own tooling into the body ([SITE-PYTHON-LANDING]).
 
-- **Agents dwarf the category.** `claude code` 46 against `code quality` 7 and
-  `cursor ai` 6; `mcp server` 45 against `duplicate code` 4. Name the agents and
-  the protocol plainly.
-- **`duplicate code` is the head term, and ambiguous.** It runs about 7×
-  `code duplication`, but its top related query is “duplicate line in visual
-  studio code.” Always give it a scope: *across a codebase*, *in source code*.
-- **Category names have no audience.** `duplicate code detector`, `duplicate
-  code checker`, `copy paste detector` and `find duplicate code` sit at or near
-  0. People type a product name or the symptom.
-- **Adjacent terms carry the volume.** `refactoring` 43, `duplicate code` 39 and
-  `code smell` 38 sit together; `code quality`, `static analysis` and `AI code
-  review` grow fastest.
-- **Python and JavaScript carry the language demand.** `python linter` 43
-  against `c# linter` 1; `javascript static analysis` 29 and `python static
-  analysis` 21 against `c# static analysis` 3.
-- **.NET developers search the platform, the review and the incumbent.**
-  `dotnet` 64 against `sonarqube` 22; `.net code quality` 32 and `c#
-  refactoring` 19 against `c# duplicate code` 6; `c# code review` 32 against
-  `c# analyzer` 8 and `c# code quality` 5; `sonarqube` 61 against `resharper` 8.
-  `roslyn analyzer` and `c# code analysis` sit near 0.
+## Accuracy claims against other tools
 
-- **Python developers search review, practice and their tools, not
-  duplication.** `python code review` 39 against `python code quality` 7,
-  `python clean code` 5, `python refactoring` 2 and `python duplicate code` 1;
-  `python best practices` 29, `python vscode` 24 and `python code review` 19
-  against `dry principle` 5 and `pylint` 4; `pylint` 2.5 against `flake8` 1.7
-  and `python linter` 1.2; `python copilot` 58 against `python design patterns`
-  10 and `python duplicate code` 4. The Python page ([SITE-PYTHON-LANDING])
-  leads with *duplicate Python code* and works the rest into its body.
+- State **method differences**, which are verifiable: tree-sitter parsers, not
+  token streams; edited copies (renamed identifiers, changed literals, inserted
+  statements) as well as exact ones; worst-first ranking; live editor and agent
+  checks.
+- Never write *more accurate than jscpd* (or any tool) until a mechanically
+  generated head-to-head report in this repo measures both tools on the same
+  judged pairs. Link that report wherever the claim appears.
+- Until then, point at the judged clone registers and Accuracy Transparency,
+  and say the results cover the judged examples only. No superlatives, no
+  "first", no "best".
 
 ## Search language
 
@@ -123,9 +115,8 @@ into every description, JSON-LD block and marketplace listing.
 - **Comparisons, never self-description:** linter, SonarQube, ReSharper, jscpd.
   Say what Deslop adds to the tools people already search for; never call it
   one of them.
-- **Not worth a title:** duplicate code detector, finder or checker, copy paste
-  detector. Nobody searches them; they may still appear in body copy where they
-  read naturally.
+- **Not worth a title:** duplicate code checker, duplicate code finder, copy
+  paste detector. They may still appear in body copy where they read naturally.
 
 Weave the terms in; don't stack them. A searched term belongs wherever a reader
 would expect that word: “find duplicate C# and F# code across a .NET solution
@@ -285,37 +276,3 @@ Good Deslop copy answers three questions immediately:
 
 If the reader has to understand the architecture before answering those
 questions, the copy is off message.
-
-## Re-pulling the search data
-
-The agent-tooling vocabulary is moving fast enough that this section ages in
-months, not years. Re-pull it when a major surface is rewritten, or every six
-months, whichever comes first. Compare terms inside one set, record the date,
-and replace the numbers here rather than adding a second set beside them.
-
-The sets behind the numbers above, all worldwide, all categories:
-
-| Window | Terms compared |
-| --- | --- |
-| 5 years | duplicate code · code duplication · duplicate code detector · code clone detection · copy paste detector |
-| 5 years | sonarqube · refactoring · remove duplicate code · find duplicate code · duplicate code checker |
-| 5 years | static analysis · code smell · code review tool · dry principle · copy paste programming |
-| 12 months | code quality · AI code review · vibe coding · AI slop · technical debt |
-| 12 months | claude code · mcp server · sonarqube · cursor rules · ai code quality |
-| 12 months | duplicate code · jscpd · sonarqube duplicate code · dry principle · refactoring |
-| 12 months | duplicate code · find duplicate code · duplicate code finder · remove duplicate code · code smell |
-| 12 months | duplicate code · duplicate code python · duplicate code c# · duplicate code javascript · duplicate code vscode |
-| 12 months | python linter · rust linter · typescript linter · go linter · c# linter |
-| 12 months | python static analysis · c# static analysis · rust static analysis · javascript static analysis · dart analyzer |
-| 12 months | code quality · code quality tool · ai code review · claude code · cursor ai |
-| 12 months | c# code analysis · roslyn analyzer · resharper · sonarqube · dotnet format |
-| 12 months | sonarqube · roslyn analyzer · c# refactoring · c# duplicate code · dotnet |
-| 12 months | .net code quality · c# refactoring · c# code smell · c# duplicate code · visual studio code cleanup |
-| 12 months | c# static code analysis · c# clean code · c# code review · c# code quality · c# analyzer |
-| 12 months | python duplicate code · python refactoring · python code quality · python clean code · python code review |
-| 12 months | ruff · pylint · flake8 · python linter · python static analysis |
-| 12 months | python vscode · python best practices · python code review · dry principle · pylint |
-| 12 months | refactor python code · python design patterns · python duplicate code · python code smells · python copilot |
-
-Related queries were pulled per term, both all-categories and inside the
-Programming category. The `/website-audit` skill covers the procedure.
