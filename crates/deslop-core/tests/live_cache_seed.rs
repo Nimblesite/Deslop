@@ -139,7 +139,10 @@ fn seed_window_session() -> Result<(tempfile::TempDir, std::path::PathBuf, Analy
     )
     .context("warm session")?;
     warm.persist_seed_cache();
-    ensure!(!warm.report().clusters.is_empty(), "the fixture must cluster");
+    ensure!(
+        !warm.report().clusters.is_empty(),
+        "the fixture must cluster"
+    );
     drop(warm);
     let seeded = AnalysisSession::try_seeded_from_cache(
         root.clone(),

@@ -94,9 +94,8 @@ fn call_over(
 /// LSP does not know can then only mean another build, which the stamp
 /// has already refused by name, `-32601` included.
 fn decode_response(line: &str, method: &str, endpoint: &Path) -> Result<Value, BackendError> {
-    let response: Value = serde_json::from_str(line.trim()).map_err(|err| {
-        BackendError::IpcTransport(format!("ipc response not valid JSON: {err}"))
-    })?;
+    let response: Value = serde_json::from_str(line.trim())
+        .map_err(|err| BackendError::IpcTransport(format!("ipc response not valid JSON: {err}")))?;
     wire::refuse_foreign_envelope(method, endpoint, &response)?;
     if let Some(error) = response.get("error") {
         return Err(BackendError::IpcTransport(format!(

@@ -42,8 +42,9 @@ const FIRST_EDIT_VERSION: usize = 2;
 fn ipc_report(socket: &Path, id: usize) -> Result<Value> {
     let mut stream = UnixStream::connect(socket)?;
     stream.set_read_timeout(Some(ANALYSIS_TIMEOUT))?;
-    let mut payload =
-        serde_json::to_vec(&json!({"jsonrpc": "2.0", "id": id, "method": REPORT_GET, "params": {}}))?;
+    let mut payload = serde_json::to_vec(
+        &json!({"jsonrpc": "2.0", "id": id, "method": REPORT_GET, "params": {}}),
+    )?;
     payload.push(b'\n');
     stream.write_all(&payload)?;
     let mut line = String::new();
@@ -52,7 +53,9 @@ fn ipc_report(socket: &Path, id: usize) -> Result<Value> {
     })?;
     let answer: Value = serde_json::from_str(line.trim())?;
     ensure!(
-        answer.pointer("/result/clusters").is_some_and(Value::is_array),
+        answer
+            .pointer("/result/clusters")
+            .is_some_and(Value::is_array),
         "IPC answer {id} is not a report: {line}"
     );
     Ok(answer)
@@ -96,7 +99,10 @@ fn an_editor_that_stops_reading_does_not_block_ipc_report_reads() -> Result<()> 
         ensure!(answers < MAX_ANSWERS, "the editor pipe never filled");
         let _report = ipc_report(&socket, answers)?;
         let now_written = written.load(Ordering::SeqCst);
-        ensure!(now_written < FLOOD, "every edit was consumed: the editor pipe never filled");
+        ensure!(
+            now_written < FLOOD,
+            "every edit was consumed: the editor pipe never filled"
+        );
         unchanged = if now_written > 0 && now_written == last_written {
             unchanged.saturating_add(1)
         } else {
@@ -106,7 +112,10 @@ fn an_editor_that_stops_reading_does_not_block_ipc_report_reads() -> Result<()> 
     }
     let after_stall = ipc_report(&socket, answers.saturating_add(1))?;
     ensure!(
-        after_stall.pointer("/result/files_analysed").and_then(Value::as_u64) == Some(2),
+        after_stall
+            .pointer("/result/files_analysed")
+            .and_then(Value::as_u64)
+            == Some(2),
         "the report served while the editor is stalled still covers both files: {after_stall}"
     );
     drop(guard);
