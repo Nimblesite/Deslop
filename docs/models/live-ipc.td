@@ -209,7 +209,7 @@ type EmbeddingProvenance {
 
 type ReportOccurrence {
   path: String
-  language: Option<String>
+  language: String
   start_byte: Int
   end_byte: Int
   start_line: Int

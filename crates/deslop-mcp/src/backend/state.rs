@@ -147,7 +147,7 @@ fn connect_subscribe_and_read_ack(
     }))
     .unwrap_or_default();
     let io_error =
-        |err: std::io::Error| BackendError::StateFileCorrupt(format!("ipc subscribe: {err}"));
+        |err: std::io::Error| BackendError::IpcTransport(format!("ipc subscribe: {err}"));
     stream.write_all(&payload).map_err(io_error)?;
     stream.write_all(b"\n").map_err(io_error)?;
     stream.flush().map_err(io_error)?;
@@ -273,7 +273,7 @@ impl McpBackend for LiveBackend {
             max_results: Some(top_n),
         };
         let params = serde_json::to_value(&request)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc serialise: {err}")))?;
+            .map_err(|err| BackendError::IpcTransport(format!("ipc serialise: {err}")))?;
         let result = ipc_call(&self.root, FIND_SIMILAR, &params)?;
         // [MCP-IPC-WIRE-MISMATCH] Decode the complete generated reply before reading any field.
         let reply: FindSimilarResult = wire::decode(FIND_SIMILAR, &self.ipc_socket, result)?;
@@ -291,7 +291,7 @@ impl McpBackend for LiveBackend {
 
     fn compare_pair(&self, params: &PairComparisonParams) -> Result<PairComparison, BackendError> {
         let params = serde_json::to_value(params)
-            .map_err(|error| BackendError::StateFileCorrupt(format!("ipc serialise: {error}")))?;
+            .map_err(|error| BackendError::IpcTransport(format!("ipc serialise: {error}")))?;
         let result = ipc_call(&self.root, PAIR_COMPARE, &params)?;
         wire::decode(PAIR_COMPARE, &self.ipc_socket, result)
     }
@@ -387,7 +387,7 @@ impl McpBackend for LiveBackend {
 /// A null provenance means the LSP switched embeddings off rather than
 /// swapping providers. The MCP schema cannot request that, so receiving
 /// it means the two binaries disagree about the wire contract — the
-/// same class of drift `StateFileCorrupt` reports elsewhere.
+/// same class of drift `IpcTransport` reports elsewhere.
 fn spec_from_set_model_reply(
     endpoint: &Path,
     result: Value,
@@ -395,7 +395,7 @@ fn spec_from_set_model_reply(
     let provenance =
         wire::decode::<Option<EmbeddingProvenance>>(EMBEDDING_SET_MODEL, endpoint, result)?
             .ok_or_else(|| {
-            BackendError::StateFileCorrupt(
+            BackendError::IpcTransport(
                 "ipc set-model returned no provenance: the LSP switched embeddings off instead of swapping providers".to_owned(),
             )
         })?;
@@ -411,7 +411,7 @@ fn spec_from_set_model_reply(
 /// the progress fields exposed by MCP `rescan`.
 fn refresh_progress_from_result(result: &Value) -> Result<RescanProgress, BackendError> {
     if result.get("command").and_then(Value::as_str) != Some("deslop.lsp.refreshReport") {
-        return Err(BackendError::StateFileCorrupt(format!(
+        return Err(BackendError::IpcTransport(format!(
             "ipc refresh returned unexpected payload: {result}"
         )));
     }
@@ -433,14 +433,14 @@ fn refresh_progress_from_result(result: &Value) -> Result<RescanProgress, Backen
 fn required_usize(result: &Value, field: &str) -> Result<usize, BackendError> {
     let value = required_u64(result, field)?;
     usize::try_from(value).map_err(|_| {
-        BackendError::StateFileCorrupt(format!("ipc refresh field {field} overflows usize"))
+        BackendError::IpcTransport(format!("ipc refresh field {field} overflows usize"))
     })
 }
 
 /// Reads a required unsigned IPC field as `u64`.
 fn required_u64(result: &Value, field: &str) -> Result<u64, BackendError> {
     result.get(field).and_then(Value::as_u64).ok_or_else(|| {
-        BackendError::StateFileCorrupt(format!(
+        BackendError::IpcTransport(format!(
             "ipc refresh missing unsigned integer field {field}: {result}"
         ))
     })
@@ -456,7 +456,7 @@ fn empty_rescan_progress(generation: u64) -> RescanProgress {
 
 /// Issues a cluster-scoped IPC call, mapping the LSP's unknown-id
 /// JSON-RPC error onto the stable `UnknownCluster` code — the generic
-/// IPC client folds every RPC error into `StateFileCorrupt`, but the
+/// IPC client folds every RPC error into `IpcTransport`, but the
 /// MCP wire contract requires the stable code ([MCP-TESTING]).
 fn cluster_scoped_ipc(
     root: &std::path::Path,
@@ -465,7 +465,7 @@ fn cluster_scoped_ipc(
 ) -> Result<serde_json::Value, BackendError> {
     match ipc_call(root, method, &json!({ "id": id })) {
         Ok(value) => Ok(value),
-        Err(BackendError::StateFileCorrupt(message))
+        Err(BackendError::IpcTransport(message))
             if message.contains("unknown cluster id") || message.contains("no cluster with id") =>
         {
             Err(BackendError::UnknownCluster(id.to_owned()))

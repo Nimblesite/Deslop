@@ -57,7 +57,7 @@ pub fn build_for_range(
         let Some(parser) = cluster
             .occurrences
             .first()
-            .and_then(|occurrence| refactor::parser_for_occurrence(occurrence, path))
+            .and_then(refactor::parser_for_occurrence)
         else {
             continue;
         };

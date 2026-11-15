@@ -165,7 +165,7 @@ fn occurrence<S: BuildHasher>(
             range: member.byte_range,
             line_index: source.map(|item| item.line_index),
             hidden,
-            language: Some(language),
+            language,
         },
         scan_root,
     )
@@ -174,7 +174,7 @@ fn occurrence<S: BuildHasher>(
 /// One place in one file, with everything a published occurrence states.
 pub(crate) struct Located<'a> {
     /// Parser identity recorded by the analysis session.
-    pub(crate) language: Option<&'static str>,
+    pub(crate) language: &'static str,
     /// Absolute path, when the registry still knows the file.
     pub(crate) absolute: Option<&'a Path>,
     /// Byte range of the view.
@@ -202,7 +202,7 @@ pub(crate) fn located_occurrence(located: &Located<'_>, scan_root: &Path) -> Rep
         end_line,
         hidden: located.hidden,
         in_diff: None,
-        language: located.language.map(str::to_owned),
+        language: located.language.to_owned(),
     }
 }
 

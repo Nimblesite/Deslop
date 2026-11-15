@@ -103,7 +103,7 @@ pub(crate) fn report_occurrence(
         end_line: 0,
         hidden,
         in_diff: None,
-        language: None,
+        language: deslop_core::pipeline::language_for_path(std::path::Path::new(file_name)).to_owned(),
     }
 }
 

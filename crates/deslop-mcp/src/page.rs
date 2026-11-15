@@ -1,7 +1,6 @@
 //! Paginated mass-only duplicate-cluster pages.
 
 use deslop_core::{
-    pipeline::language_for_path,
     report::{occurrence_count, Report, ReportCluster},
     wire_generated::{
         ClusterSummary, DuplicateCluster, DuplicatesFilters, DuplicatesPage, OccurrenceSummary,
@@ -161,12 +160,10 @@ fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
 
 /// Returns the stable first occurrence's language id.
 fn cluster_language(cluster: &ReportCluster) -> &str {
-    cluster.occurrences.first().map_or("unknown", |occurrence| {
-        occurrence
-            .language
-            .as_deref()
-            .unwrap_or_else(|| language_for_path(&occurrence.path))
-    })
+    cluster
+        .occurrences
+        .first()
+        .map_or("unknown", |occurrence| occurrence.language.as_str())
 }
 
 /// Builds a compact cluster row: identity, rank, kind, and mass.

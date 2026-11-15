@@ -175,7 +175,7 @@ fn cluster() -> Result<Value> {
             end_line: 1,
             hidden: false,
             in_diff: None,
-            language: None,
+            language: deslop_core::pipeline::language_for_path(std::path::Path::new(FIXTURE_PATH)).to_owned(),
         })
         .collect();
     let cluster = ReportCluster {

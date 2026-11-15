@@ -137,11 +137,8 @@ pub fn parser_for_path(path: &Path) -> Option<Box<dyn LanguageParser>> {
 /// Resolves the recorded parser identity, including contextual Osprey flavors.
 /// [LANG-CAND-OSPREY] Unsaved source and manifest selection must survive dispatch.
 #[must_use]
-pub fn parser_for_occurrence(
-    occurrence: &ReportOccurrence,
-    path: &Path,
-) -> Option<Box<dyn LanguageParser>> {
-    occurrence.language.as_deref().and_then(parser_for_language)
+pub fn parser_for_occurrence(occurrence: &ReportOccurrence) -> Option<Box<dyn LanguageParser>> {
+    parser_for_language(&occurrence.language)
 }
 
 /// Selects the single registered implementation for a parser identity.

@@ -86,17 +86,18 @@ impl LspBackend {
         let previous_generation = session.generation();
         let previous_report = session.report();
         let delta = change(session)?;
-        let analysed_buffer = analysed_buffer.and_then(|buffer| session.acknowledgement(buffer));
+        let acknowledged = analysed_buffer
+            .and_then(|buffer| session.acknowledgement(buffer))
+            .is_some();
         self.service
             .remember_snapshot(previous_generation, previous_report)
             .await;
-        if delta.is_empty() && analysed_buffer.is_none() {
+        if delta.is_empty() && !acknowledged {
             return Ok(None);
         }
         Ok(Some(ReportChangedNotification {
             generation: delta.to_generation,
             summary: ChangeSummary::from_delta(&delta),
-            analysed_buffer,
         }))
     }
 }

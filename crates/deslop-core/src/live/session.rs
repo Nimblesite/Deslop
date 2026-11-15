@@ -29,7 +29,7 @@ use crate::{
     config::{is_config_path, watched_config_paths},
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
-    pipeline::{language_for_path, EmbeddingSettings, OpenBuffers, PipelineSession},
+    pipeline::{EmbeddingSettings, OpenBuffers, PipelineSession},
     report::Report,
 };
 
@@ -468,9 +468,7 @@ fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
     let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     for cluster in &report.clusters {
         for occurrence in &cluster.occurrences {
-            if let Some(language) = occurrence.language.as_deref() {
-                let _inserted = seen.insert(language);
-            }
+            let _inserted = seen.insert(occurrence.language.as_str());
         }
     }
     seen.into_iter().map(str::to_owned).collect()

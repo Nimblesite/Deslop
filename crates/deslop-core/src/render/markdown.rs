@@ -191,7 +191,7 @@ mod tests {
             end_line: 1,
             hidden: false,
             in_diff: None,
-            language: None,
+            language: crate::pipeline::language_for_path(std::path::Path::new(path)).to_owned(),
         }
     }
 }

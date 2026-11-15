@@ -4,10 +4,9 @@ export const REPORT_TYPE_CONFIG = {
     derives: ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: { path: "PathBuf", start_byte: "usize", end_byte: "usize" },
     fieldSerdeAttrs: {
-      language: ["default", 'skip_serializing_if = "Option::is_none"'],
       in_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
-    tsOptional: ["language", "in_diff"],
+    tsOptional: ["in_diff"],
     fieldDocs: {
       path: "Source path, relative to the scan root when possible.",
       language: "Engine-selected parser identity, including Osprey syntax flavor ([LANG-CAND-OSPREY]).",

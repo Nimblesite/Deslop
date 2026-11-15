@@ -63,6 +63,11 @@ pub enum BackendError {
         /// Absolute path the MCP backend tried to connect to.
         socket_path: PathBuf,
     },
+    /// The IPC exchange with the LSP failed in transit: a broken pipe, a
+    /// frame that is not JSON, or a JSON-RPC `error` envelope
+    /// ([MCP-IPC-TRANSPORT]).
+    #[error("ipc transport failure: {0}")]
+    IpcTransport(String),
     /// The LSP's reply is not the wire this binary was built against:
     /// its `tool_version` is another release's, or the document did not
     /// decode ([MCP-IPC-WIRE-MISMATCH]). Names both versions, the

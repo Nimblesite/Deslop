@@ -14,7 +14,6 @@
 use std::{fmt::Write as _, path::Path};
 
 use crate::{
-    pipeline::language_for_path,
     render::{
         html_buckets::{facet_css, group_by_first_seen, write_bucket_groups, write_facet_controls},
         html_css::{REPORT_CSS, SITE_CSS},
@@ -305,12 +304,10 @@ fn group_clusters_by_language(clusters: &[ReportCluster]) -> Vec<(&str, Vec<&Rep
 /// Language id of a cluster's canonical (first) occurrence, or
 /// `"unknown"` when it has none.
 fn canonical_language(cluster: &ReportCluster) -> &str {
-    cluster.occurrences.first().map_or("unknown", |occurrence| {
-        occurrence
-            .language
-            .as_deref()
-            .unwrap_or_else(|| language_for_path(&occurrence.path))
-    })
+    cluster
+        .occurrences
+        .first()
+        .map_or("unknown", |occurrence| occurrence.language.as_str())
 }
 
 /// One-line per-language count clause for the intro lede, worst-first.
@@ -419,10 +416,7 @@ fn write_example(
     let Some(example) = occurrences.first() else {
         return;
     };
-    let language = example
-        .language
-        .as_deref()
-        .unwrap_or_else(|| language_for_path(&example.path));
+    let language = example.language.as_str();
     let location = snippets.location(&example.path, example.start_byte);
     let badge = diff_badge_markup(example.in_diff);
     match snippets.snippet(&example.path, example.start_byte, example.end_byte) {
