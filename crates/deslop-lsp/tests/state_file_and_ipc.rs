@@ -36,6 +36,8 @@ use crate::common;
 
 #[path = "state_file_and_ipc/harness.rs"]
 mod harness;
+#[path = "state_file_and_ipc/slow_editor.rs"]
+mod slow_editor;
 
 const STATE_FILE: &str = ".deslop/cache/live-report.json";
 

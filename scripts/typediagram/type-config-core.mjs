@@ -316,7 +316,7 @@ export const CORE_TYPE_CONFIG = {
   ReportDelta: {
     docs: "Diff between two report generations.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
-    fieldSerdeAttrs: { routing: ["default"], analysed_buffers: ["default", 'skip_serializing_if = "Option::is_none"'] },
+    fieldSerdeAttrs: { analysed_buffers: ["default", 'skip_serializing_if = "Option::is_none"'] },
     tsOptional: ["analysed_buffers"],
     fieldOverrides: {
       from_generation: "u64",

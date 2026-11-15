@@ -75,19 +75,19 @@ Legacy code is contamination (AGENTS.md). Every path that existed only to accept
 
 - [x] Hard-delete every legacy compatibility path found by the sweep, then commit and push in the broken state.
 - [x] Record the rule in AGENTS.md: legacy code is contamination; delete it on sight and report it.
-- [ ] Make the spec changes listed above, and cross-reference the spec IDs in code and tests.
-- [ ] `docs/models/live-ipc.td`: make `ReportOccurrence.language` required. Regenerate both wire models, and confirm `analysed_buffer` and the deleted serde defaults are gone from the generated code.
-- [ ] Engine: make `--from-report` refuse a report missing a required field, with one named usage error, and add the black-box CLI test for each field (`total_includes`, `per_kind`, `per_file`, `folders`, `files_skipped`, `routing`, `succeeded_subtrees`).
-- [ ] Convert `replay_preserves_all_clone_kinds_when_the_original_include_field_is_absent` and `replay_requires_kind_measurements_when_kind_limits_are_configured` to assert the refusal. Keep every assertion's strength and delete none of the tests.
-- [ ] Update replay fixtures and hand-built report JSON in tests to carry every required field.
-- [ ] LSP: switch `deslop-lsp/tests/app.rs` retired-flag assertions to the general unsupported-flag error.
-- [ ] Config: switch the `[ranking]` tests (`rank_structural_only_policy.rs`, `issue_190_data_table_demote.rs`) to assert the unknown-field refusal.
-- [ ] CLI: switch the lookalike-guard tests that named retired tools to assert that those words are treated as plain paths.
-- [ ] Corpus scorer: fail the run with a named error on a report without `kind`. Test it, then regenerate any committed corpus record missing `load_at_start` / `logical_cores`.
-- [ ] Parser identity: populate `language` on every occurrence the engine writes, then switch `parser_for_occurrence` and `languages_from_report_occurrences` callers to the required field.
-- [ ] MCP: add the correctly named IPC transport variant, move all 23 `StateFileCorrupt` sites, and assert the rendered error text in an MCP test.
-- [ ] LSP: stop computing `analysed_buffer` for notifications (`backend_changes.rs`, `scheduler.rs`), and keep the `analysed_versions` E2E test green.
-- [ ] VSIX: move `extension.ts` and every test subscriber from `onDidChange` to `effect()`.
-- [ ] VSIX: handle the no-report case at `providers.ts:260` and `main.tsx:60` without `undefined`. Convert the `legacyMetrics` and no-include-set tests to assert that a report without `total_includes` is refused at parse.
-- [ ] Re-run the sweep (`legacy`, `older`, `predat`, `retired`, `compat`, `formerly`, `serde(default)` on required fields) and get zero production hits.
+- [x] Make the spec changes listed above, and cross-reference the spec IDs in code and tests.
+- [x] `docs/models/live-ipc.td`: make `ReportOccurrence.language` required. Regenerate both wire models, and confirm `analysed_buffer` and the deleted serde defaults are gone from the generated code.
+- [x] Engine: make `--from-report` refuse a report missing a required field, with one named usage error, and add the black-box CLI test for each field (`total_includes`, `per_kind`, `per_file`, `folders`, `files_skipped`, `routing`, `succeeded_subtrees`).
+- [x] Convert `replay_preserves_all_clone_kinds_when_the_original_include_field_is_absent` and `replay_requires_kind_measurements_when_kind_limits_are_configured` to assert the refusal. Keep every assertion's strength and delete none of the tests.
+- [x] Update replay fixtures and hand-built report JSON in tests to carry every required field.
+- [x] LSP: switch `deslop-lsp/tests/app.rs` retired-flag assertions to the general unsupported-flag error.
+- [x] Config: switch the `[ranking]` tests (`rank_structural_only_policy.rs`, `issue_190_data_table_demote.rs`) to assert the unknown-field refusal.
+- [x] CLI: switch the lookalike-guard tests that named retired tools to assert that those words are treated as plain paths.
+- [x] Corpus scorer: fail the run with a named error on a report without `kind`. Test it, then regenerate any committed corpus record missing `load_at_start` / `logical_cores`.
+- [x] Parser identity: populate `language` on every occurrence the engine writes, then switch `parser_for_occurrence` and `languages_from_report_occurrences` callers to the required field.
+- [x] MCP: add the correctly named IPC transport variant, move all 23 `StateFileCorrupt` sites, and assert the rendered error text in an MCP test.
+- [x] LSP: stop computing `analysed_buffer` for notifications (`backend_changes.rs`, `scheduler.rs`), and keep the `analysed_versions` E2E test green.
+- [x] VSIX: move `extension.ts` and every test subscriber from `onDidChange` to `effect()`.
+- [x] VSIX: handle the no-report case at `providers.ts:260` and `main.tsx:60` without `undefined`. Convert the `legacyMetrics` and no-include-set tests to assert that a report without `total_includes` is refused at parse.
+- [x] Re-run the sweep (`legacy`, `older`, `predat`, `retired`, `compat`, `formerly`, `serde(default)` on required fields) and get zero production hits.
 - [ ] `make ci` green, coverage at or above `coverage-thresholds.json`, and the corpus comparison (`scripts/compare-versions.sh v0.42.0 HEAD`) shows no accuracy regression.
