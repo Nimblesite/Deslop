@@ -2,9 +2,6 @@
 // Implements [PRINCIPLES-LIVE-IS-REACTIVE]: signals are the primary reactive
 // primitive — every surface that shows report data derives from them via
 // effect() or computed().
-// onDidChange is a compatibility shim for places that have not yet
-// migrated to effect() — it skips the initial synchronous run so
-// subscriber counts in existing tests stay correct.
 //
 // The store exposes two views of the same data ([VSIX-STATE-DIRTY]):
 //   * report          — canonical truth from the LSP. Only setSnapshot /
@@ -23,7 +20,7 @@
 //                       webviews — render from this projection.
 
 import * as vscode from "vscode";
-import { signal, batch, effect, computed, ReadonlySignal } from "@preact/signals-core";
+import { signal, batch, computed, ReadonlySignal } from "@preact/signals-core";
 
 import {
   AnalysedBuffer,
@@ -186,26 +183,6 @@ export class ReportStore implements vscode.Disposable {
   /** [SEVERITY-MODEL] Re-render current findings without another analysis. */
   setSeverityOverrides(overrides: SeverityOverrides): void {
     this._severityOverrides.value = overrides;
-  }
-
-  /**
-   * Compatibility shim — fires `cb` whenever any signal changes.
-   * Skips the initial synchronous run so callers see exactly one
-   * notification per mutation, matching the old EventEmitter contract.
-   *
-   * Prefer `effect(() => { void store.current; … })` for new code.
-   */
-  onDidChange(cb: (state: ReportState) => void): vscode.Disposable {
-    let skip = true;
-    const unsub = effect(() => {
-      const state = this.current;
-      if (skip) {
-        skip = false;
-        return;
-      }
-      cb(state);
-    });
-    return { dispose: unsub };
   }
 
   /**

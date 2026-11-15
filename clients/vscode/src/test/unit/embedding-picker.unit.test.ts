@@ -1,3 +1,4 @@
+import { observeStoreChanges } from "../storeChanges";
 import { FIXTURE_ROUTING } from "../cluster.helpers";
 // Unit: pure helper logic inside embeddingPicker. Runs under vscode-test so
 // the transitive `vscode` import resolves against the real host.
@@ -246,7 +247,7 @@ suite("embeddingPicker helpers", () => {
     const store = newStore();
     const events: string[] = [];
     const recorded: Array<string | null> = [];
-    store.onDidChange((s) => {
+    observeStoreChanges(store, (s) => {
       events.push("change");
       recorded.push(s.pendingEmbeddingModel);
     });

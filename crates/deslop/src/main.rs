@@ -408,9 +408,8 @@ fn resolve_split_by_language(args: &Cli) -> Result<bool> {
 /// the positional `PATH`, the path resolves to a non-existent directory,
 /// and the pipeline cheerfully reports zero clones.
 ///
-/// Holds every tool the MCP server registers today ([MCP-TOOLS],
-/// [AUTOFIX-MERGE-MCP]) and then the retired names, which published agent
-/// recipes still carry.
+/// Holds every tool the MCP server registers ([MCP-TOOLS],
+/// [AUTOFIX-MERGE-MCP]).
 const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
     "top-offenders",
     "find-similar",
@@ -421,13 +420,6 @@ const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
     "session",
     "schema-doc",
     "merge-plan",
-    "report-get",
-    "report-query",
-    "report-for-file",
-    "report-for-range",
-    "list-embedding-models",
-    "set-embedding-model",
-    "session-config",
 ];
 
 /// Refuses to scan a path that does not exist or matches a known MCP

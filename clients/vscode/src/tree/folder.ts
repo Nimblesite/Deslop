@@ -8,10 +8,10 @@ import { FileAgg, fileNodeWithChildren, groupByFile, worstCluster } from "./grou
 import { FolderNode, Node } from "./nodes";
 import { baseName, displayPath } from "./paths";
 import { buildPathTree, countLeaves, PathTree } from "./pathTree";
-import { compareWeightedPath, WeightedPath } from "./sort";
+import { compareMassPath, MassPath } from "./sort";
 
 interface BuiltChild {
-  weighted: WeightedPath;
+  ranked: MassPath;
   /** The worst cluster anywhere beneath this child — the engine's
    * lowest-ranked one, carried up so a folder row shows a member's own
    * weight rather than a maximum recomputed per level. */
@@ -34,7 +34,7 @@ function childrenOf(tree: PathTree<FileAgg>): BuiltChild[] {
   const children: BuiltChild[] = tree.folders.flatMap(folderChild);
   for (const file of tree.leaves) {
     children.push({
-      weighted: {
+      ranked: {
         path: baseName(displayPath(file.path)),
         mass: file.worst.mass,
         massTotal: file.massTotal,
@@ -43,8 +43,8 @@ function childrenOf(tree: PathTree<FileAgg>): BuiltChild[] {
       node: fileNodeWithChildren(file),
     });
   }
-  const compare = compareWeightedPath();
-  children.sort((left, right) => compare(left.weighted, right.weighted));
+  const compare = compareMassPath();
+  children.sort((left, right) => compare(left.ranked, right.ranked));
   return children;
 }
 
@@ -56,7 +56,7 @@ function folderChild(folder: PathTree<FileAgg>): BuiltChild[] {
   const children = childrenOf(folder);
   const worst = worstCluster(children.map((child) => child.worst));
   if (!worst) return [];
-  const massTotal = children.reduce((sum, child) => sum + child.weighted.massTotal, 0);
+  const massTotal = children.reduce((sum, child) => sum + child.ranked.massTotal, 0);
   const node = new FolderNode(
     folder.path,
     folder.label,
@@ -65,5 +65,5 @@ function folderChild(folder: PathTree<FileAgg>): BuiltChild[] {
     countLeaves(folder),
     isClone(worst),
   );
-  return [{ weighted: { path: folder.label, mass: worst.mass, massTotal }, worst, node }];
+  return [{ ranked: { path: folder.label, mass: worst.mass, massTotal }, worst, node }];
 }

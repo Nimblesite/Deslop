@@ -70,7 +70,7 @@ suite("occurrence display locations", () => {
   test("missing source file produces no display location", () => {
     // Covers the `readFileSync` catch → return undefined branch and
     // therefore the early-return in occurrenceDisplayLocation.
-    const location = occurrenceDisplayLocation({path: "/definitely/not/a/real/path/XYZ.cs",
+    const location = occurrenceDisplayLocation({path: "/definitely/not/a/real/path/XYZ.cs", language: "csharp",
       start_byte: 0,
       end_byte: 1,
       hidden: false, start_line: 1, end_line: 2});

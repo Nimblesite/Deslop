@@ -4,6 +4,7 @@
 // report-store.unit.test.ts to honour the 500-line file rule; assertions
 // unchanged.
 
+import { observeStoreChanges } from "../storeChanges";
 import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
 import { cluster, emptyReport, metrics, occurrence, seededStore } from "./report-store.helpers";
@@ -16,7 +17,7 @@ suite("ReportStore dirty-file projection", () => {
   test("visibleReport elides dirty-file occurrences and singleton clusters; canonical report keeps everything (#78, #117, #130)", () => {
     const store = new ReportStore();
     let fired = 0;
-    store.onDidChange(() => {
+    observeStoreChanges(store, () => {
       fired += 1;
     });
     store.setSnapshot(

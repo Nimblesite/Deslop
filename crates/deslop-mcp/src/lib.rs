@@ -15,8 +15,7 @@
 //! - [MCP-TOOL-DUPLICATES] — `duplicates` serves every report view —
 //!   whole workspace, one file, one byte range — as one paginated page
 //!   shape carrying the shared filter block, so a single page can never
-//!   blow out an agent's context window. It replaced the retired
-//!   `report-get` and `report-query` pair.
+//!   blow out an agent's context window.
 //! - [MCP-RESOURCES] — `deslop://report` + `deslop://schema`.
 //! - [MCP-NOTIFICATIONS] — `notifications/resources/updated` +
 //!   `notifications/deslop/reportChanged`.

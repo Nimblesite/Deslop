@@ -108,7 +108,7 @@ fn occurrence(path: &Path, span: (usize, usize)) -> ReportOccurrence {
         end_line: 0,
         hidden: false,
         in_diff: None,
-        language: None,
+        language: deslop_core::pipeline::language_for_path(path).to_owned(),
     }
 }
 

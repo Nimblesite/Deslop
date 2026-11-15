@@ -11,7 +11,6 @@ import {
   ReportCluster,
   ReportOccurrence,
   compareClusterRank,
-  isClone,
   isCloneKindLeftOut,
   kindCountsTowardTotal,
   kindsCountedFirst,
@@ -26,7 +25,7 @@ import {
 } from "./nodes";
 import { displayPath, representativePath } from "./paths";
 import { languageForPath, languageDisplayName } from "../types/languages";
-import { compareWeightedPath } from "./sort";
+import { compareMassPath } from "./sort";
 
 export type GroupBy = "cluster" | "file" | "folder" | "kind" | "language";
 
@@ -44,7 +43,7 @@ export interface FileAgg {
   /** The file's worst cluster — the engine's lowest-ranked member of
    * this group. Its `mass` is the row's headline mass. */
   worst: ReportCluster;
-  /** Ordering tiebreak only; see {@link WeightedPath.massTotal}. */
+  /** Ordering tiebreak only; see {@link MassPath.massTotal}. */
   massTotal: number;
 }
 
@@ -67,13 +66,13 @@ function totalMass(clusters: ReportCluster[]): number {
 
 // Worst-first display order is the engine's own ranking, so ordering by
 // `rank` reproduces it exactly — including the tie-break the engine
-// applies between equally weighted clusters.
+// applies between clusters of equal mass.
 const byRank = compareClusterRank;
 
 // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster roots keep engine rank.
 export function buildClusterMode(
   clusters: ReportCluster[],
-  totalIncludes?: readonly ClusterKind[],
+  totalIncludes: readonly ClusterKind[],
 ): Node[] {
   return clusters.map((cluster) => {
     const excluded = isCloneKindLeftOut(cluster.kind, totalIncludes);
@@ -107,7 +106,7 @@ export function groupByFile(clusters: ReportCluster[]): FileAgg[] {
 // [VSIX-TOP-OFFENDERS-FILE-MODE] File roots sort by weight descending.
 export function buildFileMode(clusters: ReportCluster[]): Node[] {
   const files = groupByFile(clusters);
-  const compare = compareWeightedPath();
+  const compare = compareMassPath();
   files.sort((left, right) =>
     compare(
       { path: displayPath(left.path), mass: left.worst.mass, massTotal: left.massTotal },
@@ -135,7 +134,7 @@ const fileNodeClusters = new WeakMap<FileNode, ReportCluster[]>();
 function kindSections(
   clusters: ReportCluster[],
   order: (list: ReportCluster[]) => ReportCluster[],
-  totalIncludes: readonly ClusterKind[] | undefined,
+  totalIncludes: readonly ClusterKind[],
 ): { kind: ClusterKind; list: ReportCluster[] }[] {
   return kindsCountedFirst(totalIncludes).map((kind) => ({
     kind,
@@ -148,7 +147,7 @@ function kindGroupNodes(
   clusters: ReportCluster[],
   order: (list: ReportCluster[]) => ReportCluster[],
   showFileInChildren: boolean,
-  totalIncludes?: readonly ClusterKind[],
+  totalIncludes: readonly ClusterKind[],
 ): Node[] {
   return kindSections(clusters, order, totalIncludes).map(({ kind, list }) =>
     registerGroup(new KindGroupNode(kind, list, showFileInChildren, !kindCountsTowardTotal(kind, totalIncludes)), list));
@@ -157,7 +156,7 @@ function kindGroupNodes(
 // File categories share the same category display order as category roots.
 export function getFileNodeChildren(
   file: FileNode,
-  totalIncludes?: readonly ClusterKind[],
+  totalIncludes: readonly ClusterKind[],
 ): Node[] {
   const clusters = fileNodeClusters.get(file);
   if (!clusters) return [];
@@ -178,19 +177,19 @@ function registerGroup(node: GroupNode, list: ReportCluster[]): GroupNode {
 
 // Children of any GroupNode: ClusterNodes in the group's stored display
 // order, with the file suffix driven by the group's axis.
-export function getGroupNodeChildren(group: GroupNode, totalIncludes?: readonly ClusterKind[]): Node[] {
+export function getGroupNodeChildren(group: GroupNode, totalIncludes: readonly ClusterKind[]): Node[] {
   const clusters = groupClusters.get(group);
   if (!clusters) return [];
   return clusters.map(
     (cluster) => new ClusterNode(cluster, { showFile: group.showFileInChildren,
-      excluded: totalIncludes === undefined ? group instanceof KindGroupNode && group.excluded && isClone(cluster) : isCloneKindLeftOut(cluster.kind, totalIncludes) }),
+      excluded: isCloneKindLeftOut(cluster.kind, totalIncludes) }),
   );
 }
 
 // [FACET-GROUP-BY-KIND] Flat category roots, category display order.
 export function buildKindMode(
   clusters: ReportCluster[],
-  totalIncludes?: readonly ClusterKind[],
+  totalIncludes: readonly ClusterKind[],
 ): Node[] {
   return kindGroupNodes(clusters, (list) => list, true, totalIncludes);
 }

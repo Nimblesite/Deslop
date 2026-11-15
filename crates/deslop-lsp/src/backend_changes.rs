@@ -50,24 +50,27 @@ impl LspBackend {
         self.apply_session_change(change, analysed_buffer).await;
     }
 
-    /// Runs `change` against the locked session and pushes the resulting
-    /// report delta to the editor.
+    /// Runs `change` against the locked session, releases the lock, and
+    /// pushes the resulting report delta to the editor.
     pub(super) async fn apply_session_change(
         &self,
         change: impl SessionChange,
         analysed_buffer: Option<AnalysedBuffer>,
     ) {
-        let session = self.service.session();
-        let mut guard = session.lock().await;
-        match self
-            .commit_change(&mut guard, change, analysed_buffer)
-            .await
-        {
+        // [LIVE-OPEN-BUFFERS] The lock covers the change alone. Writing to
+        // an editor that has stopped reading can wait for ever, and no
+        // other reader of the session may wait with it.
+        let outcome = {
+            let session = self.service.session();
+            let mut guard = session.lock().await;
+            self.commit_change(&mut guard, change, analysed_buffer)
+                .await
+        };
+        match outcome {
             Ok(Some(notification)) => {
                 self.client
                     .send_notification::<ReportChangedLspNotification>(notification)
                     .await;
-                drop(guard);
                 self.diagnostics.refresh(&self.client).await;
             }
             Ok(None) => {}
@@ -86,17 +89,18 @@ impl LspBackend {
         let previous_generation = session.generation();
         let previous_report = session.report();
         let delta = change(session)?;
-        let analysed_buffer = analysed_buffer.and_then(|buffer| session.acknowledgement(buffer));
+        let acknowledged = analysed_buffer
+            .and_then(|buffer| session.acknowledgement(buffer))
+            .is_some();
         self.service
             .remember_snapshot(previous_generation, previous_report)
             .await;
-        if delta.is_empty() && analysed_buffer.is_none() {
+        if delta.is_empty() && !acknowledged {
             return Ok(None);
         }
         Ok(Some(ReportChangedNotification {
             generation: delta.to_generation,
             summary: ChangeSummary::from_delta(&delta),
-            analysed_buffer,
         }))
     }
 }

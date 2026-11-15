@@ -288,8 +288,10 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
       // command every occurrence link uses.
       const filePath = m["path"];
       if (typeof filePath !== "string" || filePath.length === 0) return;
-      const clusters = store.current.report?.clusters ?? [];
-      const occurrence = topOccurrenceInFile(clusters, filePath) ?? fileStartOccurrence(filePath);
+      const { report } = store.current;
+      if (!report) return;
+      const occurrence = topOccurrenceInFile(report.clusters, filePath) ?? fileStartOccurrence(report.metrics, filePath);
+      if (!occurrence) return;
       await vscode.commands.executeCommand("deslop.openOccurrence", occurrence);
       return;
     }

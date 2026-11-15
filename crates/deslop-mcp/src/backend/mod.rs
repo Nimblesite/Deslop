@@ -63,12 +63,11 @@ pub enum BackendError {
         /// Absolute path the MCP backend tried to connect to.
         socket_path: PathBuf,
     },
-    /// IPC transport / parse failure. Catch-all for malformed wire
-    /// frames, broken pipes, and protocol drift between LSP and MCP.
-    /// Variant name retained for backwards binary compatibility with
-    /// previous releases that exposed it as `state file corrupt`.
+    /// The IPC exchange with the LSP failed in transit: a broken pipe, a
+    /// frame that is not JSON, or a JSON-RPC `error` envelope
+    /// ([MCP-IPC-TRANSPORT]).
     #[error("ipc transport failure: {0}")]
-    StateFileCorrupt(String),
+    IpcTransport(String),
     /// The LSP's reply is not the wire this binary was built against:
     /// its `tool_version` is another release's, or the document did not
     /// decode ([MCP-IPC-WIRE-MISMATCH]). Names both versions, the

@@ -57,8 +57,6 @@ function ReportApp() {
   const snapshot = report.value;
   const rows = filteredClusters.value;
   const state = analysisState.value;
-  const kindOptions = kindFilterOptions(snapshot?.metrics.total_includes);
-
   if (!snapshot) {
     return (
       <main style={{ padding: LARGE_SPACING }}>
@@ -66,6 +64,7 @@ function ReportApp() {
       </main>
     );
   }
+  const kindOptions = kindFilterOptions(snapshot.metrics.total_includes);
 
   return (
     <main style={{ padding: "24px clamp(16px, 6vw, 32px)" }}>

@@ -339,6 +339,20 @@ pub fn error_and_message(response: &Value) -> Result<(Value, String)> {
     Ok((error.clone(), message.to_owned()))
 }
 
+/// Calls `tool` and returns the error message it was refused with,
+/// erroring when the call produced a result page instead.
+pub fn refused_call_message(mcp: &mut McpHandle, tool: &str, arguments: &Value) -> Result<String> {
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": tool, "arguments": arguments }),
+    )?;
+    ensure!(
+        response.pointer("/result").is_none(),
+        "{tool}: a refused call must not produce a result page: {response}"
+    );
+    Ok(error_and_message(&response)?.1)
+}
+
 /// Canonicalises `workspace` and returns the absolute
 /// `.deslop/cache/deslop.sock` path string the MCP backend connects to.
 pub fn expected_socket_fragment(workspace: &Path) -> Result<String> {

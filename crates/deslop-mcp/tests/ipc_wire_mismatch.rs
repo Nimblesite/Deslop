@@ -12,7 +12,7 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::{ensure, Result};
 use common::{
-    error_and_message, expected_socket_fragment, initialized_mcp,
+    error_and_message, expected_socket_fragment, initialized_mcp, refused_call_message,
     stub_lsp::{bind_stub_lsp, method_not_found, Reply, Stamp},
 };
 use deslop_core::report_fixtures::{fixture_cluster, fixture_occurrence};
@@ -124,15 +124,7 @@ fn refusal_for(tool: &str, arguments: &Value) -> Result<(String, String)> {
     let workspace = TempDir::new()?;
     bind_foreign_release_lsp(workspace.path())?;
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": tool, "arguments": arguments }),
-    )?;
-    ensure!(
-        response.pointer("/result").is_none(),
-        "a mismatched reply must not produce a result page: {response}"
-    );
-    let (_error, message) = error_and_message(&response)?;
+    let message = refused_call_message(&mut mcp, tool, arguments)?;
     Ok((message, expected_socket_fragment(workspace.path())?))
 }
 

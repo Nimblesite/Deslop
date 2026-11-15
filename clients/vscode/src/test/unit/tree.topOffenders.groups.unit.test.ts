@@ -425,4 +425,28 @@ suite("TopOffendersProvider groups", () => {
       else assert.ok(description.endsWith(`· ${NOT_COUNTED_MARKER}`), group.kind);
     }
   });
+
+  test("[METRICS-TOTAL-COUNTED] shape-only stays out of the total when the report names an empty include set", () => {
+    // [METRICS-TOTAL-INCLUDE] An empty include set excludes every clone
+    // kind, and shape-only never counts ([CLONE-BUCKETS-STRUCTURAL-ONLY]).
+    const store = storeWith(
+      report(
+        [
+          cluster("c1", HIGH_CLUSTER_MASS, ALPHA_FILE_PATH, 0, 20, "information", 1, IDENTICAL_KIND),
+          cluster("c2", MEDIUM_CLUSTER_MASS, BETA_FILE_PATH, 0, 20, "information", 2, STRUCTURAL_ONLY_KIND),
+        ],
+        { total_includes: [] },
+      ),
+    );
+    const roots = topOffenders(store).getChildren() as KindGroupNode[];
+    const [identicalGroup, structuralGroup] = roots;
+    assert.ok(identicalGroup && structuralGroup);
+    assert.equal(identicalGroup.kind, IDENTICAL_KIND);
+    assert.equal(identicalGroup.description, NOT_COUNTED_MARKER, "an empty set leaves every clone kind out of the total");
+    assert.equal(structuralGroup.kind, STRUCTURAL_ONLY_KIND);
+    assert.equal(structuralGroup.description, NOT_COUNTED_MARKER);
+    assert.equal(structuralGroup.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+    assert.equal(iconColorId(structuralGroup), NOT_COUNTED_ICON_COLOR);
+    assert.ok(tooltipText(structuralGroup).endsWith(NOT_COUNTED_TOOLTIP), tooltipText(structuralGroup));
+  });
 });

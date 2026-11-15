@@ -1,6 +1,7 @@
 // [FACET-MODEL] Shared fixtures carry complete engine fields. Individual
 // tests override the facts they exercise; pair evidence belongs to pairs.
 
+import { languageForPath } from "../types/languages";
 import type {
   ClusterKind,
   ReportCluster,
@@ -76,6 +77,7 @@ export function occurrence(
 ): ReportOccurrence {
   return {
     path,
+    language: languageForPath(path),
     start_byte: startByte,
     end_byte: endByte,
     start_line: 1,

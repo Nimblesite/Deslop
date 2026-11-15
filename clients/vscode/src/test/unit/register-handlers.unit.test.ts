@@ -222,7 +222,7 @@ suite("register command handlers", () => {
     openClusterDetails(
       fakeCtx(),
       store,
-      new OccurrenceNode({path: "/orphan.cs", start_byte: 0, end_byte: 4, hidden: false, start_line: 1, end_line: 2}),
+      new OccurrenceNode({path: "/orphan.cs", language: "csharp", start_byte: 0, end_byte: 4, hidden: false, start_line: 1, end_line: 2}),
     );
     const tabsAfter = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
     assert.equal(tabsAfter, tabsBefore, "an unresolved row must not spawn a cluster panel");

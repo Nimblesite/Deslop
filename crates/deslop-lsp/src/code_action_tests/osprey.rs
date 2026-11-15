@@ -29,7 +29,7 @@ fn select_osprey(report: &mut Report) {
         .iter_mut()
         .flat_map(|cluster| &mut cluster.occurrences)
     {
-        occurrence.language = Some(OSPREY_PYTHON.to_owned());
+        occurrence.language = OSPREY_PYTHON.to_owned();
     }
 }
 

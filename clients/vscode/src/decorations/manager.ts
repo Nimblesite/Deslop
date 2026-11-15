@@ -103,7 +103,6 @@ export class DecorationManager implements vscode.Disposable {
  * server's `metrics.total_includes`; the client never re-derives it. */
 export function decoratableClusters(report: Report): ReportCluster[] {
   const totalIncludes = report.metrics.total_includes;
-  if (totalIncludes === undefined) return report.clusters;
   return report.clusters.filter(
     (cluster) => !isCloneKindLeftOut(cluster.kind, totalIncludes),
   );

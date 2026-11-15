@@ -141,7 +141,7 @@ Pick the cheapest option that answers your question.
 
 This writes `.deslop/deslop-report.txt` and `.html` and copies the JSON to `.deslop/deslop-report.json`. The file holds the editor's last full analysis; it is not rewritten after each edit. Re-rendering does not refresh analysis or validate offsets against current source. A parse failure can mean an incompatible version, a partial write, or corruption; inspect the error and regenerate with the matching bundled CLI when necessary.
 
-**2. Re-render a report you already have.** `--from-report .deslop/deslop-report.json --nojson` writes a fresh HTML and text report from the last CLI run without analysing anything.
+**2. Re-render a report you already have.** `--from-report .deslop/deslop-report.json --nojson` writes a fresh HTML and text report from the last CLI run without analysing anything. The report must come from the same Deslop build: one missing any field this build writes is refused with exit `2` and a message naming the field. Re-scan instead.
 
 **3. Analyse, reusing the cache.** A plain run reuses `.deslop/cache/fingerprints/`, which is on by default, so only files whose content changed are parsed again. Matching is still repository-wide, so a run takes longer than a re-render. Ask for only the output you need:
 

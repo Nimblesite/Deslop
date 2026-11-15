@@ -29,7 +29,7 @@ use crate::{
     config::{is_config_path, watched_config_paths},
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
-    pipeline::{language_for_path, EmbeddingSettings, OpenBuffers, PipelineSession},
+    pipeline::{EmbeddingSettings, OpenBuffers, PipelineSession},
     report::Report,
 };
 
@@ -459,25 +459,17 @@ pub fn read_analysed_buffers(handle: &RwLock<Arc<OpenBuffers>>) -> Arc<OpenBuffe
     )
 }
 
-/// Derives language ids from the occurrence paths of a report, mapping each
-/// path onto its canonical parser id via the registry-driven
-/// [`language_for_path`]. Used as a fallback for `parser_ids` during the
-/// cache-seed window before the background pipeline installs. Deriving from
-/// the parser registry (not a hand-maintained extension map) keeps the seeded
-/// language set from drifting when a language is added ([PIPELINE-LANG-TRAIT],
-/// ).
+/// Collects the parser ids a report's occurrences record, deduplicated and
+/// sorted. Used as a fallback for `parser_ids` during the cache-seed window
+/// before the background pipeline installs ([PIPELINE-LANG-TRAIT]).
 fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
-    let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
-    for cluster in &report.clusters {
-        for occurrence in &cluster.occurrences {
-            let language = occurrence
-                .language
-                .as_deref()
-                .unwrap_or_else(|| language_for_path(&occurrence.path));
-            if language != "unknown" {
-                let _inserted = seen.insert(language);
-            }
-        }
-    }
-    seen.into_iter().map(str::to_owned).collect()
+    report
+        .clusters
+        .iter()
+        .flat_map(|cluster| &cluster.occurrences)
+        .map(|occurrence| occurrence.language.as_str())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }

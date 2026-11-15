@@ -39,7 +39,8 @@ impl ClusterKindJudge for UniformKind {
     }
 }
 
-/// One visible occurrence over `[start, end)` of `path`, with no line
+/// One visible occurrence over `[start, end)` of `path`, carrying the parser
+/// identity the registry assigns that path, with no line
 /// information — suites that assert on lines set them explicitly.
 #[must_use]
 pub fn fixture_occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
@@ -51,7 +52,7 @@ pub fn fixture_occurrence(path: &str, start: usize, end: usize) -> ReportOccurre
         end_line: 0,
         hidden: false,
         in_diff: None,
-        language: None,
+        language: crate::pipeline::language_for_path(std::path::Path::new(path)).to_owned(),
     }
 }
 

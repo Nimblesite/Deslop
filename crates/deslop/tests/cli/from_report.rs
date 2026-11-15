@@ -4,6 +4,9 @@ use crate::common::IDENTICAL_TITLE;
 #[path = "from_report/include.rs"]
 mod include;
 
+#[path = "from_report/required.rs"]
+mod required;
+
 #[path = "from_report/reuse.rs"]
 mod reuse;
 
@@ -39,7 +42,9 @@ fn from_report_preserves_current_report_fields_issue_85() -> Result<()> {
               \"files_analysed\": 0,\n\
               \"clusters_hidden\": 0,\n\
               \"cache_stats\": {\"hits\": 0, \"misses\": 0},\n\
-              \"metrics\": {\"analysed_loc\": 0, \"duplicated_loc\": 0, \"duplication_percent\": 0.0, \"clusters_total\": 0, \"duplicated_files\": 0, \"threshold\": {\"percent\": 0.0, \"breached\": false, \"source\": \"none\"}},\n\
+              \"metrics\": {\"analysed_loc\": 0, \"duplicated_loc\": 0, \"duplication_percent\": 0.0, \"clusters_total\": 0, \"duplicated_files\": 0, \"threshold\": {\"percent\": 0.0, \"breached\": false, \"source\": \"none\"}, \"total_includes\": [\"identical\", \"nearly_identical\"], \"per_kind\": [], \"per_file\": [], \"folders\": []},\n\
+              \"files_skipped\": [],\n\
+              \"routing\": {\"nearly_identical_min_shape\": 0.9, \"nearly_identical_min_content\": 0.7, \"similar_min_content\": 0.5, \"shape_only_max_content\": 0.05},\n\
               \"schema_doc\": \"\",\n\
               \"boilerplate_hints\": [],\n\
               \"embedding_provenance\": null,\n\
@@ -135,8 +140,10 @@ fn from_report_preserves_mass_and_kind_in_html() -> Result<()> {
                   \"files_analysed\": 1,\n\
                   \"clusters_hidden\": 0,\n\
                   \"cache_stats\": {\"hits\": 0, \"misses\": 0},\n\
-                  \"metrics\": {\"analysed_loc\": 0, \"duplicated_loc\": 0, \"duplication_percent\": 0.0, \"clusters_total\": 1, \"duplicated_files\": 1, \"threshold\": {\"percent\": 0.0, \"breached\": false, \"source\": \"none\"}},\n\
-                  \"schema_doc\": \"\",\n\
+                  \"metrics\": {\"analysed_loc\": 0, \"duplicated_loc\": 0, \"duplication_percent\": 0.0, \"clusters_total\": 1, \"duplicated_files\": 1, \"threshold\": {\"percent\": 0.0, \"breached\": false, \"source\": \"none\"}, \"total_includes\": [\"identical\", \"nearly_identical\"], \"per_kind\": [], \"per_file\": [], \"folders\": []},\n\
+                  \"files_skipped\": [],\n\
+              \"routing\": {\"nearly_identical_min_shape\": 0.9, \"nearly_identical_min_content\": 0.7, \"similar_min_content\": 0.5, \"shape_only_max_content\": 0.05},\n\
+              \"schema_doc\": \"\",\n\
                   \"boilerplate_hints\": [],\n\
                   \"embedding_provenance\": null,\n\
                   \"clusters\": [{\n\
@@ -147,8 +154,8 @@ fn from_report_preserves_mass_and_kind_in_html() -> Result<()> {
                     \"mass\": 89,\n\
                     \"canonical_node_count\": 12,\n\
                     \"occurrences\": [\n\
-                      {\"path\": \"missing.unknown\", \"start_byte\": 0, \"end_byte\": 40, \"start_line\": 1, \"end_line\": 3, \"hidden\": false},\n\
-                      {\"path\": \"missing2.unknown\", \"start_byte\": 60, \"end_byte\": 100, \"start_line\": 9, \"end_line\": 11, \"hidden\": false}\n\
+                      {\"path\": \"missing.unknown\", \"language\": \"unknown\", \"start_byte\": 0, \"end_byte\": 40, \"start_line\": 1, \"end_line\": 3, \"hidden\": false},\n\
+                      {\"path\": \"missing2.unknown\", \"language\": \"unknown\", \"start_byte\": 60, \"end_byte\": 100, \"start_line\": 9, \"end_line\": 11, \"hidden\": false}\n\
                     ],\n\
                     \"occurrences_total\": 2,\n\
                     \"occurrence_count\": 2,\n\

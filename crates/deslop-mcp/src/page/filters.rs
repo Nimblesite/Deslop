@@ -2,7 +2,7 @@
 
 use deslop_core::buckets::TotalInclude;
 
-use super::{cluster_language, DuplicatesFilters, Report, ReportCluster};
+use super::{canonical_language, DuplicatesFilters, Report, ReportCluster};
 
 /// Resolves omitted kinds from the engine's configuration and normalises overrides.
 pub(super) fn effective_filters(
@@ -31,7 +31,7 @@ pub(super) fn matches_filters(filters: &DuplicatesFilters, cluster: &ReportClust
             value == &cluster.severity
         })
         && matches_values(filters.languages.as_deref(), |value| {
-            value == cluster_language(cluster)
+            value == canonical_language(cluster)
         })
         && matches_path(filters.path_contains.as_deref(), cluster)
 }

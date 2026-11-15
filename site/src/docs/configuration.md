@@ -135,7 +135,7 @@ split_by_language = false
 
 Clones are ranked by duplicated mass: canonical AST nodes × additional visible copies. Category and confidence do not multiply that mass, and no setting reweights or hides a category. Shape-only findings are listed after the clones, marked as not counted in the total, and never add to the duplication figure.
 
-The `[ranking]` section is retired. A config that still has one fails to load and says so; remove the section.
+There is no `[ranking]` section. A config that has one fails to load, naming `ranking` as an unknown field, as any unknown section does; remove it.
 
 ## `[visibility]`
 

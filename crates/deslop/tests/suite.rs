@@ -185,6 +185,8 @@ mod metric_excludes_hidden_clusters;
 mod metric_language_agnostic;
 #[path = "metrics_folder_rollup.rs"]
 mod metrics_folder_rollup;
+#[path = "metrics_mechanical_proof.rs"]
+mod metrics_mechanical_proof;
 mod metrics_weighted_wire_refusal;
 #[path = "minified_artifact_exclusion.rs"]
 mod minified_artifact_exclusion;

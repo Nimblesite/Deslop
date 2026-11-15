@@ -1,4 +1,5 @@
 // Shared fixtures for the Top Offenders tests.
+import { languageForPath } from "../../types/languages";
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { TopOffendersProvider } from "../../tree/providers";
@@ -101,7 +102,7 @@ export function reportOccurrence(
   startByte = 0,
   endByte = DEFAULT_OCCURRENCE_END_BYTE,
 ): ReportOccurrence {
-  return { path: occurrencePath, start_byte: startByte, end_byte: endByte, start_line: 1, end_line: 2, hidden: false };
+  return { path: occurrencePath, language: languageForPath(occurrencePath), start_byte: startByte, end_byte: endByte, start_line: 1, end_line: 2, hidden: false };
 }
 
 export function withOccurrences(

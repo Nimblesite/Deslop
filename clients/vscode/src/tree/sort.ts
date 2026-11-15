@@ -1,8 +1,8 @@
-// [VSIX-TOP-OFFENDERS-SORT] Fixed highest-weight-first ordering.
+// [VSIX-TOP-OFFENDERS-SORT] Fixed highest-mass-first ordering.
 // Display ordering never changes a cluster's engine-provided rank.
 
 /** Ordering keys shared by file and folder rows. */
-export interface WeightedPath {
+export interface MassPath {
   path: string;
   /** The row's worst cluster mass, read from the engine. */
   mass: number;
@@ -11,7 +11,7 @@ export interface WeightedPath {
 }
 
 /** Descending worst mass, then total mass, with a deterministic path tie break. */
-export function compareWeightedPath(): (left: WeightedPath, right: WeightedPath) => number {
+export function compareMassPath(): (left: MassPath, right: MassPath) => number {
   return (left, right) =>
     right.mass - left.mass ||
     right.massTotal - left.massTotal ||

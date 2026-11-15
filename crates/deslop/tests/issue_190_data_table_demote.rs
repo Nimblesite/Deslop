@@ -128,7 +128,7 @@ fn keep_mode_keeps_logic_clone_first_and_publishes_no_data_table() -> Result<()>
 /// section is gone, so no reader mistakes an ignored key for a working one.
 #[test]
 fn the_retired_ranking_section_is_refused_whatever_it_holds() -> Result<()> {
-    const RANKING_RETIRED: &str = "the [ranking] section is retired";
+    const RANKING_RETIRED: &str = "unknown field `ranking`";
     let (tmp, src) = temp_scan_dir("src")?;
     fs::write(src.join("a.dart"), "class A { int x = 1; }\n")?;
 

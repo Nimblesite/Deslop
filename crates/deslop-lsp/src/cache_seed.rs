@@ -157,17 +157,13 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
             // startup has a warm seed cache ([LIVE-SEED-CACHE]). The
             // call is the only seed-cache write path in this module.
             guard.persist_seed_cache();
-            let replayed = guard.take_deferred_acknowledgements();
-            (
-                previous_generation,
-                previous_report,
-                generation,
-                delta,
-                replayed,
-            )
+            // [LIVE-OPEN-BUFFERS] The replayed seed-window versions now
+            // ride on the installed report's `analysed_buffers`.
+            let _replayed = guard.take_deferred_acknowledgements();
+            (previous_generation, previous_report, generation, delta)
         })
     };
-    let (previous_generation, previous_report, generation, delta, replayed) = match installed {
+    let (previous_generation, previous_report, generation, delta) = match installed {
         Ok(installed) => installed,
         Err(error) => {
             report_refresh_error(&task.client, &task.startup_state, &error).await;
@@ -177,27 +173,14 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
     task.service
         .remember_snapshot(previous_generation, previous_report)
         .await;
-    let mut replayed = replayed.into_iter();
     let notification = ReportChangedNotification {
         generation,
         summary: ChangeSummary::from_delta(&delta),
-        analysed_buffer: replayed.next(),
     };
     broadcast_report_changed(&task.report_changed, notification.clone());
     task.client
         .send_notification::<ReportChangedLspNotification>(notification)
         .await;
-    // [LIVE-OPEN-BUFFERS] One notification carries one acknowledgement; the
-    // rest change nothing else, so they report an empty summary.
-    for buffer in replayed {
-        task.client
-            .send_notification::<ReportChangedLspNotification>(ReportChangedNotification {
-                generation,
-                summary: ChangeSummary::default(),
-                analysed_buffer: Some(buffer),
-            })
-            .await;
-    }
     // [LIVE-CACHE-SEED-READINESS] Installation and deferred replay are complete.
     publish_state(&task.client, &task.startup_state, AnalysisState::Idle).await;
 }

@@ -91,7 +91,6 @@ type AnalysedBuffer {
 type ReportChangedNotification {
   generation: Int
   summary: ChangeSummary
-  analysed_buffer: Option<AnalysedBuffer>
 }
 
 union EmbeddingPhase {
@@ -155,8 +154,7 @@ type DiffMetrics {
 # total — a configuration choice ([METRICS-TOTAL-INCLUDE]), carried on
 # the wire so every client renders the same total and can grey out the
 # kinds it excludes. Always in the category display order, never empty
-# unless the user explicitly emptied `[total] include`. Older reports
-# without the field deserialize as all clone kinds, matching their measured total.
+# unless the user explicitly emptied `[total] include`.
 type KindMetric {
   kind: ClusterKind
   duplicated_loc: Int
@@ -211,7 +209,7 @@ type EmbeddingProvenance {
 
 type ReportOccurrence {
   path: String
-  language: Option<String>
+  language: String
   start_byte: Int
   end_byte: Int
   start_line: Int
@@ -685,5 +683,4 @@ type MergePlan {
   workspace_edit: Option<String>
 }
 
-# All types referenced by name are now defined here. EXTERNAL_TYPES in
-# the generator can stay populated as a safety net for legacy callers.
+# All types referenced by name are now defined here.

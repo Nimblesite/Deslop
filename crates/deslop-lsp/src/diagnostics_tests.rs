@@ -83,7 +83,7 @@ fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
         end_line: 1,
         hidden: false,
         in_diff: None,
-        language: None,
+        language: deslop_core::pipeline::language_for_path(std::path::Path::new(path)).to_owned(),
     }
 }
 

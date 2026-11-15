@@ -3,9 +3,8 @@ import { totalCountsCaption, type RepoMetrics } from "../../../src/types/report"
 import { metricsThresholdStatuses } from "../../../src/tree/threshold";
 
 export function MetricContext({ metrics }: { metrics: RepoMetrics }) {
-  const caption = totalCountsCaption(metrics.total_includes);
   return <div>
-    {caption ? <div class="total-counts-caption">total counts: {caption}</div> : null}
+    <div class="total-counts-caption">total counts: {totalCountsCaption(metrics.total_includes)}</div>
     {metricsThresholdStatuses(metrics).map((status) => <p key={status.label} class={status.breached ? "threshold-verdict--breached" : "threshold-verdict"}>{status.label}</p>)}
   </div>;
 }

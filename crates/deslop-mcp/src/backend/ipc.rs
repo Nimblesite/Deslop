@@ -29,13 +29,9 @@ use super::{wire, BackendError};
 /// # Errors
 ///
 /// Returns [`BackendError::LspNotRunning`] when neither the socket nor
-/// the TCP discovery record answers, [`BackendError::StateFileCorrupt`]
-/// when the response is malformed, and [`BackendError::Core`]-style
-/// errors propagated as [`BackendError::StateFileCorrupt`] when the
-/// LSP returns a JSON-RPC `error` envelope. (`StateFileCorrupt`
-/// doubles as the catch-all transport-failure variant — IPC failures
-/// are reported the same way as a corrupt state file because both
-/// indicate the LSP and MCP have drifted out of sync.) A reply from
+/// the TCP discovery record answers, [`BackendError::IpcTransport`]
+/// when the response is malformed or the LSP returns a JSON-RPC `error`
+/// envelope ([MCP-IPC-TRANSPORT]). A reply from
 /// another build, `-32601 method not found` included, is refused as
 /// [`BackendError::WireMismatch`] naming both builds and the remedy.
 pub fn ipc_call(root: &Path, method: &str, params: &Value) -> Result<Value, BackendError> {
@@ -50,13 +46,13 @@ pub fn ipc_call(root: &Path, method: &str, params: &Value) -> Result<Value, Back
 /// # Errors
 ///
 /// [`BackendError::LspNotRunning`] when no endpoint answers;
-/// [`BackendError::StateFileCorrupt`] for live-but-broken endpoints.
+/// [`BackendError::IpcTransport`] for live-but-broken endpoints.
 pub fn connect(root: &Path) -> Result<IpcStream, BackendError> {
     transport::connect(root).map_err(|error| match error {
         IpcConnectError::NotRunning { socket_path, .. } => {
             BackendError::LspNotRunning { socket_path }
         }
-        other => BackendError::StateFileCorrupt(format!(
+        other => BackendError::IpcTransport(format!(
             "ipc connect failed for {}: {other}",
             root.display()
         )),
@@ -78,18 +74,18 @@ fn call_over(
         "params": params,
     });
     let mut payload = serde_json::to_vec(&request)
-        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc serialize: {err}")))?;
+        .map_err(|err| BackendError::IpcTransport(format!("ipc serialize: {err}")))?;
     payload.push(b'\n');
     stream
         .write_all(&payload)
-        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc write: {err}")))?;
+        .map_err(|err| BackendError::IpcTransport(format!("ipc write: {err}")))?;
     stream
         .flush()
-        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc flush: {err}")))?;
+        .map_err(|err| BackendError::IpcTransport(format!("ipc flush: {err}")))?;
     let mut line = String::new();
     let _bytes = BufReader::new(stream)
         .read_line(&mut line)
-        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc read: {err}")))?;
+        .map_err(|err| BackendError::IpcTransport(format!("ipc read: {err}")))?;
     decode_response(&line, method, endpoint)
 }
 
@@ -98,17 +94,16 @@ fn call_over(
 /// LSP does not know can then only mean another build, which the stamp
 /// has already refused by name, `-32601` included.
 fn decode_response(line: &str, method: &str, endpoint: &Path) -> Result<Value, BackendError> {
-    let response: Value = serde_json::from_str(line.trim()).map_err(|err| {
-        BackendError::StateFileCorrupt(format!("ipc response not valid JSON: {err}"))
-    })?;
+    let response: Value = serde_json::from_str(line.trim())
+        .map_err(|err| BackendError::IpcTransport(format!("ipc response not valid JSON: {err}")))?;
     wire::refuse_foreign_envelope(method, endpoint, &response)?;
     if let Some(error) = response.get("error") {
-        return Err(BackendError::StateFileCorrupt(format!(
+        return Err(BackendError::IpcTransport(format!(
             "ipc rpc error: {error}"
         )));
     }
     response
         .get("result")
         .cloned()
-        .ok_or_else(|| BackendError::StateFileCorrupt("ipc response missing result".to_owned()))
+        .ok_or_else(|| BackendError::IpcTransport("ipc response missing result".to_owned()))
 }

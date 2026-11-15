@@ -66,18 +66,7 @@ fn occurrence_text(root: &Path, occurrence: &ReportOccurrence) -> Result<String>
 
 #[test]
 fn a_snippet_query_in_the_seed_window_says_not_ready_never_nothing_similar() -> Result<()> {
-    let tmp = copy_fixture(FIXTURE)?;
-    let root = tmp.path().to_path_buf();
-    let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
-    let warm = AnalysisSession::new(
-        root.clone(),
-        DEFAULT_LIVE_MIN_NODES,
-        false,
-        None,
-        Arc::clone(&provider),
-    )
-    .context("warm session")?;
-    warm.persist_seed_cache();
+    let (_tmp, root, provider, warm) = warm_session()?;
     let report = warm.report();
     let occurrence = report
         .clusters
@@ -95,15 +84,7 @@ fn a_snippet_query_in_the_seed_window_says_not_ready_never_nothing_similar() -> 
     );
     drop(warm);
 
-    let seeded = AnalysisSession::try_seeded_from_cache(
-        root.clone(),
-        DEFAULT_LIVE_MIN_NODES,
-        false,
-        None,
-        provider,
-        EmbeddingMode::Off,
-    )
-    .context("the warm run's seed must be served")?;
+    let seeded = seeded_from(&root, provider)?;
     ensure!(seeded.is_seed_only(), "the seeded session has no pass yet");
     match seeded.find_similar(&snippet_request(&snippet)) {
         Err(LiveError::AnalysisNotReady) => {}
@@ -125,11 +106,14 @@ fn a_snippet_query_in_the_seed_window_says_not_ready_never_nothing_similar() -> 
     Ok(())
 }
 
-/// [LIVE-OPEN-BUFFERS] An edit the seed window only queued may not reveal the
-/// old report as if it had been analysed: the editor is told once, with the
-/// latest version, after the pass that replays the edit.
-#[test]
-fn a_seed_window_edit_is_acknowledged_only_by_the_pass_that_replays_it() -> Result<()> {
+/// A session over a fresh copy of the fixture whose pass has run and
+/// whose seed cache is persisted.
+fn warm_session() -> Result<(
+    tempfile::TempDir,
+    std::path::PathBuf,
+    Arc<dyn EmbeddingProvider>,
+    AnalysisSession,
+)> {
     let tmp = copy_fixture(FIXTURE)?;
     let root = tmp.path().to_path_buf();
     let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
@@ -142,19 +126,81 @@ fn a_seed_window_edit_is_acknowledged_only_by_the_pass_that_replays_it() -> Resu
     )
     .context("warm session")?;
     warm.persist_seed_cache();
-    let cached_clusters = warm.report().clusters.len();
-    ensure!(cached_clusters > 0, "the fixture must cluster");
-    drop(warm);
+    Ok((tmp, root, provider, warm))
+}
 
-    let mut seeded = AnalysisSession::try_seeded_from_cache(
-        root.clone(),
+/// A session serving the seed a warm run persisted under `root`.
+fn seeded_from(
+    root: &std::path::Path,
+    provider: Arc<dyn EmbeddingProvider>,
+) -> Result<AnalysisSession> {
+    AnalysisSession::try_seeded_from_cache(
+        root.to_path_buf(),
         DEFAULT_LIVE_MIN_NODES,
         false,
         None,
         provider,
         EmbeddingMode::Off,
     )
-    .context("the warm run's seed must be served")?;
+    .context("the warm run's seed must be served")
+}
+
+/// A session serving a warm run's seed, before any pass has installed.
+fn seed_window_session() -> Result<(tempfile::TempDir, std::path::PathBuf, AnalysisSession)> {
+    let (tmp, root, provider, warm) = warm_session()?;
+    ensure!(
+        !warm.report().clusters.is_empty(),
+        "the fixture must cluster"
+    );
+    drop(warm);
+    let seeded = seeded_from(&root, provider)?;
+    Ok((tmp, root, seeded))
+}
+
+/// [LIVE-OPEN-BUFFERS] A buffer closed in the seed window is not open when the
+/// pass installs, so that pass acknowledges no version of it and no later
+/// report names it among the buffers it analysed.
+#[test]
+fn a_buffer_closed_in_the_seed_window_is_never_acknowledged() -> Result<()> {
+    let (_tmp, root, mut seeded) = seed_window_session()?;
+    let path = fs::canonicalize(root.join(EDITED_FILE))?;
+    let _delta = seeded.open_buffer(&path, String::new())?;
+    ensure!(
+        seeded
+            .acknowledgement(AnalysedBuffer {
+                path: path.clone(),
+                version: FIRST_VERSION,
+            })
+            .is_none(),
+        "the seed report never analysed the opened buffer"
+    );
+    let _delta = seeded.close_buffer(&path)?;
+    let _delta = seeded.refresh_full()?;
+    ensure!(!seeded.is_seed_only(), "the pass has installed");
+    let replayed = seeded.take_deferred_acknowledgements();
+    ensure!(
+        replayed.is_empty(),
+        "a closed buffer has no version to acknowledge: {replayed:?}"
+    );
+    let analysed = seeded.analysed_versions();
+    ensure!(
+        analysed.is_empty(),
+        "no report names a closed buffer as analysed: {analysed:?}"
+    );
+    ensure!(
+        !seeded.report().clusters.is_empty(),
+        "the closed buffer no longer shadows the disk, so the clone is reported"
+    );
+    Ok(())
+}
+
+/// [LIVE-OPEN-BUFFERS] An edit the seed window only queued may not reveal the
+/// old report as if it had been analysed: the editor is told once, with the
+/// latest version, after the pass that replays the edit.
+#[test]
+fn a_seed_window_edit_is_acknowledged_only_by_the_pass_that_replays_it() -> Result<()> {
+    let (_tmp, root, mut seeded) = seed_window_session()?;
+    let cached_clusters = seeded.report().clusters.len();
     let path = fs::canonicalize(root.join(EDITED_FILE))?;
     let buffer = |version| AnalysedBuffer {
         path: path.clone(),

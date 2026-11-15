@@ -4,13 +4,12 @@ export const REPORT_TYPE_CONFIG = {
     derives: ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: { path: "PathBuf", start_byte: "usize", end_byte: "usize" },
     fieldSerdeAttrs: {
-      language: ["default", 'skip_serializing_if = "Option::is_none"'],
       in_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
-    tsOptional: ["language", "in_diff"],
+    tsOptional: ["in_diff"],
     fieldDocs: {
       path: "Source path, relative to the scan root when possible.",
-      language: "Engine-selected parser identity, including Osprey syntax flavor ([LANG-CAND-OSPREY]); absent in older reports.",
+      language: "Engine-selected parser identity, including Osprey syntax flavor ([LANG-CAND-OSPREY]).",
       start_byte: "Inclusive byte offset of the occurrence.",
       end_byte: "Exclusive byte offset of the occurrence.",
       start_line: "One-based first source line.",
@@ -345,7 +344,7 @@ export const REPORT_TYPE_CONFIG = {
       literal_findings_hidden: "usize",
       literal_max_findings: "usize",
     },
-    fieldSerdeAttrs: { files_skipped: ["default"], clusters_outside_diff: ["default", 'skip_serializing_if = "Option::is_none"'], routing: ["default"], analysed_buffers: ["default", 'skip_serializing_if = "Option::is_none"'] },
+    fieldSerdeAttrs: { clusters_outside_diff: ["default", 'skip_serializing_if = "Option::is_none"'], analysed_buffers: ["default", 'skip_serializing_if = "Option::is_none"'] },
     tsOptional: ["clusters_outside_diff", "analysed_buffers"],
     fieldDocs: {
       tool_version: "Producer version.",

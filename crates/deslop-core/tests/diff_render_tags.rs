@@ -72,7 +72,7 @@ fn occurrence(name: &str, line: i64, in_diff: Option<bool>) -> ReportOccurrence 
         end_line: line.saturating_add(9),
         hidden: false,
         in_diff,
-        language: None,
+        language: deslop_core::pipeline::language_for_path(std::path::Path::new(name)).to_owned(),
     }
 }
 

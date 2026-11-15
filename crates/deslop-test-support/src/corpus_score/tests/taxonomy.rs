@@ -15,26 +15,12 @@ const UNKNOWN_KIND: &str = "future_unknown";
 const EXTRA_START: u64 = 50;
 const EXTRA_END: u64 = 60;
 
-fn unproven_clone_reports() -> [Value; 5] {
+/// Classified findings that certify no clone: informational, and unknown.
+fn unproven_clone_reports() -> [Value; 2] {
     [
         json!({"clusters": [{
             "id": INFORMATION_ID,
-            "bucket": STRUCTURAL_ONLY,
-            "occurrences": the_pair(),
-        }]}),
-        json!({"clusters": [{
-            "id": INFORMATION_ID,
             "kind": STRUCTURAL_ONLY,
-            "occurrences": the_pair(),
-        }]}),
-        json!({"clusters": [{
-            "id": INFORMATION_ID,
-            "occurrences": the_pair(),
-        }]}),
-        json!({"clusters": [{
-            "id": INFORMATION_ID,
-            "kind": super::IDENTICAL_KIND,
-            "bucket": STRUCTURAL_ONLY,
             "occurrences": the_pair(),
         }]}),
         json!({"clusters": [{
@@ -43,6 +29,31 @@ fn unproven_clone_reports() -> [Value; 5] {
             "occurrences": the_pair(),
         }]}),
     ]
+}
+
+/// Reports that name no `kind`: one spells it `bucket`, one omits it.
+fn unclassified_reports() -> [Value; 2] {
+    [
+        json!({"clusters": [{
+            "id": INFORMATION_ID,
+            "bucket": STRUCTURAL_ONLY,
+            "occurrences": the_pair(),
+        }]}),
+        json!({"clusters": [{
+            "id": INFORMATION_ID,
+            "occurrences": the_pair(),
+        }]}),
+    ]
+}
+
+/// A cluster whose `kind` certifies a clone beside a field the scorer never reads.
+fn clone_with_an_unread_field() -> Value {
+    json!({"clusters": [{
+        "id": INFORMATION_ID,
+        "kind": super::IDENTICAL_KIND,
+        "bucket": STRUCTURAL_ONLY,
+        "occurrences": the_pair(),
+    }]})
 }
 
 fn assert_pair_status(report: &Value, found: bool, cluster_id: Option<&str>) -> Result<()> {
@@ -80,7 +91,32 @@ fn add_clone(report: &mut Value) -> Result<()> {
     Ok(())
 }
 
-/// Old `bucket` and current `kind` schemas must both prove a clone kind.
+/// [CORPUS-SCORE] A report that names no `kind` fails the run by name; it is
+/// never scored as "no clone".
+#[test]
+fn a_report_without_kind_fails_the_run_and_names_the_cluster() {
+    for report in unclassified_reports() {
+        let refusal = score_repo(
+            REPO,
+            &register(CLEARLY_IN, &[FIRST_RANGE, SECOND_RANGE]),
+            &report,
+        )
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(refusal.contains("without `kind`"), "{refusal:?}");
+        assert!(refusal.contains(INFORMATION_ID), "{refusal:?}");
+        assert!(refusal.contains(REPO), "{refusal:?}");
+    }
+}
+
+/// [CORPUS-SCORE] Only `kind` classifies: a stray `bucket` disproves nothing.
+#[test]
+fn only_the_kind_field_classifies_a_cluster() -> Result<()> {
+    assert_pair_status(&clone_with_an_unread_field(), true, Some(INFORMATION_ID))
+}
+
+/// Informational and unknown kinds cannot prove a clone.
 #[test]
 fn informational_findings_cannot_satisfy_either_verdict() -> Result<()> {
     for report in unproven_clone_reports() {

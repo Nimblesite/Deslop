@@ -97,8 +97,9 @@ impl AnalysisSession {
 
     /// Forgets the editor's copy of `path` and re-analyses the file from
     /// disk, so a buffer discarded without saving stops shadowing the
-    /// saved bytes. Closing a path that was never open re-reads the disk
-    /// and changes nothing.
+    /// saved bytes. A closed buffer has no version left to acknowledge,
+    /// analysed or still deferred by the seed window. Closing a path that
+    /// was never open re-reads the disk and changes nothing.
     ///
     /// # Errors
     ///
@@ -107,6 +108,7 @@ impl AnalysisSession {
         self.guard_path(path)?;
         let _was_open = self.buffers.close(path);
         let _analysed = self.analysed_versions.remove(path);
+        let _deferred = self.deferred_acknowledgements.remove(path);
         self.apply_changes(&[path.to_path_buf()])
     }
 }

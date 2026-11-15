@@ -264,7 +264,6 @@ impl SchedulerTaskState {
         PassOutcome::Completed(Some(ReportChangedNotification {
             generation,
             summary: ChangeSummary::from_delta(delta),
-            analysed_buffer: None,
         }))
     }
 }

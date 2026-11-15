@@ -259,10 +259,10 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
     const totalIncludes = this.store.current.visibleReport?.metrics.total_includes;
     if (node instanceof FolderNode) return node.children;
-    if (node instanceof FileNode) return getFileNodeChildren(node, totalIncludes);
+    if (node instanceof FileNode) return totalIncludes ? getFileNodeChildren(node, totalIncludes) : [];
     // One machinery for both group axes: file-mode kind sections and
     // kind-mode roots.
-    if (node instanceof GroupNode) return getGroupNodeChildren(node, totalIncludes);
+    if (node instanceof GroupNode) return totalIncludes ? getGroupNodeChildren(node, totalIncludes) : [];
     if (node instanceof ClusterNode) {
       // [VSIX-PAIR-COMPARE] Dirty projection and path sorting never promote
       // a surviving peer into the original canonical occurrence.
@@ -280,7 +280,7 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     if (failed) return failed;
     const { visibleReport } = this.store.current;
     if (!visibleReport || visibleReport.clusters.length === 0) return cleanOrBusy(indicator);
-    const roots = buildRoots(visibleReport.clusters, totalIncludes);
+    const roots = buildRoots(visibleReport.clusters, visibleReport.metrics.total_includes);
     // [req: incremental indicator] Keep clusters visible during a
     // re-analysis (stale > blank) and lead with a busy badge so the user
     // sees an update is in flight ([VSIX-REACTIVITY-TREE]).
@@ -298,7 +298,7 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
 // [VSIX-TOP-OFFENDERS-GROUPING] Group the filtered report without changing engine ranks.
 function buildRoots(
   clusters: ReportCluster[],
-  totalIncludes?: readonly ClusterKind[],
+  totalIncludes: readonly ClusterKind[],
 ): Node[] {
   const groupBy = readGroupBy();
   const filter = readTopOffendersFilter();
@@ -363,8 +363,7 @@ export class MetricsProvider extends LifecycleAwareProvider {
 // totals, with the configured duplication gate and an over/within verdict
 // appended whenever `.deslop.toml` sets one.
 function metricsHeadline(metrics: RepoMetrics): MetricsHeadlineNode {
-  const caption = totalCountsCaption(metrics.total_includes);
-  const includes = caption ? ` · total counts: ${caption}` : "";
+  const includes = ` · total counts: ${totalCountsCaption(metrics.total_includes)}`;
   const detail =
     `${metrics.analysed_loc.toLocaleString()} LOC analysed · ` +
     `${metrics.duplicated_loc.toLocaleString()} duplicated · ` +

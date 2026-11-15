@@ -17,7 +17,7 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 pub const DEFAULT_TOTAL_INCLUDES: [ClusterKind; 2] =
     [ClusterKind::Identical, ClusterKind::NearlyIdentical];
 
-/// [METRICS-TOTAL-INCLUDE] Reports predating the include field counted every clone kind.
+/// [METRICS-TOTAL-INCLUDE] Every clone kind.
 #[must_use]
 pub fn all_clone_kinds() -> Vec<ClusterKind> {
     ClusterKind::all()

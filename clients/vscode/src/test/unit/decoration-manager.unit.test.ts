@@ -8,7 +8,7 @@ import * as vscode from "vscode";
 import { DecorationManager, decoratableClusters } from "../../decorations/manager";
 import { ReportStore } from "../../reportStore";
 import { ScheduleFn } from "../../util/debounce";
-import { Report, ReportCluster, RepoMetrics } from "../../types/report";
+import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
@@ -101,15 +101,13 @@ suite("DecorationManager redraw", () => {
       ["dm-identical", "dm-similar"],
       "naming the kind in config paints its decorations again",
     );
-    // A pre-#585 report carries no include set — the fixture helper
-    // defaults it, so model the legacy wire shape explicitly: the field
-    // absent, which `exactOptionalPropertyTypes` cannot spell inline.
-    const legacyMetrics = { total_includes: undefined } as unknown as Partial<RepoMetrics>;
-    const legacyReport = reportWithClusters([identical, similar], {}, legacyMetrics);
+    // [METRICS-TOTAL-INCLUDE] An explicit empty include set excludes
+    // every clone kind.
+    const emptySetReport = reportWithClusters([identical, similar], {}, { total_includes: [] });
     assert.deepEqual(
-      decoratableClusters(legacyReport).map((item) => item.id),
-      ["dm-identical", "dm-similar"],
-      "a report with no include set claims nothing — every kind paints",
+      decoratableClusters(emptySetReport).map((item) => item.id),
+      [],
+      "an empty include set counts no kind — nothing paints",
     );
   });
 

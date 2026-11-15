@@ -95,7 +95,12 @@ export function topOccurrenceInFile(
 }
 
 /** [VSIX-METRICS-REPORT-NAVIGATE] The top of a file, for a row no cluster
- * touches: the same open-occurrence route, pointed at line 1. */
-export function fileStartOccurrence(filePath: string): ReportOccurrence {
-  return { path: filePath, start_byte: 0, end_byte: 0, start_line: 1, end_line: 1, hidden: false };
+ * touches: the same open-occurrence route, pointed at line 1. The parser
+ * identity is the one the engine stamped on the file's metric row; a path
+ * the report does not measure has no occurrence to open. */
+export function fileStartOccurrence(metrics: RepoMetrics, filePath: string): ReportOccurrence | undefined {
+  const wanted = normalizePath(filePath);
+  const language = metrics.per_file.find((row) => normalizePath(row.path) === wanted)?.language;
+  if (language === undefined) return undefined;
+  return { path: filePath, language, start_byte: 0, end_byte: 0, start_line: 1, end_line: 1, hidden: false };
 }

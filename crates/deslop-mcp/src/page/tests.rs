@@ -21,7 +21,7 @@ const END_LINE: usize = 19;
 /// The canonical wire cluster, with both of its members retained.
 fn cluster() -> serde_json::Result<ReportCluster> {
     let occurrence = |path: &str| {
-        json!({"path": path, "start_byte": START_BYTE, "end_byte": END_BYTE,
+        json!({"path": path, "language": LANGUAGE, "start_byte": START_BYTE, "end_byte": END_BYTE,
         "start_line": START_LINE, "end_line": END_LINE, "hidden": false})
     };
     serde_json::from_value(json!({

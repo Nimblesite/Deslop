@@ -193,7 +193,7 @@ suite("tree context menu commands", () => {
   test("deslop.openClusterDetails is a no-op for an orphan occurrence node", async () => {
     await vscode.commands.executeCommand(
       "deslop.openClusterDetails",
-      occurrenceNode({path: "/tmp/__cdd_no_parent__.cs",
+      occurrenceNode({path: "/tmp/__cdd_no_parent__.cs", language: "csharp",
         start_byte: 0,
         end_byte: 1,
         hidden: false, start_line: 1, end_line: 2}),

@@ -75,19 +75,20 @@ impl PipelineSession {
     fn published(&self, member: &Fingerprint, hide: &ReportHide<'_>) -> Option<ReportOccurrence> {
         let absolute = self.path_for(member.file_id)?;
         let source = self.sources.get(&member.file_id)?;
+        let language = self
+            .file_languages
+            .get(&member.file_id)
+            .copied()
+            .unwrap_or("");
         let hidden = hide.hides(&MemberFile {
             id: member.file_id,
             path: Some(absolute),
-            language: self
-                .file_languages
-                .get(&member.file_id)
-                .copied()
-                .unwrap_or(""),
+            language,
             source: Some(source),
         });
         let line_index = LineIndex::new(source);
         let located = Located {
-            language: self.file_languages.get(&member.file_id).copied(),
+            language,
             absolute: Some(absolute),
             range: member.byte_range,
             line_index: Some(&line_index),

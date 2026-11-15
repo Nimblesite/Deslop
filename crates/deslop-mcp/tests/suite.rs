@@ -40,6 +40,8 @@ mod dart_generated_fp_over_mcp;
 mod dart_language_label_over_mcp;
 #[path = "fsharp_language_label_over_mcp.rs"]
 mod fsharp_language_label_over_mcp;
+#[path = "ipc_transport.rs"]
+mod ipc_transport;
 #[path = "ipc_wire_mismatch.rs"]
 mod ipc_wire_mismatch;
 #[path = "issue_135_rescan_generation.rs"]

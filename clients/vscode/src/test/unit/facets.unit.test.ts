@@ -39,6 +39,8 @@ const LOOSELY_SIMILAR_KIND = "loosely_similar";
 const SAME_BEHAVIOR_KIND = "same_behavior";
 const STRUCTURAL_ONLY_KIND = "structural_only";
 const DEFAULT_TOTAL_INCLUDES = [IDENTICAL_KIND, NEARLY_IDENTICAL_KIND] as const;
+/** Every clone kind counted: no group carries a not-counted mark. */
+const EVERY_CLONE_KIND = [IDENTICAL_KIND, NEARLY_IDENTICAL_KIND, LOOSELY_SIMILAR_KIND, SAME_BEHAVIOR_KIND] as const;
 const ALL_CLONE_KINDS_LABEL = "All clone kinds";
 const NOT_COUNTED_MARKER = "not counted in total";
 const EXCLUDED_FILTER_MARKER = `(${NOT_COUNTED_MARKER})`;
@@ -84,7 +86,7 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
   // surfaces together in one flat group, strongest kind first, with no
   // file/folder sub-grouping in between ([FACET-GROUP-BY-KIND]).
   test("roots are one flat group per kind present, in category display order, so all identical clusters sit together", () => {
-    const roots = buildKindMode(KIND_GROUPED);
+    const roots = buildKindMode(KIND_GROUPED, EVERY_CLONE_KIND);
     assert.equal(roots.length, 3, "identical + nearly identical + loosely similar groups; absent kinds omitted");
     const [identicalGroup, nearGroup, looseGroup] = roots as [KindGroupNode, KindGroupNode, KindGroupNode];
     assert.ok(identicalGroup instanceof KindGroupNode);
@@ -95,13 +97,13 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
       labelText(identicalGroup).startsWith(kindTitle(IDENTICAL_KIND)),
       `the group is titled by its kind: ${labelText(identicalGroup)}`,
     );
-    const identicalChildren = getGroupNodeChildren(identicalGroup) as ClusterNode[];
+    const identicalChildren = getGroupNodeChildren(identicalGroup, EVERY_CLONE_KIND) as ClusterNode[];
     assert.deepEqual(
       identicalChildren.map((node) => node.cluster.id),
       ["bbbbbbb2", "ddddddd4"],
       "the identical group is flat and holds every identical cluster, worst-first",
     );
-    const looseChildren = getGroupNodeChildren(looseGroup) as ClusterNode[];
+    const looseChildren = getGroupNodeChildren(looseGroup, EVERY_CLONE_KIND) as ClusterNode[];
     assert.deepEqual(
       looseChildren.map((node) => node.cluster.id),
       ["ccccccc3"],
@@ -114,10 +116,10 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
   });
 
   test("children keep the GLOBAL rank (gaps allowed) and show their file", () => {
-    const roots = buildKindMode(KIND_GROUPED);
+    const roots = buildKindMode(KIND_GROUPED, EVERY_CLONE_KIND);
     const identicalGroup = roots.find((node) => node instanceof KindGroupNode && node.kind === IDENTICAL_KIND);
     assert.ok(identicalGroup instanceof KindGroupNode);
-    const identicalChildren = getGroupNodeChildren(identicalGroup);
+    const identicalChildren = getGroupNodeChildren(identicalGroup, EVERY_CLONE_KIND);
     assert.equal(identicalChildren.length, 2);
     const child = identicalChildren[1] as ClusterNode;
     assert.ok(child instanceof ClusterNode);
@@ -131,7 +133,7 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
   test("absent kinds never render empty groups", () => {
     const soleNear = KIND_GROUPED[0];
     assert.ok(soleNear, "fixture: the stamped report carries a nearly identical cluster");
-    const roots = buildKindMode([soleNear]);
+    const roots = buildKindMode([soleNear], EVERY_CLONE_KIND);
     assert.equal(roots.length, 1);
     assert.equal((roots[0] as KindGroupNode).kind, NEARLY_IDENTICAL_KIND);
   });
@@ -141,7 +143,7 @@ suite("clone-kind grouping mode ([FACET-GROUP-BY-KIND])", () => {
     const expectedLanguages = ["C# (2)", "Dart (1)", "Rust (1)"];
     const roots = buildLanguageMode(KIND_GROUPED) as GroupNode[];
     assert.deepEqual(roots.map(labelText), expectedLanguages);
-    const children = roots.flatMap((root) => getGroupNodeChildren(root)) as ClusterNode[];
+    const children = roots.flatMap((root) => getGroupNodeChildren(root, EVERY_CLONE_KIND)) as ClusterNode[];
     assert.deepEqual(children.map((node) => node.cluster.id), KIND_GROUPED.map((member) => member.id));
     assert.deepEqual(children.map((node) => node.rank), KIND_GROUPED.map((member) => member.rank));
     assert.ok(roots.every((root) => root.showFileInChildren));
@@ -276,8 +278,8 @@ suite("include-set surfaces ([METRICS-TOTAL-INCLUDE] in the webview)", () => {
     assert.equal(totalCountsCaption([IDENTICAL_KIND]), kindTitle(IDENTICAL_KIND));
   });
 
-  test("the caption makes no claim when the wire carries no include set", () => {
-    assert.equal(totalCountsCaption(undefined), "");
+  test("the caption names an empty include set and a single-kind one", () => {
+    assert.equal(totalCountsCaption([LOOSELY_SIMILAR_KIND]), kindTitle(LOOSELY_SIMILAR_KIND));
     assert.equal(totalCountsCaption([]), "No clone kinds");
   });
 
@@ -310,10 +312,11 @@ suite("include-set surfaces ([METRICS-TOTAL-INCLUDE] in the webview)", () => {
     );
   });
 
-  test("the kind filter carries no excluded marks when the wire carries no include set", () => {
-    for (const option of kindFilterOptions(undefined)) {
-      assert.equal(option.excluded, false);
-      assert.ok(!option.label.includes(EXCLUDED_FILTER_MARKER));
+  test("the kind filter marks every kind excluded when the include set is empty", () => {
+    for (const option of kindFilterOptions([])) {
+      const isAllOption = option.value === null;
+      assert.equal(option.excluded, !isAllOption, option.label);
+      assert.equal(option.label.includes(EXCLUDED_FILTER_MARKER), !isAllOption, option.label);
     }
   });
 });

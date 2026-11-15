@@ -211,14 +211,12 @@ export const NOT_COUNTED_MARKER = "not counted in total";
 
 /** [METRICS-TOTAL-COUNTED] True when a kind's lines are in the headline
  * figure: a clone kind the server's include set names. Shape-only never
- * counts ([CLONE-BUCKETS-STRUCTURAL-ONLY]). An absent set claims nothing —
- * reports written before the field existed mark no kind. The one fact
+ * counts ([CLONE-BUCKETS-STRUCTURAL-ONLY]). The one fact
  * every group header, tooltip and filter reads. */
 export function kindCountsTowardTotal(
   kind: ClusterKind,
-  totalIncludes: readonly ClusterKind[] | undefined,
+  totalIncludes: readonly ClusterKind[],
 ): boolean {
-  if (totalIncludes === undefined) return true;
   return kind !== "structural_only" && totalIncludes.includes(kind);
 }
 
@@ -226,7 +224,7 @@ export function kindCountsTowardTotal(
  * total: the kinds the editor keeps quiet. Shape-only has its own default. */
 export function isCloneKindLeftOut(
   kind: ClusterKind,
-  totalIncludes: readonly ClusterKind[] | undefined,
+  totalIncludes: readonly ClusterKind[],
 ): boolean {
   return kind !== "structural_only" && !kindCountsTowardTotal(kind, totalIncludes);
 }
@@ -234,7 +232,7 @@ export function isCloneKindLeftOut(
 /** [METRICS-TOTAL-COUNTED] Every kind, the ones the total counts first,
  * each run in the category display order. */
 export function kindsCountedFirst(
-  totalIncludes: readonly ClusterKind[] | undefined,
+  totalIncludes: readonly ClusterKind[],
 ): ClusterKind[] {
   const counted = CLUSTER_KINDS.filter((kind) => kindCountsTowardTotal(kind, totalIncludes));
   const rest = CLUSTER_KINDS.filter((kind) => !kindCountsTowardTotal(kind, totalIncludes));
@@ -243,10 +241,8 @@ export function kindsCountedFirst(
 
 /** [METRICS-TOTAL-INCLUDE] The kinds the headline counts, as one
  * human caption — the webview duplication panel prints it beside the
- * score so the number is never mistaken for every relation found.
- * Empty when the wire carries no include set: no claim, no caption. */
-export function totalCountsCaption(totalIncludes: readonly ClusterKind[] | undefined): string {
-  if (!totalIncludes) return "";
+ * score so the number is never mistaken for every relation found. */
+export function totalCountsCaption(totalIncludes: readonly ClusterKind[]): string {
   if (totalIncludes.length === 0) return NO_CLONE_KINDS_LABEL;
   const cloneKinds = CLUSTER_KINDS.filter((kind) => kind !== "structural_only");
   if (cloneKinds.every((kind) => totalIncludes.includes(kind))) return ALL_CLONE_KINDS_LABEL;
@@ -269,7 +265,7 @@ const EXCLUDED_FILTER_MARKER = `(${NOT_COUNTED_MARKER})`;
  * excluded kinds marked in the label so the filter greys what the total
  * ignores without hiding it. */
 export function kindFilterOptions(
-  totalIncludes: readonly ClusterKind[] | undefined,
+  totalIncludes: readonly ClusterKind[],
 ): KindFilterOption[] {
   return [
     { label: ALL_CLONE_KINDS_LABEL, value: null, excluded: false },
