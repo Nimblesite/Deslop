@@ -18,17 +18,17 @@
 - [x] Delete `--fail-over-weighted`, `max_weighted_duplication_percent`, two-gate resolution, weighted verdicts, and weighted exit-code branches.
 - [x] Delete weighted numerator calculation, per-line evidence lookup, bucket/category weight lookup, weighted folder rollup, and every helper used only by them.
 - [x] Delete weighted text, HTML, JSON, LSP, MCP, VSIX, site, and documentation rendering. Do not leave hidden fields, empty placeholders, deprecated aliases, or no-op switches.
-- [ ] Replace tests that assert weighted output with strict negative schema tests and positive mechanical-metric tests; never remove the underlying coverage assertions.
+- [x] Replace tests that assert weighted output with strict negative schema tests and positive mechanical-metric tests; never remove the underlying coverage assertions. Proof: `metrics_weighted_wire_refusal` (negative schema on JSON, text, HTML) and `metrics_mechanical_proof` (positive figures).
 
 ## Proof
 
-- [ ] Black-box CLI tests assert exact `analysed_loc`, `duplicated_loc`, `duplication_percent`, per-file values, folder values, threshold source, breach flag, exit code, and rendered text/HTML.
+- [x] Black-box CLI tests assert exact `analysed_loc`, `duplicated_loc`, `duplication_percent`, per-file values, folder values, threshold source, breach flag, exit code, and rendered text/HTML. Proof: `metrics_mechanical_proof::a_mixed_corpus_counts_only_its_clone_on_every_surface` and `the_one_gate_reads_the_one_percentage_from_flag_or_config`.
 - [x] Configuration tests reject every retired weighted key and flag with a named invalid-configuration or invalid-argument error (`metrics_weighted_wire_refusal`: four TOML forms and two CLI flags).
-- [ ] Generated-model tests prove no weighted field or table exists in Rust or TypeScript.
-- [ ] Tests prove changing pair evidence without changing clone eligibility or eligible occurrence coverage cannot change repository metrics; showing or hiding shape-only information and overriding its diagnostic severity also leave metrics unchanged.
-- [ ] CLI fixtures pin shape-only-only zero duplication and mixed-corpus true-clone coverage, including exact file/folder/diff percentages, clone counts, paths, ordering and threshold verdicts ([CLONE-KIND-TESTING](../specs/taxonomy.md#clone-kind-testing-required-examples-and-assertions), [METRICS-REPO](../specs/pipeline.md#metrics-repo-repo-wide-duplication-metrics)).
-- [ ] Repository-wide searches find no executable weighted-metric type, field, flag, config key, renderer, or compatibility branch.
-- [ ] Full CI and installed VSIX verification pass with the one mechanical metric on every surface.
+- [x] Generated-model tests prove no weighted field or table exists in Rust or TypeScript. Proof: `metrics_mechanical_proof::the_wire_models_declare_nothing_weighted` reads `live-ipc.td` and both generated modules.
+- [x] Tests prove changing pair evidence without changing clone eligibility or eligible occurrence coverage cannot change repository metrics; showing or hiding shape-only information and overriding its diagnostic severity also leave metrics unchanged. Proof: `metrics_mechanical_proof::evidence_and_presentation_changes_leave_every_figure_alone`; `rank_structural_only_policy::visibility_choices_leave_clone_rank_mass_and_percentage_untouched`.
+- [x] CLI fixtures pin shape-only-only zero duplication and mixed-corpus true-clone coverage, including exact file/folder/diff percentages, clone counts, paths, ordering and threshold verdicts ([CLONE-KIND-TESTING](../specs/taxonomy.md#clone-kind-testing-required-examples-and-assertions), [METRICS-REPO](../specs/pipeline.md#metrics-repo-repo-wide-duplication-metrics)). Proof: `shape_only_information_is_excluded_from_every_duplication_figure` (shape-only alone) and the mixed corpus in `metrics_mechanical_proof`, including `a_diff_states_its_own_figure_beside_the_unchanged_repository_figure`.
+- [x] Repository-wide searches find no executable weighted-metric type, field, flag, config key, renderer, or compatibility branch. `git grep -i weighted` over `crates/*/src`, `clients/`, `docs/models` and `scripts` returns nothing; the VSIX tree-sort key `WeightedPath` was renamed `MassPath`.
+- [x] Full CI and installed VSIX verification pass with the one mechanical metric on every surface. `make ci` and PR CI green; the packaged `deslop-live-darwin-arm64.vsix`, installed into an isolated extensions directory, carries no `weighted` string outside its binaries and its bundled CLI reports `24.1% duplicated (14 / 58 LOC, 1 clusters across 2 files)` on the mixed corpus.
 
 ## Completion
 
@@ -36,7 +36,7 @@ This plan is complete when the weighted design is absent from the wire, engine, 
 
 ## Current verification
 
-The weighted types, calculations, flags and renderers have been removed. `make _ci-analyze` regenerated unchanged wire models at commit `9541eb6c`; the CLI refusal and rendered-surface tests ran in the passing workspace suite recorded in `reports/tests/rust-coverage-baseline.md`. A new black-box regression reproduced silent acceptance of retired TOML fields. Root and threshold tables now reject unknown fields; all three `metrics_weighted_wire_refusal` tests pass, including four retired TOML forms and two CLI flags. Installed VSIX verification and the remaining proof items are still required.
+The weighted types, calculations, flags and renderers have been removed. `make _ci-analyze` regenerated unchanged wire models at commit `9541eb6c`; the CLI refusal and rendered-surface tests ran in the passing workspace suite recorded in `reports/tests/rust-coverage-baseline.md`. A new black-box regression reproduced silent acceptance of retired TOML fields. Root and threshold tables now reject unknown fields; all three `metrics_weighted_wire_refusal` tests pass, including four retired TOML forms and two CLI flags. The remaining proof items are pinned by `crates/deslop/tests/metrics_mechanical_proof.rs`. The packaged VSIX was installed into an isolated extensions directory: its three binaries are byte-identical to `target/release`, nothing outside them contains `weighted`, and its bundled CLI states the mixed corpus's hand-counted figure.
 
 ## Legacy compatibility removal — replacement strategy
 

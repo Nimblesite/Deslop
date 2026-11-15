@@ -25,7 +25,7 @@ import {
 } from "./nodes";
 import { displayPath, representativePath } from "./paths";
 import { languageForPath, languageDisplayName } from "../types/languages";
-import { compareWeightedPath } from "./sort";
+import { compareMassPath } from "./sort";
 
 export type GroupBy = "cluster" | "file" | "folder" | "kind" | "language";
 
@@ -43,7 +43,7 @@ export interface FileAgg {
   /** The file's worst cluster — the engine's lowest-ranked member of
    * this group. Its `mass` is the row's headline mass. */
   worst: ReportCluster;
-  /** Ordering tiebreak only; see {@link WeightedPath.massTotal}. */
+  /** Ordering tiebreak only; see {@link MassPath.massTotal}. */
   massTotal: number;
 }
 
@@ -66,7 +66,7 @@ function totalMass(clusters: ReportCluster[]): number {
 
 // Worst-first display order is the engine's own ranking, so ordering by
 // `rank` reproduces it exactly — including the tie-break the engine
-// applies between equally weighted clusters.
+// applies between clusters of equal mass.
 const byRank = compareClusterRank;
 
 // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster roots keep engine rank.
@@ -106,7 +106,7 @@ export function groupByFile(clusters: ReportCluster[]): FileAgg[] {
 // [VSIX-TOP-OFFENDERS-FILE-MODE] File roots sort by weight descending.
 export function buildFileMode(clusters: ReportCluster[]): Node[] {
   const files = groupByFile(clusters);
-  const compare = compareWeightedPath();
+  const compare = compareMassPath();
   files.sort((left, right) =>
     compare(
       { path: displayPath(left.path), mass: left.worst.mass, massTotal: left.massTotal },
