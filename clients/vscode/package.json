@@ -1,7 +1,7 @@
 {
   "name": "deslop-live",
   "displayName": "Deslop.live",
-  "description": "Find duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. Ranks what to remove first, warns as you type, and tells your coding agent when similar code already exists.",
+  "description": "Clean up duplicate code in your repo and stop coding agents from writing more. Ranks what to remove first and flags new copies as you or your agent type.",
   "version": "0.0.0-dev",
   "publisher": "nimblesite",
   "license": "MIT",

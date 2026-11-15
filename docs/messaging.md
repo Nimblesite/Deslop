@@ -29,7 +29,7 @@ They do not belong in the primary website message.
 
 ### Short description
 
-Deslop finds duplicate functions and repeated code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey. It ranks what to remove first and tells coding agents when similar code already exists.
+Deslop finds the duplicate code in your repo, ranks what to remove first, and stops coding agents from writing more.
 
 ### Homepage lead
 
@@ -52,7 +52,7 @@ the reader arrived looking for agent tooling, not for a linter:
 Use these ideas in this order. Most surfaces need only the first three.
 
 1. **Find duplicate code.**
-2. **Works across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey.**
+2. **Works across the languages your repo uses** (linked, never listed inline).
 3. **Ranks what is worth removing first.**
 4. **Tells coding agents when similar code already exists.**
 5. **Updates live in the editor.**
@@ -155,20 +155,17 @@ one entity are worse than none.
 
 ## Language statement
 
-**Name the languages; never count them.** A count goes stale the moment a parser
-ships. The names are what people search, so they are mandatory in:
+**Never count the languages, and never hardcode the list in copy.** A count or a
+fixed list goes stale the moment a parser ships. The one source of truth is
+`site/src/_data/languages.js`, rendered on the homepage language panel
+(`https://deslop.live/#languages`).
 
-- page titles, meta descriptions and the homepage lead;
-- `SoftwareApplication` JSON-LD and marketplace keywords;
-- the first paragraph of the README and the VS Code extension listing;
-- the homepage language panel, each with its icon.
-
-The full list: C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#,
-Go and Osprey. Where space is tight, lead with the most searched (Python,
-JavaScript, TypeScript, C#, Go, Rust) and end with “and more,” linked to the
-full list. Osprey's syntax flavors are one language family; the
-[Osprey guide](../site/src/docs/osprey.md) states their verification
-boundaries. Java and C++ are roadmap languages, not shipping ones.
+- The README, the VS Code listing, the extension `description` and the agent
+  blurbs link to that panel instead of naming languages.
+- Generated surfaces (page titles, meta descriptions, `SoftwareApplication`
+  JSON-LD, marketplace keywords) may name languages only when they are generated
+  from `languages.js`.
+- Java and C++ are roadmap languages, not shipping ones.
 
 ## The agent message
 

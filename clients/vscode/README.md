@@ -1,67 +1,52 @@
 # Deslop for VS Code
 
-**Find duplicate code across C, C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, Go and Osprey, live in VS Code.** A long-running LSP + MCP process sits in your workspace and feeds duplicate-code signals — live, on every keystroke — to your editor *and* to whichever AI coding agent is driving it (Claude Code, Cursor, Copilot, Continue, Codex).
+**Clean up the duplicate code in your repo, and stop your coding agents from writing more.**
 
-Clone detectors such as PMD CPD, jscpd, SonarLint, and the JetBrains inspections report duplication on CI, on save, or in a panel you open on purpose. Deslop surfaces duplicates **inline, next to your cursor, as you type**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
+Deslop finds copied and near-copied code across your workspace and ranks it worst first, so you know what to remove. While you or your agent edit, it flags new code that duplicates something that already exists.
 
 [![Deslop demo: inspect a duplicate cluster and compare both copies in VS Code.](https://deslop.live/assets/img/deslop-demo.gif)](https://deslop.live/#demo)
 
-[Watch the narrated demo with captions](https://deslop.live/#demo).
+[Watch the narrated demo](https://deslop.live/#demo) · [Supported languages](https://deslop.live/#languages)
 
-![Deslop showing a real duplicate-code cluster, its two locations and canonical comparison actions.](https://deslop.live/assets/img/screenshot.webp)
+## Clean up what's there
 
-**Find, inspect, compare.** Top Offenders lists the findings beside your code. Open a cluster to see its locations, then compare an occurrence with its canonical copy in VS Code's native diff editor before refactoring. The demonstration uses a small two-file C# fixture analysed by the packaged extension.
+- **Top Offenders** lists the duplicate clusters worth removing, biggest first.
+- Open a cluster to see every copy, then diff any copy against the canonical one before you refactor.
+- The report view filters by language, severity and path. Walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
 
-Every panel reads the same live analysis. Full walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+## Stop new duplicates
 
-## Features
+- **While you type**, a label at the end of the line tells you the code matches an existing cluster.
+- **Your coding agent** gets the same check over MCP, so it can see that the code already exists before it writes another copy. Agents inside VS Code (such as Copilot Chat) pick it up automatically.
+- Optional local embeddings through Ollama catch code that behaves the same but reads differently. Nothing leaves your machine.
 
-- **Live duplication bubble.** The moment you type code that matches an existing cluster, a kind-coloured label — **Identical code**, **Nearly identical code**, **Similar code**, **Same behavior, different code** (AI match), or **Same shape, different content** (informational, not a clone) — appears at the end of the line, naming the relation and the cluster's mass.
-- **Worst-first activity-bar view.** The **Top Offenders** view always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
-- **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
-- **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals.
-- **Bundled servers and CLI.** Every platform ships the `deslop-lsp`, `deslop-mcp`, and `deslop` binaries. No post-install downloads. The MCP server auto-registers with Copilot Chat (and any other VS Code-hosted MCP client) so your AI agents inside VS Code consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
-- **Uses the installed extension bundle.** The VSIX runs the binaries unpacked under its own `bin/<platform>/` folder. No post-install copying and no PATH lookup are required.
+### Agents outside VS Code
 
-## Wire `deslop-mcp` into external MCP clients
-
-External MCP clients that run *outside* VS Code's process — Claude Code (CLI), Claude Desktop, Codex, Cursor, Continue — do not inherit VS Code's bundled `PATH`, so they cannot auto-discover the `deslop-mcp` binary. Point them at the **VSIX-bundled binary by absolute path** so the agent runs the exact binary this extension ships.
-
-After installing this VSIX, the binary lives at:
+Claude Code, Claude Desktop, Codex, Cursor and Continue need the absolute path to the `deslop-mcp` binary bundled with this extension:
 
 ```
 ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp
 ```
 
-Where `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`, and `<VERSION>` matches the installed extension. Bump `<VERSION>` whenever you update the extension.
-
-Example — Claude Code:
-
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-darwin-arm64/bin/darwin-arm64/deslop-mcp \
-  --root .
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-darwin-arm64/bin/darwin-arm64/deslop-mcp --root .
 ```
 
-Example — Codex (`~/.codex/config.toml`):
+Update `<VERSION>` whenever the extension updates. Setup for other clients: [AI integration](https://deslop.live/docs/ai-integration/).
 
-```toml
-[mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>-darwin-arm64/bin/darwin-arm64/deslop-mcp"
-args    = ["--root", "."]
-```
+## How accurate is it?
 
-The full set of client wiring snippets — including Claude Desktop and the rule against pointing MCP clients at `cargo install` / `target/release` binaries — lives in the [AI integration docs](https://deslop.live/docs/ai-integration/).
+Deslop is tested against [judged clone registers](https://github.com/Nimblesite/Deslop/tree/main/corpus/register): code pairs from pinned open-source repositories that a reviewer has marked as real copies or not copies. A missed real copy counts as a false negative, and a reported non-copy counts as a false positive. [Accuracy Transparency](https://deslop.live/docs/accuracy-transparency/) explains the scoring and how the duplication percentage is calculated.
+
+No head-to-head benchmark against other duplicate detectors has been published yet, so we make no claim that Deslop is more accurate than they are. The register results cover only the judged examples.
 
 ## Install
 
-- Install [Deslop Live from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live).
-- Or download the platform-specific `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-live-X.Y.Z-<target>.vsix`.
-- CLI too: `brew install nimblesite/tap/deslop` or `scoop install deslop`.
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live), or the platform `.vsix` from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest).
+- The CLI is also available for CI: `brew install nimblesite/tap/deslop` or `scoop install deslop`.
 
-## Settings
-
-See `Deslop` in the Settings UI. Key knobs: `deslop.embedding.model`, `deslop.minNodes`, `deslop.liveBubble.mode` (inline / ghost).
+The extension ships its own binaries, so nothing is downloaded after install. Settings live under **Deslop** in the Settings UI.
 
 ## License
 
