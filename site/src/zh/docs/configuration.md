@@ -41,7 +41,36 @@ Deslop 从扫描根目录读取 `.deslop.toml`，或读取 `--config` 指定的�
 
 </div>
 
-四个相似度参数位于 `[tuning.routing]` 下。取值范围为 `0` 到 `1`，且必须满足 `shape_only_max_content < similar_min_content <= nearly_identical_min_content`，否则配置会被拒绝。它们只为已通过克隆准入的代码对贴标签，任何设置都不能把被拒绝的代码对变成克隆。JSON 报告在 `routing` 下记录实际生效的值。
+<span id="similarity-dials"></span>
+
+### 相似度参数
+
+`[tuning.routing]` 下的四个参数决定一对代码范围被标为哪种**类型**。它们读取 Deslop 对每对代码的两项测量：
+
+- **结构（shape）**：忽略名称和字面值后，两棵语法树有多相像。`1.0` 表示结构相同。
+- **内容支持度（content support）**：填充结构的内容（名称、字面值、运算符、调用）有多少一致，或被一致地重命名（每个 `a` 都变成了 `b`）。`1.0` 表示内容相同。
+
+Deslop 先判断一对代码是否算克隆（[准入机制](/zh/docs/how-it-works/)），然后由这些参数按以下顺序贴标签：
+
+1. **Identical**：源码文本相同。不受任何参数影响。
+2. **Nearly identical**：一致重命名，或结构 ≥ `nearly_identical_min_shape` **且**内容支持度 ≥ `nearly_identical_min_content`。
+3. **Same behavior**：嵌入判断两者行为相同（仅在启用 `--embeddings` 时）。
+4. **Loosely similar**：有一段完全相同的复制核心，或内容支持度 ≥ `similar_min_content`。
+
+**不是**克隆、但结构 ≥ `nearly_identical_min_shape` 且内容支持度 ≤ `shape_only_max_content` 的代码对列为 **Shape-only**：结构相同、内容不同。它永远不计入重复。
+
+<div class="key-table">
+
+| 目的 | 调整 | 副作用 |
+| --- | --- | --- |
+| 减少被标为 Nearly identical 的代码对 | 调高 `nearly_identical_min_shape` 或 `nearly_identical_min_content` | 这些代码对改为 Loosely similar。默认只有 Identical 和 Nearly identical 计入总体百分比，因此它会下降。 |
+| 让弱匹配的代码对不进入 Loosely similar | 调高 `similar_min_content` | 低于该值且没有复制核心的已准入代码对不再获得类型。 |
+| 把更多结构相同的代码对视为 Shape-only | 调高 `shape_only_max_content` | 必须保持低于 `similar_min_content`。 |
+| 发现更小的克隆 | 调低 `--min-nodes` | 发现更多、更小，扫描更慢。 |
+
+</div>
+
+每个参数取值 `0` 到 `1`，且必须满足 `shape_only_max_content < similar_min_content <= nearly_identical_min_content`，否则配置会被拒绝。任何参数都不能把被拒绝的代码对变成克隆。JSON 报告在 `routing` 下记录实际生效的值。默认值仍是暂定的，对其他取值打分的语料库扫描记录在 [corpus/tuning-sweep.md](https://github.com/Nimblesite/Deslop/blob/main/corpus/tuning-sweep.md)。
 
 ```toml
 [tuning.routing]

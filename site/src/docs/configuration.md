@@ -38,7 +38,34 @@ These are all the numbers you can change. Each one alters what Deslop finds, how
 
 </div>
 
-The four similarity dials live under `[tuning.routing]`. Each takes a value from `0` to `1`, and together they must satisfy `shape_only_max_content < similar_min_content <= nearly_identical_min_content`; a config that breaks this is refused. They only label pairs that already passed clone admission, so no setting turns a rejected pair into a clone. The JSON report records the values in effect under `routing`.
+### Similarity dials
+
+The four `[tuning.routing]` dials decide which **kind** a pair of code ranges gets. They read two measurements Deslop takes on every pair:
+
+- **Shape**: how alike the two syntax trees are once names and literal values are set aside. `1.0` means the same structure.
+- **Content support**: how much of what fills that structure matches, such as names, literals, operators and calls, or is renamed consistently (every `a` became `b`). `1.0` means the same content.
+
+Deslop first decides whether a pair is a clone at all ([how admission works](/docs/how-it-works/#find-candidate-copies)). The dials then label it, checking in this order:
+
+1. **Identical**: the source text is the same. No dial applies.
+2. **Nearly identical**: a consistent rename, or shape ≥ `nearly_identical_min_shape` **and** content support ≥ `nearly_identical_min_content`.
+3. **Same behavior**: embeddings say the two do the same thing (only with `--embeddings`).
+4. **Loosely similar**: a copied core of identical lines, or content support ≥ `similar_min_content`.
+
+A pair that is **not** a clone, but has shape ≥ `nearly_identical_min_shape` and content support ≤ `shape_only_max_content`, is listed as **Shape-only**: the same structure filled with different code. It never counts toward duplication.
+
+<div class="key-table">
+
+| To… | Turn… | Side effect |
+| --- | --- | --- |
+| Call fewer pairs Nearly identical | `nearly_identical_min_shape` or `nearly_identical_min_content` up | Those pairs become Loosely similar. By default only Identical and Nearly identical count toward the headline percentage, so it drops. |
+| Keep weakly matching pairs out of Loosely similar | `similar_min_content` up | Admitted pairs below it and with no copied core get no kind. |
+| Treat more same-shaped pairs as Shape-only | `shape_only_max_content` up | Must stay below `similar_min_content`. |
+| Find smaller clones | `--min-nodes` down | More, smaller findings, and slower scans. |
+
+</div>
+
+Each dial takes a value from `0` to `1`, and together they must satisfy `shape_only_max_content < similar_min_content <= nearly_identical_min_content`; a config that breaks this is refused. No dial turns a rejected pair into a clone. The JSON report records the values in effect under `routing`. The defaults are provisional, and a corpus sweep that scores alternatives is recorded in [corpus/tuning-sweep.md](https://github.com/Nimblesite/Deslop/blob/main/corpus/tuning-sweep.md).
 
 ```toml
 [tuning.routing]
