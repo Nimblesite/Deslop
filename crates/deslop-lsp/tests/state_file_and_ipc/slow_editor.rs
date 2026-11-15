@@ -62,12 +62,12 @@ fn ipc_report(socket: &Path, id: usize) -> Result<Value> {
 }
 
 /// Writes `FLOOD` whole-buffer edits, counting each one the server accepted.
-fn flood_edits(mut stdin: ChildStdin, uri: String, text: String, written: Arc<AtomicUsize>) {
+fn flood_edits(mut stdin: ChildStdin, uri: &str, text: &str, written: &AtomicUsize) {
     for version in FIRST_EDIT_VERSION..FIRST_EDIT_VERSION.saturating_add(FLOOD) {
         let Ok(version_number) = i64::try_from(version) else {
             return;
         };
-        let Ok(frame) = whole_buffer_change(&uri, version_number, &text) else {
+        let Ok(frame) = whole_buffer_change(uri, version_number, text) else {
             return;
         };
         if write_frame(&mut stdin, &frame).is_err() {
@@ -89,7 +89,7 @@ fn an_editor_that_stops_reading_does_not_block_ipc_report_reads() -> Result<()> 
     write_frame(&mut stdin, &opened)?;
     let written = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&written);
-    let writer = thread::spawn(move || flood_edits(stdin, uri.to_string(), text, counter));
+    let writer = thread::spawn(move || flood_edits(stdin, uri.as_str(), &text, &counter));
 
     let mut unchanged = 0_usize;
     let mut last_written = 0_usize;
