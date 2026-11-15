@@ -159,3 +159,14 @@ test('the docs root lists every documentation page on mobile without opening the
     await expect(page.locator('.doc-film video')).toHaveCount(1);
   }
 });
+
+test('the docs root on desktop lists the pages once, in the sidebar, with no duplicate index beside it', async ({ page }) => {
+  await page.setViewportSize(DESKTOP);
+  for (const [route, start] of [['/docs/', '/docs/getting-started/'], ['/zh/docs/', '/zh/docs/getting-started/']]) {
+    await page.goto(route);
+    await expect(page.locator('.docs-sidebar'), `${route}: the sidebar is the menu`).toBeVisible();
+    await expect(page.locator('.docs-index'), `${route}: no second menu beside the sidebar`).toBeHidden();
+    await expect(page.locator(`.docs-shell a[href="${start}"]:visible`), `${route}: one visible Getting Started link in the docs menus`).toHaveCount(1);
+    await expect(page.locator('main h1')).toBeVisible();
+  }
+});
