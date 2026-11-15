@@ -8,7 +8,7 @@ import * as vscode from "vscode";
 import { handleMessage } from "../../webview/panels";
 import { ReportStore } from "../../reportStore";
 import { occurrence, wireCluster } from "../cluster.helpers";
-import { emptyReport, storeWith } from "./report-store.helpers";
+import { emptyReport, metrics, storeWith } from "./report-store.helpers";
 import { withTempDir } from "./temp-file.helpers";
 
 /** Five numbered lines; each `lineN` starts at a known byte. */
@@ -86,6 +86,11 @@ suite("webview handleMessage", () => {
             clusterAtLine("lighter", LOWER_RANK, duplicated, LIGHTER_DUPLICATE_LINE),
             clusterAtLine("heavier", TOP_RANK, duplicated, HEAVIER_DUPLICATE_LINE),
           ],
+          // The engine measures the clean file too: its row carries the
+          // parser identity the opened occurrence takes.
+          metrics: metrics({
+            per_file: [{ path: clean, language: "csharp", analysed_loc: SOURCE_LINES.length, duplicated_loc: 0, duplication_percent: 0 }],
+          }),
         }),
       );
       await handleMessage(store, { kind: "open/file", path: duplicated });
