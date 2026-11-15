@@ -105,12 +105,14 @@ struct Run {
     html: String,
 }
 
-/// Seeds the mixed corpus under `tmp` and returns its scan root.
-fn seed_mixed_corpus(tmp: &Path) -> Result<PathBuf> {
-    let scan_root = tmp.join(SCAN_DIR);
+/// Seeds the mixed corpus in a fresh directory and returns it with the
+/// scan root inside it.
+fn mixed_corpus() -> Result<(tempfile::TempDir, PathBuf)> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join(SCAN_DIR);
     seed_nested_corpus(&scan_root)?;
     fs::write(scan_root.join(SHAPES_FILE), SHAPE_ONLY_DISJOINT)?;
-    Ok(scan_root)
+    Ok((tmp, scan_root))
 }
 
 /// Scans the corpus under `tmp` with `extra` flags, from `tmp` so diff
@@ -291,8 +293,7 @@ fn assert_gate(run: &Run, code: i32, source: &str, breached: bool) {
 /// the JSON, text and HTML reports alike.
 #[test]
 fn a_mixed_corpus_counts_only_its_clone_on_every_surface() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let _scan_root = seed_mixed_corpus(tmp.path())?;
+    let (tmp, _scan_root) = mixed_corpus()?;
     let run = scan(tmp.path(), "plain", &[])?;
     assert_repository_figures(&run.report);
     assert_findings(&run.report, IDENTICAL_KIND)?;
@@ -305,8 +306,7 @@ fn a_mixed_corpus_counts_only_its_clone_on_every_surface() -> Result<()> {
 /// breached or not, the figures never move.
 #[test]
 fn the_one_gate_reads_the_one_percentage_from_flag_or_config() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = seed_mixed_corpus(tmp.path())?;
+    let (tmp, scan_root) = mixed_corpus()?;
     let within = scan(tmp.path(), "within", &["--fail-over", GATE_ABOVE])?;
     assert_gate(&within, EXIT_OK, "cli", false);
     let over = scan(tmp.path(), "over", &["--fail-over", GATE_BELOW])?;
@@ -344,8 +344,7 @@ fn write_beta_diff(tmp: &Path, scan_root: &Path) -> Result<&'static str> {
 /// eight added lines — and leaves the repository figure alone.
 #[test]
 fn a_diff_states_its_own_figure_beside_the_unchanged_repository_figure() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = seed_mixed_corpus(tmp.path())?;
+    let (tmp, scan_root) = mixed_corpus()?;
     let diff = write_beta_diff(tmp.path(), &scan_root)?;
     let run = scan(tmp.path(), "diffed", &["--diff", diff])?;
     assert_eq!(run.code, EXIT_OK);
@@ -392,48 +391,44 @@ fn replace_word(source: &str, from: &str, to: &str) -> String {
         .collect()
 }
 
+/// Asserts `run` states the `expected` figures and both findings, the
+/// clone pair classified as `kind`.
+fn assert_unmoved(run: &Run, expected: &[&Value], kind: &str, change: &str) -> Result<()> {
+    assert_eq!(figures(&run.report), expected, "{change} moves no figure");
+    assert_findings(&run.report, kind)
+}
+
 /// [METRICS-REPO-WEIGHTED] Pair evidence and presentation cannot move a
 /// figure: a renamed copy is a different kind over the same lines, a
 /// shape-only pair with other literals is still information, and no
 /// visibility or rendering choice reaches the metrics.
 #[test]
 fn evidence_and_presentation_changes_leave_every_figure_alone() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = seed_mixed_corpus(tmp.path())?;
+    let (tmp, scan_root) = mixed_corpus()?;
     let baseline = scan(tmp.path(), "baseline", &[])?;
     let expected = figures(&baseline.report);
     for flags in [&["--technical"][..], &["--split-by-language"][..]] {
         let run = scan(tmp.path(), "rendered", flags)?;
-        assert_eq!(
-            figures(&run.report),
-            expected,
-            "{flags:?} is presentation only"
-        );
+        assert_unmoved(&run, &expected, IDENTICAL_KIND, "a rendering flag")?;
     }
     for choice in ["keep", "ignore"] {
         let config = format!("[visibility]\ndata_clones = \"{choice}\"\n");
         fs::write(scan_root.join(".deslop.toml"), config)?;
         let run = scan(tmp.path(), "visibility", &[])?;
-        assert_eq!(figures(&run.report), expected, "data_clones = {choice}");
-        assert_findings(&run.report, IDENTICAL_KIND)?;
+        assert_unmoved(&run, &expected, IDENTICAL_KIND, "a visibility choice")?;
     }
     fs::remove_file(scan_root.join(".deslop.toml"))?;
     rewrite(&scan_root, SHAPES_FILE, &SHAPE_LITERAL_SWAPS)?;
     let reworded = scan(tmp.path(), "reworded", &[])?;
-    assert_eq!(
-        figures(&reworded.report),
-        expected,
-        "other literals, same shape"
-    );
-    assert_findings(&reworded.report, IDENTICAL_KIND)?;
+    assert_unmoved(
+        &reworded,
+        &expected,
+        IDENTICAL_KIND,
+        "other literals, same shape",
+    )?;
     rewrite(&scan_root, "src/b/beta.rs", &BETA_RENAMES)?;
     let renamed = scan(tmp.path(), "renamed", &[])?;
-    assert_findings(&renamed.report, NEARLY_IDENTICAL_KIND)?;
-    assert_eq!(
-        figures(&renamed.report),
-        expected,
-        "a renamed copy covers the same lines"
-    );
+    assert_unmoved(&renamed, &expected, NEARLY_IDENTICAL_KIND, "a renamed copy")?;
     assert_rendered_headline(&renamed);
     Ok(())
 }

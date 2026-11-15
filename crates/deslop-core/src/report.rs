@@ -63,6 +63,19 @@ pub fn occurrence_count(cluster: &ReportCluster) -> usize {
     cluster.occurrences_total.max(cluster.occurrences.len())
 }
 
+/// Language id reported for a cluster that has no occurrence.
+const UNKNOWN_LANGUAGE: &str = "unknown";
+
+/// Language id of a cluster's canonical (first) occurrence, or
+/// `"unknown"` when it has none.
+#[must_use]
+pub fn canonical_language(cluster: &ReportCluster) -> &str {
+    cluster
+        .occurrences
+        .first()
+        .map_or(UNKNOWN_LANGUAGE, |occurrence| occurrence.language.as_str())
+}
+
 /// Counts distinct visible paths in one cluster.
 #[must_use]
 pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {

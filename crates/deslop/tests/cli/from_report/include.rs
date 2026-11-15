@@ -48,6 +48,23 @@ fn replay(scan: &Path, output: &Path, source: &Value, expected_code: i32) -> Res
     read_json_report(&with_ext(output, "json"))
 }
 
+/// Replays `source` and asserts the refusal: the usage exit code, the
+/// missing `field` by name and the re-scan remedy ([OUTPUT-REPLAY-REQUIRED-FIELDS]).
+fn assert_replay_refused(scan: &Path, output: &Path, source: &Value, field: &str) -> Result<()> {
+    let source_path = output.with_file_name(SOURCE_FILE);
+    fs::write(&source_path, serde_json::to_vec(source)?)?;
+    let mut command = deslop_command(scan, output)?;
+    let _assertion = command
+        .arg(REPLAY_FLAG)
+        .arg(source_path)
+        .arg(NO_COLOR_FLAG)
+        .assert()
+        .code(USAGE_CODE)
+        .stderr(contains(format!("missing field `{field}`")))
+        .stderr(contains(RESCAN_REMEDY));
+    Ok(())
+}
+
 // [OUTPUT-REPLAY-REQUIRED-FIELDS] A report without its include set is refused, never assumed.
 #[test]
 fn replay_preserves_all_clone_kinds_when_the_original_include_field_is_absent() -> Result<()> {
@@ -65,17 +82,7 @@ fn replay_preserves_all_clone_kinds_when_the_original_include_field_is_absent() 
     let _removed = metrics.remove("total_includes");
     let _removed = metrics.remove("per_kind");
     let output = tmp.path().join(REPLAY_STEM);
-    let source = tmp.path().join(SOURCE_FILE);
-    fs::write(&source, serde_json::to_vec(&stripped)?)?;
-    let mut command = deslop_command(&scan, &output)?;
-    let _assertion = command
-        .arg(REPLAY_FLAG)
-        .arg(source)
-        .arg(NO_COLOR_FLAG)
-        .assert()
-        .code(USAGE_CODE)
-        .stderr(contains("missing field `total_includes`"))
-        .stderr(contains(RESCAN_REMEDY));
+    assert_replay_refused(&scan, &output, &stripped, "total_includes")?;
     for extension in ["json", "html", "txt"] {
         assert!(
             !with_ext(&output, extension).exists(),
@@ -124,18 +131,7 @@ fn replay_requires_kind_measurements_when_kind_limits_are_configured() -> Result
         .ok_or_else(|| anyhow::anyhow!("metrics object missing"))?
         .remove("per_kind");
     fs::write(scan.join(CONFIG_FILE), CONFIG_GATE)?;
-    let source = tmp.path().join(SOURCE_FILE);
-    fs::write(&source, serde_json::to_vec(&stripped)?)?;
-    let mut command = deslop_command(&scan, &tmp.path().join(REPLAY_STEM))?;
-    let _assertion = command
-        .arg(REPLAY_FLAG)
-        .arg(source)
-        .arg(NO_COLOR_FLAG)
-        .assert()
-        .code(USAGE_CODE)
-        .stderr(contains("missing field `per_kind`"))
-        .stderr(contains(RESCAN_REMEDY));
-    Ok(())
+    assert_replay_refused(&scan, &tmp.path().join(REPLAY_STEM), &stripped, "per_kind")
 }
 
 // [EXIT-CODES-KINDS] Opting out bypasses the config for report replay, like the original total gate.

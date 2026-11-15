@@ -66,18 +66,7 @@ fn occurrence_text(root: &Path, occurrence: &ReportOccurrence) -> Result<String>
 
 #[test]
 fn a_snippet_query_in_the_seed_window_says_not_ready_never_nothing_similar() -> Result<()> {
-    let tmp = copy_fixture(FIXTURE)?;
-    let root = tmp.path().to_path_buf();
-    let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
-    let warm = AnalysisSession::new(
-        root.clone(),
-        DEFAULT_LIVE_MIN_NODES,
-        false,
-        None,
-        Arc::clone(&provider),
-    )
-    .context("warm session")?;
-    warm.persist_seed_cache();
+    let (_tmp, root, provider, warm) = warm_session()?;
     let report = warm.report();
     let occurrence = report
         .clusters
@@ -95,15 +84,7 @@ fn a_snippet_query_in_the_seed_window_says_not_ready_never_nothing_similar() -> 
     );
     drop(warm);
 
-    let seeded = AnalysisSession::try_seeded_from_cache(
-        root.clone(),
-        DEFAULT_LIVE_MIN_NODES,
-        false,
-        None,
-        provider,
-        EmbeddingMode::Off,
-    )
-    .context("the warm run's seed must be served")?;
+    let seeded = seeded_from(&root, provider)?;
     ensure!(seeded.is_seed_only(), "the seeded session has no pass yet");
     match seeded.find_similar(&snippet_request(&snippet)) {
         Err(LiveError::AnalysisNotReady) => {}
@@ -125,8 +106,14 @@ fn a_snippet_query_in_the_seed_window_says_not_ready_never_nothing_similar() -> 
     Ok(())
 }
 
-/// A session serving a warm run's seed, before any pass has installed.
-fn seed_window_session() -> Result<(tempfile::TempDir, std::path::PathBuf, AnalysisSession)> {
+/// A session over a fresh copy of the fixture whose pass has run and
+/// whose seed cache is persisted.
+fn warm_session() -> Result<(
+    tempfile::TempDir,
+    std::path::PathBuf,
+    Arc<dyn EmbeddingProvider>,
+    AnalysisSession,
+)> {
     let tmp = copy_fixture(FIXTURE)?;
     let root = tmp.path().to_path_buf();
     let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
@@ -139,20 +126,34 @@ fn seed_window_session() -> Result<(tempfile::TempDir, std::path::PathBuf, Analy
     )
     .context("warm session")?;
     warm.persist_seed_cache();
-    ensure!(
-        !warm.report().clusters.is_empty(),
-        "the fixture must cluster"
-    );
-    drop(warm);
-    let seeded = AnalysisSession::try_seeded_from_cache(
-        root.clone(),
+    Ok((tmp, root, provider, warm))
+}
+
+/// A session serving the seed a warm run persisted under `root`.
+fn seeded_from(
+    root: &std::path::Path,
+    provider: Arc<dyn EmbeddingProvider>,
+) -> Result<AnalysisSession> {
+    AnalysisSession::try_seeded_from_cache(
+        root.to_path_buf(),
         DEFAULT_LIVE_MIN_NODES,
         false,
         None,
         provider,
         EmbeddingMode::Off,
     )
-    .context("the warm run's seed must be served")?;
+    .context("the warm run's seed must be served")
+}
+
+/// A session serving a warm run's seed, before any pass has installed.
+fn seed_window_session() -> Result<(tempfile::TempDir, std::path::PathBuf, AnalysisSession)> {
+    let (tmp, root, provider, warm) = warm_session()?;
+    ensure!(
+        !warm.report().clusters.is_empty(),
+        "the fixture must cluster"
+    );
+    drop(warm);
+    let seeded = seeded_from(&root, provider)?;
     Ok((tmp, root, seeded))
 }
 

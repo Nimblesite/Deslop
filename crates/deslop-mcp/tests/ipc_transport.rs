@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use anyhow::{ensure, Result};
 use common::{
-    error_and_message, initialized_mcp,
+    initialized_mcp, refused_call_message,
     stub_lsp::{bind_stub_lsp, Reply, Stamp},
 };
 use serde_json::json;
@@ -41,15 +41,7 @@ fn an_engine_error_envelope_is_reported_as_a_transport_failure() -> Result<()> {
         ("duplicates", json!({ "limit": PAGE_LIMIT })),
         ("cluster-by-id", json!({ "id": "0000000000000000" })),
     ] {
-        let response = mcp.request(
-            "tools/call",
-            &json!({ "name": tool, "arguments": arguments }),
-        )?;
-        ensure!(
-            response.pointer("/result").is_none(),
-            "{tool}: a failed exchange must not produce a result page: {response}"
-        );
-        let (_error, message) = error_and_message(&response)?;
+        let message = refused_call_message(&mut mcp, tool, &arguments)?;
         ensure!(
             message.contains(TRANSPORT_FAILURE),
             "{tool}: names the transport failure: {message}"
