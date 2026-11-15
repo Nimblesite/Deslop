@@ -35,30 +35,27 @@ fn measured_report(scan: &Path, output: &Path, config: &str) -> Result<Value> {
     read_json_report(&with_ext(output, "json"))
 }
 
-fn replay(scan: &Path, output: &Path, source: &Value, expected_code: i32) -> Result<Value> {
+/// Stages `source` beside `output` and runs `--from-report` over it.
+fn replay_assert(scan: &Path, output: &Path, source: &Value) -> Result<assert_cmd::assert::Assert> {
     let source_path = output.with_file_name(SOURCE_FILE);
     fs::write(&source_path, serde_json::to_vec(source)?)?;
     let mut command = deslop_command(scan, output)?;
-    let _assertion = command
+    Ok(command
         .arg(REPLAY_FLAG)
         .arg(source_path)
         .arg(NO_COLOR_FLAG)
-        .assert()
-        .code(expected_code);
+        .assert())
+}
+
+fn replay(scan: &Path, output: &Path, source: &Value, expected_code: i32) -> Result<Value> {
+    let _assertion = replay_assert(scan, output, source)?.code(expected_code);
     read_json_report(&with_ext(output, "json"))
 }
 
 /// Replays `source` and asserts the refusal: the usage exit code, the
 /// missing `field` by name and the re-scan remedy ([OUTPUT-REPLAY-REQUIRED-FIELDS]).
 fn assert_replay_refused(scan: &Path, output: &Path, source: &Value, field: &str) -> Result<()> {
-    let source_path = output.with_file_name(SOURCE_FILE);
-    fs::write(&source_path, serde_json::to_vec(source)?)?;
-    let mut command = deslop_command(scan, output)?;
-    let _assertion = command
-        .arg(REPLAY_FLAG)
-        .arg(source_path)
-        .arg(NO_COLOR_FLAG)
-        .assert()
+    let _assertion = replay_assert(scan, output, source)?
         .code(USAGE_CODE)
         .stderr(contains(format!("missing field `{field}`")))
         .stderr(contains(RESCAN_REMEDY));
