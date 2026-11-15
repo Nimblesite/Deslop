@@ -142,7 +142,7 @@ CLI 运行同一个引擎，写出同样的 JSON。它无法回答"这段尚未�
 
 这会写出 `.deslop/deslop-report.txt` 和 `.html`，并把 JSON 复制到 `.deslop/deslop-report.json`。种子文件不会在每次编辑后重写；重新渲染不刷新分析，也不验证字节范围。解析失败可能是版本不兼容、文件未写完或损坏；先查看错误，必要时用配套 CLI 重新生成。
 
-**2. 重新渲染已有报告。** `--from-report .deslop/deslop-report.json --nojson` 会根据上一次 CLI 运行写出新的 HTML 和文本报告，不做任何分析。
+**2. 重新渲染已有报告。** `--from-report .deslop/deslop-report.json --nojson` 会根据上一次 CLI 运行写出新的 HTML 和文本报告，不做任何分析。报告必须来自同一个 Deslop 版本：缺少当前版本所写任一字段的报告会被拒绝，退出码为 `2`，并指出缺少的字段。此时请重新扫描。
 
 **3. 分析，同时复用缓存。** 普通运行默认复用 `.deslop/cache/fingerprints/`，只重新解析内容有变化的文件。匹配仍覆盖整个仓库，所以比重新渲染慢。只请求你需要的输出：
 
