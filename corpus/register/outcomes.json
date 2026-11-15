@@ -13138,10 +13138,10 @@
         "tpl/tplimpl/templatestore_integration_test.go:1438-1461",
         "tpl/tplimpl/templatestore_integration_test.go:367-394"
       ],
-      "outcome": "fail",
-      "since": "2026-11-02T01:31:12.995Z",
-      "engine": "deslop@f3bb59490f9b",
-      "commit": "f3bb59490f9b59776758e678ae2ebc78a4d3560a",
+      "outcome": "pass",
+      "since": "2026-11-14T22:15:54.674Z",
+      "engine": "deslop@4e2261957f12",
+      "commit": "4e2261957f123dbc0dc3bad9376d97b4a1ecf216",
       "version": null
     },
     {
