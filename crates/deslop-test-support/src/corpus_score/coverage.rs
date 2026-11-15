@@ -34,15 +34,10 @@ impl RangeCoverage {
     }
 }
 
-/// An older engine's spelling of the cluster classification. Current reports
-/// never emit it, so it sits outside [`ReportField`]: it is read only when a
-/// version comparison scores that older engine's report.
-const LEGACY_TAXONOMY_FIELD: &str = "bucket";
-/// Both serialized report spellings of the cluster classification.
-const TAXONOMY_FIELDS: &[&str] = &[ReportField::Kind.name(), LEGACY_TAXONOMY_FIELD];
+/// The serialized report field naming the cluster classification.
+const TAXONOMY_FIELDS: &[&str] = &[ReportField::Kind.name()];
 
-/// Old reports call the cluster taxonomy `bucket`; current ones call it `kind`.
-/// Either field can disprove a clone, and an absent or unknown taxonomy cannot
+/// The `kind` field can disprove a clone, and an absent or unknown taxonomy cannot
 /// certify one ([CORPUS-SCORE]). A pinned type must also be one the kind
 /// reports ([CORPUS-REGISTER-TYPE]).
 fn is_clone_label(label: &Value, pinned: Option<CloneType>) -> bool {

@@ -273,11 +273,6 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
                 index = index.saturating_add(2);
             }
             "--debug" | "--stdio" => index = index.saturating_add(1),
-            flag if LEGACY_STARTUP_FLAGS.contains(&flag) => {
-                return Err(anyhow!(
-                    "unsupported LSP startup flag {flag}; configure Deslop through settings"
-                ));
-            }
             flag if flag.starts_with('-') => {
                 return Err(anyhow!("unsupported LSP startup flag {flag}"));
             }
@@ -286,20 +281,6 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     }
     Ok(())
 }
-
-/// Startup flags removed from the LSP command line by.
-const LEGACY_STARTUP_FLAGS: &[&str] = &[
-    "--min-nodes",
-    "--embeddings",
-    "--embedding-provider",
-    "--embedding-model",
-    "--embedding-endpoint",
-    RETIRED_RANKING_FLAG,
-];
-
-/// The retired shape-only ranking override. Ranking is mass alone
-/// ([RANK-MASS-SUM]), so the flag is refused rather than ignored.
-const RETIRED_RANKING_FLAG: &str = "--ranking-structural-only";
 
 /// Builds the Tokio runtime for the app layer.
 fn build_runtime(worker_threads: usize) -> Result<Runtime> {

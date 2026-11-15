@@ -235,9 +235,7 @@ pub fn backend_to_rpc(err: crate::backend::BackendError) -> JsonRpcError {
 
 /// Builds the `-32004` error for a missing LSP, attaching a structured
 /// recovery payload so agents can decide whether to retry and where the
-/// on-disk fallback lives. The numeric code and the
-/// human message are reproduced verbatim for wire
-/// back-compat; only the previously-`null` `data` field is enriched.
+/// on-disk fallback lives.
 fn lsp_not_running_rpc(socket_path: &std::path::Path) -> JsonRpcError {
     let message = crate::backend::BackendError::LspNotRunning {
         socket_path: socket_path.to_path_buf(),

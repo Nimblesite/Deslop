@@ -64,8 +64,7 @@ impl CloneCategory {
     }
 
     /// Parses the stable JSON `category` wire label, defaulting to
-    /// [`Self::Logic`] for absent or unknown values so older reports and
-    /// the common case both resolve cleanly.
+    /// [`Self::Logic`] for any other value.
     #[must_use]
     pub fn from_wire_label(label: &str) -> Self {
         match label {

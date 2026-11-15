@@ -298,7 +298,7 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
 // [VSIX-TOP-OFFENDERS-GROUPING] Group the filtered report without changing engine ranks.
 function buildRoots(
   clusters: ReportCluster[],
-  totalIncludes?: readonly ClusterKind[],
+  totalIncludes: readonly ClusterKind[],
 ): Node[] {
   const groupBy = readGroupBy();
   const filter = readTopOffendersFilter();
