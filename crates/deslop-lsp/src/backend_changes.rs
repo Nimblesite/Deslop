@@ -50,24 +50,27 @@ impl LspBackend {
         self.apply_session_change(change, analysed_buffer).await;
     }
 
-    /// Runs `change` against the locked session and pushes the resulting
-    /// report delta to the editor.
+    /// Runs `change` against the locked session, releases the lock, and
+    /// pushes the resulting report delta to the editor.
     pub(super) async fn apply_session_change(
         &self,
         change: impl SessionChange,
         analysed_buffer: Option<AnalysedBuffer>,
     ) {
-        let session = self.service.session();
-        let mut guard = session.lock().await;
-        match self
-            .commit_change(&mut guard, change, analysed_buffer)
-            .await
-        {
+        // [LIVE-OPEN-BUFFERS] The lock covers the change alone. Writing to
+        // an editor that has stopped reading can wait for ever, and no
+        // other reader of the session may wait with it.
+        let outcome = {
+            let session = self.service.session();
+            let mut guard = session.lock().await;
+            self.commit_change(&mut guard, change, analysed_buffer)
+                .await
+        };
+        match outcome {
             Ok(Some(notification)) => {
                 self.client
                     .send_notification::<ReportChangedLspNotification>(notification)
                     .await;
-                drop(guard);
                 self.diagnostics.refresh(&self.client).await;
             }
             Ok(None) => {}
