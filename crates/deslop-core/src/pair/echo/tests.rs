@@ -355,3 +355,42 @@ fn a_family_of_look_alike_functions_answers_each_pair_from_its_own_interior() {
         "the members around them claim the smaller statement"
     );
 }
+
+/// Three drifted methods whose shared statement the candidate stage
+/// paired as a star: the first copy with each later one, never the two
+/// later copies with each other (`console` `TableTest.php`).
+const STAR_METHODS: [ByteRange; 3] = [range(0, 100), range(200, 300), range(400, 500)];
+const STAR_STATEMENTS: [ByteRange; 3] = [range(10, 60), range(210, 260), range(410, 460)];
+const STAR_METHOD_NODES: usize = 160;
+const STAR_STATEMENT_NODES: usize = 55;
+
+#[test]
+fn copies_a_star_never_paired_still_share_their_statement() -> Result<(), &'static str> {
+    let mut registry = FileRegistry::new();
+    let file = registry.register(FILE.into());
+    let methods = STAR_METHODS.map(|method| fingerprint(file, method, STAR_METHOD_NODES, 1));
+    let statements =
+        STAR_STATEMENTS.map(|statement| fingerprint(file, statement, STAR_STATEMENT_NODES, 2));
+    let fingerprints: Vec<Fingerprint> = statements.into_iter().chain(methods).collect();
+    let star = [
+        exact_pair(0, 1, STAR_STATEMENT_NODES),
+        exact_pair(0, 2, STAR_STATEMENT_NODES),
+    ];
+    for pairs in [star.to_vec(), star.iter().rev().copied().collect()] {
+        let clones = ExactClones::within_one_file(&pairs, &fingerprints);
+        let at = |index: usize| fingerprints.get(index).ok_or(OUTSIDE_CORPUS);
+        for (left, right) in [(3, 4), (3, 5), (4, 5), (5, 4)] {
+            assert_eq!(
+                clones.enclosed_nodes(at(left)?, at(right)?),
+                STAR_STATEMENT_NODES,
+                "methods {left} and {right} each hold a copy of the statement"
+            );
+        }
+        assert_eq!(
+            clones.enclosed_nodes(at(1)?, at(2)?),
+            0,
+            "two copies enclose nothing besides themselves"
+        );
+    }
+    Ok(())
+}
