@@ -76,7 +76,7 @@ Flutter 中存在大量必要的重复，报告它们会把真正的副本淹没
 - **Generated Dart.** 以 `.g.dart`、`.freezed.dart`、`.gr.dart`、`.config.dart`、`.gen.dart`、`.mocks.dart` 结尾的文件以及 protobuf 的 `.pb*.dart` 系列会被分析，但从报告中隐藏；以生成器横幅（例如 `// GENERATED CODE - DO NOT MODIFY BY HAND`）开头的文件同样如此。
 - **Tooling and dependencies.** `.dart_tool` 始终被排除；`.pub-cache` 默认被排除，除非你选择加入。
 
-当*你的*代码与被隐藏的生成文件重复时，它们仍然会被计入。如果一个手写映射器复制了 `json_serializable` 已经生成的内容，这个簇仍会保留。完整清单见[配置](/zh/docs/configuration/#-3)。
+当*你的*代码与被隐藏的生成文件重复时，它们仍然会被计入。如果一个手写映射器复制了 `json_serializable` 已经生成的内容，这个簇仍会保留。完整清单见[配置](/zh/docs/configuration/#built-in-rules)。
 
 ## Dart 重复代码检查应当查找什么
 

@@ -95,7 +95,7 @@ deslop --version
 
 MCP 的每个回答都来自编辑器的实时分析，并随文件变化而更新，没有批处理步骤。每个工具在 `tools/list` 中都有自己的说明；它们的配合方式如下：
 
-<div class="mcp-tool-table">
+<div class="key-table">
 
 | 工具 | 用途 |
 | --- | --- |

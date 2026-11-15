@@ -467,12 +467,18 @@ body.menu-open .docs-sidebar { visibility: visible; transform: translateX(0); }
 /* Tables scroll horizontally instead of overflowing narrow screens. */
 .prose table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.9375rem; }
 .prose th, .prose td { padding: var(--space-3) var(--space-4); text-align: left; vertical-align: top; }
-.prose .mcp-tool-table td:first-child > code { white-space: nowrap; }
+.prose td:first-child > code { white-space: nowrap; }
 .prose thead th { color: var(--on-surface); font-weight: 700; background: var(--surface-container-low); }
 .prose tbody td { color: var(--on-surface-variant); }
 .prose tbody tr:nth-child(even) td { background: var(--surface-container-low); }
+/* Key tables stack each row on narrow screens: key, then default beside its effect. */
 @media (max-width: 767.98px) {
-  .prose .mcp-tool-table :is(th, td) { padding-inline: var(--space-2); }
+  .prose .key-table :is(table, tbody) { display: block; }
+  .prose .key-table thead { display: none; }
+  .prose .key-table tr { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); padding: var(--space-3); }
+  .prose .key-table tbody tr:nth-child(even) { background: var(--surface-container-low); }
+  .prose .key-table td { padding: 0; background: none; }
+  .prose .key-table td:first-child, .prose .key-table td:nth-child(2):last-child { grid-column: 1 / -1; }
 }
 
 .doc-film-transcript summary { cursor: pointer; padding: var(--space-3) 0; font-weight: 600; }

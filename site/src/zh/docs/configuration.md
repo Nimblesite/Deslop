@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 docFilm: configuration
 title: 配置与报告 — .deslop.toml、命令行参数、JSON 输出
-description: 使用 .deslop.toml 和 CLI 参数配置 Deslop。查看排除项、阈值、排名、分析设置、JSON/HTML/文本报告与退出码。
+description: 一页列出 Deslop 的全部可调参数、.deslop.toml 配置段与命令行参数：相似度阈值、CI 门禁、排除规则、报告格式与退出码。
 eleventyNavigation:
   key: 配置
   order: 6
@@ -13,324 +13,207 @@ lang: zh
 
 # 配置与报告
 
-本页适用于 [0.35.0](/zh/releases/)。
-
-Deslop 从两处读取设置：
-
-- **`.deslop.toml`** — 与代码放在一起、并纳入版本管理的文件。项目级策略写在这里：跳过什么、隐藏什么、何时让 CI 失败。
-- **命令行参数** — 单次运行的覆盖项。参数始终优先于对应的配置键。
-
-本页是一份参考手册。需要循序渐进的教程，请从[快速开始](/zh/docs/)读起。
+Deslop 从扫描根目录读取 `.deslop.toml`，或读取 `--config` 指定的文件；没有配置文件时使用下文的默认值。命令行参数优先于对应的配置键。未知的配置段或键会让运行失败并指出其名称，拼写错误永远不会悄悄关掉门禁。
 
 {% include "partials/doc-film.njk" %}
 
-## `.deslop.toml` 文件
+<span id="dials"></span>
 
-### 文件位置
+## 可调参数
 
-Deslop 会在**扫描根目录**（你指向的目录）中查找 `.deslop.toml`。用 `--config` 可以指向别处：
+这里列出所有可以调整的数值。每一项都会改变 Deslop 找到什么、如何标注发现，或何时让 CI 失败。
 
-```bash
-deslop .                          # 若存在则使用 ./.deslop.toml
-deslop ./src --config ci.toml     # 显式指定配置，文件名任意
-```
+<div class="key-table">
 
-缺少配置文件不算错误 — Deslop 会按下文的内置规则运行。
-
-### 格式
-
-TOML 格式：一个共享的 `[defaults]` 区段，外加可选的按语言覆盖区段和四个行为区段。模式是**带 gitignore 语义的 glob 模式**，**相对扫描根目录**解析 — 无论仓库在磁盘上位于何处，`subdir/**` 都匹配 `<扫描根>/subdir/...`。
-
-<span id="exclude-vs-report-hide"></span>
-
-### `exclude` 与 `report_hide` — 核心区别
-
-这两层做的事不同，区别很关键：
-
-| | 会发生什么 | 适用于 |
+| 参数 | 默认值 | 作用 |
 | --- | --- | --- |
-| `exclude` | 文件在分析前**被丢弃** — 既不解析，也不指纹化。 | 第三方代码、构建产物，以及任何你永远不想参与比较的内容。 |
-| `report_hide` | 文件**会被分析**，但每处出现都被标记为隐藏。只有当一个簇的**全部成员都是隐藏的**时，它才会从报告中移除。 | 生成的代码。你仍然想知道何时*手写*代码与某个生成文件重复了。 |
+| `--min-nodes` | `30` | 参与比较的最小语法子树（AST 节点数）。调高得到更少、更大的克隆；调低可捕获小克隆。 |
+| `nearly_identical_min_shape` | `0.90` | 标注为 **Nearly identical** 所需的结构相似度。 |
+| `nearly_identical_min_content` | `0.70` | 标注为 **Nearly identical** 所需的内容支持度。 |
+| `similar_min_content` | `0.50` | 标注为 **Loosely similar** 所需的内容支持度。 |
+| `shape_only_max_content` | `0.05` | 内容支持度不超过此值即视为没有：该代码对为 **Shape-only**，永远不计入重复。 |
+| `max_duplication_percent` | 关闭 | 全仓库重复率超过该百分比时退出码为 `3`。`--fail-over` 可按次设置。 |
+| `[threshold.kinds]` | 关闭 | 每种克隆类型各自的百分比上限，对照该类型自己的数值检查。 |
+| `max_average_line_bytes` | `200` | 文件平均每行字节数超过此值即视为压缩后的构建产物并跳过。 |
+| `--jobs` | 全部核心 | 每个并行阶段的工作线程数。只影响速度，任何取值下报告都完全相同。 |
 
-这种不对称是刻意的。`report_hide` 让"生成代码与自身重复"不进入头条，同时仍然暴露"你的代码与生成代码重复"的情况 — 因为那个簇至少有一个非隐藏成员，所以它会保留下来。
+</div>
 
-## `[defaults]`
-
-应用于每个文件，与语言无关。
+四个相似度参数位于 `[tuning.routing]` 下。取值范围为 `0` 到 `1`，且必须满足 `shape_only_max_content < similar_min_content <= nearly_identical_min_content`，否则配置会被拒绝。它们只为已通过克隆准入的代码对贴标签，任何设置都不能把被拒绝的代码对变成克隆。JSON 报告在 `routing` 下记录实际生效的值。
 
 ```toml
-[defaults]
-exclude = [
-  "**/node_modules/**",
-  "**/dist/**",
-  "vendor/**",
-]
-report_hide = [
-  "**/*.snapshot.cs",
-]
+[tuning.routing]
+nearly_identical_min_shape = 0.90
+nearly_identical_min_content = 0.70
+similar_min_content = 0.50
+shape_only_max_content = 0.05
+```
+
+<span id="a-complete-desloptoml"></span>
+
+## 完整的 `.deslop.toml`
+
+模式为 gitignore 语义的 glob，相对扫描根目录解析。
+
+```toml
+[defaults]                       # 适用于所有语言
+exclude = ["third_party/**"]     # 不分析
+report_hide = ["**/*.snapshot.cs"]  # 分析，但在报告中隐藏
 
 [defaults.boilerplate]
-imports = "report"
-```
+imports = "report"               # "suppress"（默认）| "report"
 
-| 键 | 类型 | 默认值 | 含义 |
-| --- | --- | --- | --- |
-| `exclude` | glob 列表 | `[]` | 从发现阶段丢弃的文件。与内置 exclude 叠加。 |
-| `report_hide` | glob 列表 | `[]` | 会被分析但从渲染报告中隐藏的文件。与内置隐藏规则叠加。 |
-| `boilerplate.imports` | `"suppress"` \| `"report"` | `"suppress"` | 如何处理仅由 import / 序言构成的克隆。`suppress` 静默丢弃；`report` 仍抑制克隆告警，但发出一条低严重度的整洁度提示。 |
-
-## `[language.<name>]`
-
-按语言的覆盖区段。名称是解析器的语言 id：`csharp`、`rust`、`python`、`dart`、`javascript`、`typescript`、`tsx`、`php`、`fsharp`、`go` 或 `c`。这里的模式**扩展**默认值 — 永不替换 — 因此一个 `.cs` 文件会同时针对 `defaults.exclude` **加上** `language.csharp.exclude` 进行测试。
-
-```toml
-[language.csharp]
+[language.csharp]                # 为单一语言扩展 [defaults]
 report_hide = ["**/Migrations/**"]
 
-[language.python]
-exclude = ["**/conftest.py"]
-
-[language.dart.boilerplate]
-imports = "report"
-```
-
-每个覆盖区段都接受与 `[defaults]` 相同的三个键：`exclude`、`report_hide` 和 `boilerplate.imports`。
-
-<span id="threshold"></span>
-
-## `[threshold]` — CI 门禁
-
-```toml
 [threshold]
-max_duplication_percent = 20
-```
+max_duplication_percent = 20     # 超过 20% 退出码为 3
 
-| 键 | 类型 | 范围 | 含义 |
-| --- | --- | --- | --- |
-| `max_duplication_percent` | 浮点数 | `0.0`–`100.0` | 当全仓库的 `duplication_percent` 超过此值时，`deslop` 以 **`3`** 退出并使 CI 失败。 |
+[threshold.kinds]
+identical = 3                    # 仅完全相同的副本超过 3% 时退出码为 3
 
-这是**唯一**需要显式启用的失败路径。没有 `[threshold]` 区段（且没有 `--fail-over`）时，无论发现多少重复，`deslop` 始终以 `0` 退出。命令行 `--fail-over` 参数会覆盖此键；`--no-fail-over` 会在单次运行中清除它。参见下文的[退出码](#exit-codes)。
+[total]
+include = ["identical", "nearly_identical"]  # 计入总体数值的类型
 
-## `[analysis]`
-
-```toml
 [analysis]
 allow_cross_language_comparison = false
 include_dependencies = false
 incremental = true
-```
+max_average_line_bytes = 200
 
-| 键 | 类型 | 默认值 | 含义 |
-| --- | --- | --- | --- |
-| `allow_cross_language_comparison` | 布尔 | `false` | 为 `true` 时，候选克隆对可以跨越不同语言。默认关闭，使报告聚焦于同语言重构。 |
-| `include_dependencies` | 布尔 | `false` | 连依赖树一起分析。默认关闭：否则最严重者优先的排序会把你无法修改的重复排在自己的代码之上。 |
-| `incremental` | 布尔 | `true` | 复用磁盘上的解析缓存。设为 `false` 则每次运行都完整重新解析，且对所有入口生效 —— CLI、编辑器与智能体皆然。 |
-| `max_average_line_bytes` | 整数 | `200` | 用于识别大型压缩构建产物的平均行字节数上限。 |
-
-## `[report]`
-
-```toml
 [report]
 split_by_language = false
-```
 
-| 键 | 类型 | 默认值 | 含义 |
-| --- | --- | --- | --- |
-| `split_by_language` | 布尔 | `false` | 将 HTML 报告按语言划分为各自的区段。`--split-by-language` 参数也能开启它 — 任一来源都会生效。 |
-
-## 排名
-
-克隆按重复质量排名：参考语法树节点数 × 额外可见副本数。类别和置信度不会乘入质量，也没有任何设置可以调整某一类别的权重或将其隐藏。仅形状匹配排在克隆之后，标注为不计入总量，且永远不会增加重复率。
-
-不存在 `[ranking]` 配置节。包含该配置节的配置文件会加载失败，并像其他未知配置节一样报告未知字段 `ranking`；请删除该配置节。
-
-## `[visibility]`
-
-在排名之前排除已确认的数据表类发现，保留下来的发现质量不变：
-
-```toml
 [visibility]
-data_clones = "keep"   # "keep"（默认）| "ignore"
+data_clones = "keep"             # "keep" | "ignore"
 ```
 
-此处不接受 `demote` 和权重系数：排名只依据重复质量。任何配置节中的未知键都会使运行失败，并在错误信息中指出该键，因此已停用的设置不可能悄悄关闭检查门禁。
+<span id="exclude-vs-report_hide"></span>
 
-## 内置规则（始终生效）
+## `exclude` 与 `report_hide`
 
-压缩和打包产物还会根据已识别的文件后缀及可配置的平均行长度检查被排除。体积大但可读的源码仍可分析。生成文件标记从解析后的注释中读取，字符串中的标记不算文件头。
+<div class="key-table">
 
-这些规则先于用户模式生效。排除规则移除待分析文件；报告隐藏规则保留分析，但隐藏出现位置。
+| 键 | 效果 | 适用场景 |
+| --- | --- | --- |
+| `exclude` | 文件在分析前被丢弃。 | 第三方代码，以及任何你永远不想比较的内容。 |
+| `report_hide` | 文件会被分析，但其出现位置被隐藏。只有当集群的**所有**成员都被隐藏时，该集群才会离开报告。 | 生成的代码：手写代码重复生成代码时你仍会知道。 |
 
-**构建产物与工具缓存**，一律排除且无法重新纳入 —— 它们都不是你写的源码：
+</div>
 
-```
-target   dist   build   out   coverage   .vscode-test   __pycache__   .dart_tool   .git   .claude
-```
+这两个键与 `boilerplate.imports` 一起写在 `[defaults]` 或 `[language.<name>]` 下。`suppress` 丢弃仅由 import 构成的克隆；`report` 把它们变成低严重度提示。语言覆盖项会**扩展**默认值。语言 id：`csharp`、`rust`、`python`、`dart`、`javascript`、`typescript`、`tsx`、`php`、`fsharp`、`go`、`c`。
 
-**依赖树**，除非你设置 `[analysis] include_dependencies = true`，否则一律排除：
+<span id="built-in-rules"></span>
 
-```
-node_modules   vendor   .cargo   .pub-cache   .venv
-```
+### 内置规则
 
-**始终从报告中隐藏**（会被分析，但不进入头条）：
+这些规则先于你的模式生效。
 
-- 目录组件 `generated/`。
-- 相邻组件对 `alembic/versions`、`test/fixtures`、`tests/fixtures` — 除非该对*本身*就是你的扫描根，从而让你能够刻意分析一个夹具语料库。
-- 文件后缀：`.g.cs`、`.generated.cs`、`.designer.cs`、`.pb.cs`、`.openapi.cs`、`.generated.py`、`_generated.py`、`.g.dart`、`.freezed.dart`、`.gr.dart`、`.config.dart`、`.gen.dart`、`.mocks.dart`、`.pb.dart`、`.pbenum.dart`、`.pbjson.dart`、`.pbserver.dart`、`.pbgrpc.dart`。
-- 任何以生成器横幅开头的文件——横幅必须是位于第一行代码之上的一整行注释，例如 `// GENERATED CODE - DO NOT MODIFY BY HAND`、`// Code generated … DO NOT EDIT.`、`// <auto-generated>`、`// @generated` 或 `# Generated by the protocol buffer compiler.  DO NOT EDIT!`。句子中的短语、字符串或位置更靠后的注释都不算，因此仅仅提到生成器的手写文件仍会留在报告中。[完整的横幅列表](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/exclusion.md)见规范；不在列表中的生成器，只需添加一条 `report_hide` 模式即可隐藏。
+- **始终排除：** `target`、`dist`、`build`、`out`、`coverage`、`.vscode-test`、`__pycache__`、`.dart_tool`、`.git`、`.claude`。压缩和打包后的文件也会按文件名后缀和 `max_average_line_bytes` 排除。
+- **除非 `include_dependencies = true`，否则排除：** `node_modules`、`vendor`、`.cargo`、`.pub-cache`、`.venv`。
+- **始终在报告中隐藏：**
+  - 任何 `generated/` 目录
+  - `alembic/versions`、`test/fixtures` 和 `tests/fixtures`，除非该目录就是扫描根目录
+  - 生成文件后缀：`.g.cs`、`.generated.cs`、`.designer.cs`、`.pb.cs`、`.openapi.cs`、`.generated.py`、`_generated.py`、`.g.dart`、`.freezed.dart`、`.gr.dart`、`.config.dart`、`.gen.dart`、`.mocks.dart`、`.pb.dart`、`.pbenum.dart`、`.pbjson.dart`、`.pbserver.dart`、`.pbgrpc.dart`
+  - 第一行注释是生成器标记的文件，例如 `// GENERATED CODE - DO NOT MODIFY BY HAND` 或 `// @generated`。标记从解析后的注释中读取，字符串里或后面注释中的同样短语不算。见[完整标记列表](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/exclusion.md)。
 
-## 一个完整示例
+<span id="ci-gate"></span>
 
-```toml
-# 在各处跳过第三方代码和构建产物。
-[defaults]
-exclude = [
-  "**/node_modules/**",
-  "**/dist/**",
-  "third_party/**",
-]
-report_hide = [
-  "**/*.snapshot.cs",
-]
+## CI 门禁
 
-# 对仅由 import 构成的克隆给出整洁度提示，而非静默丢弃。
-[defaults.boilerplate]
-imports = "report"
+除非你启用门禁，Deslop 的退出码始终为 `0`。任何门禁被突破都会退出码 `3`，完整报告照常写出。
 
-# C# 数据库迁移是生成的 — 分析但隐藏它们。
-[language.csharp]
-report_hide = ["**/Migrations/**"]
+<div class="key-table">
 
-# 全仓库重复超过 20% 时让 CI 失败。
-[threshold]
-max_duplication_percent = 20
+| 键 | 默认值 | 作用 |
+| --- | --- | --- |
+| `[threshold] max_duplication_percent` | 关闭 | 全仓库重复率上限，`0`–`100`。 |
+| `[threshold.kinds]` | 关闭 | 每种类型的可选上限：`identical`、`nearly_identical`、`loosely_similar`、`same_behavior`。各自独立于总体数值检查。 |
+| `[total] include` | `["identical", "nearly_identical"]` | 哪些类型计入总体数值。未计入的类型保留其集群与分类型数值。`structural_only` 会被拒绝，因为 shape-only 永远不是重复。 |
 
-# 将 HTML 报告按语言拆分。
-[report]
-split_by_language = true
-```
+</div>
+
+`--fail-over <PERCENT>` 在单次运行中覆盖 `max_duplication_percent`；`--no-fail-over` 清除所有门禁。配合 `--diff` 和 `--only-changed` 时，门禁读取限定在 diff 内的百分比，旧债不会让合并前检查失败。操作指南：[用重复阈值把关 CI](/zh/docs/#gate-ci-on-a-duplication-threshold) 与 [GitHub Action](/zh/docs/github-action/)。
+
+<span id="other-settings"></span>
+
+## 其他设置
+
+<div class="key-table">
+
+| 键 | 默认值 | 作用 |
+| --- | --- | --- |
+| `[analysis] allow_cross_language_comparison` | `false` | 允许克隆对跨越两种语言。 |
+| `[analysis] include_dependencies` | `false` | 分析依赖目录。默认关闭，否则其重复会排在你能修改的代码之前。 |
+| `[analysis] incremental` | `true` | 在所有入口复用磁盘解析缓存。`false` 强制每次完整重新解析。 |
+| `[report] split_by_language` | `false` | HTML 报告按语言分节。`--split-by-language` 也可启用。 |
+| `[visibility] data_clones` | `"keep"` | `"ignore"` 在排名前丢弃已证实的数据表发现。 |
+
+</div>
+
+克隆只按重复质量排名：AST 节点数 × 额外副本数。没有任何设置会对某种类型重新加权。
+
+<span id="cli-flags"></span>
 
 ## 命令行参数
 
-每次运行也接受参数。在该次运行中，参数会覆盖对应的 `.deslop.toml` 键。
+<div class="key-table">
 
-| 参数 | 默认值 | 含义 |
+| 参数 | 默认值 | 作用 |
 | --- | --- | --- |
-| `PATH` | `.` | 要分析的目录（位置参数）。 |
-| `--min-nodes <N>` | `30` | 构成克隆候选的最小 AST 子树节点数。越大 = 克隆越少、越大。 |
-| `--output <PREFIX>` | `.deslop/deslop-report` | 报告的基路径；会追加 `.json` / `.txt` / `.html`。日志一并写入 `<dir>/logs/`。 |
-| `--config <FILE>` | `<root>/.deslop.toml` | 显式配置文件。 |
-| `--split-by-language` | 关 | 每种语言一个 HTML 区段（等同于 `[report] split_by_language`）。 |
-| `--nojson` / `--notext` / `--nohtml` | 全开 | 抑制单一输出格式。至少需保留一种。 |
-| `--fail-over <PERCENT>` | — | 重复超过 `PERCENT` 时以 `3` 退出。覆盖 `[threshold]`。 |
-| `--no-fail-over` | — | 在该次运行中清除任何阈值；绝不以 `3` 退出。 |
-| `--technical` | 关 | 在 stderr 上显示研究者视图（分类 id、信号字母、节点数）。 |
-| `--diff <FILE>` | — | 将报告限定到统一 diff 的新增行；`-` 表示从 stdin 读取。扫描仍覆盖整棵树。与该树不匹配的 diff 会被拒绝。 |
-| `--only-changed` | 关 | 丢弃未命中 diff 的簇，并让 `--fail-over` 按 diff 范围内的占比判定，使历史欠债无法让合并前检查失败。需要 `--diff`。 |
+| `PATH` | `.` | 要分析的目录。 |
+| `--output <PREFIX>` | `.deslop/deslop-report` | 报告路径前缀，追加 `.json`、`.txt`、`.html`。日志写到 `<dir>/logs/`。 |
+| `--config <FILE>` | `<root>/.deslop.toml` | 改用的配置文件。 |
+| `--nojson` | 关闭 | 不写 JSON 报告。 |
+| `--notext` | 关闭 | 不写文本报告。 |
+| `--nohtml` | 关闭 | 不写 HTML 报告。至少保留一种格式。 |
+| `--diff <FILE>` | — | 标记统一 diff 新增行上的克隆；`-` 从 stdin 读取。与代码树不匹配的 diff 会被拒绝。 |
+| `--only-changed` | 关闭 | 丢弃 diff 之外的克隆。需要 `--diff`。 |
+| `--technical` | 关闭 | 在 stderr 显示研究者视图：分类 ID、信号字母、节点数。 |
+| `--no-incremental` | 关闭 | 本次运行不使用磁盘缓存。 |
+| `--embeddings <MODE>` | `off` | `auto` 探测提供方，不可用时带警告回退；`required` 不可用时失败。 |
+| `--embedding-provider <ID>` | `ollama` | 提供方。目前只有 `ollama`。 |
+| `--embedding-model <MODEL>` | `nomic-embed-text` | 模型名，与 `ollama list` 显示一致。 |
+| `--embedding-endpoint <URL>` | `http://127.0.0.1:11434` | 提供方端点。 |
+| `--log-to-console` | 关闭 | 日志写到 stderr，而非 `logs/deslop-<timestamp>.log`。 |
+| `--log-level <LEVEL>` | `info` | `error`、`warn`、`info`、`debug` 或 `trace`。`RUST_LOG` 优先。 |
+| `--no-color` | 关闭 | stderr 不带颜色。设置 `NO_COLOR` 或 stderr 不是终端时同样如此。 |
+
+</div>
+
+上面的可调参数（`--min-nodes`、`--jobs`、`--fail-over`、`--no-fail-over`）也是命令行参数。开发者参数：`--from-report <FILE>` 重新渲染已保存的 JSON 报告，`--debug-ast <FILE>` 打印单个文件的规范化 AST，`--rerun-touch`、`--rerun-remove` 和 `--rerun-add` 通过实时更新路径重放文件变更。
 
 <span id="compare-two-occurrences"></span>
 
 ### 比较两个出现位置
 
-`--compare` 在 **0.35.0** 中加入。传入两个 `<path>:<start_byte>:<end_byte>` 端点，使用 JSON 报告中的确切字节范围：
+以 `<path>:<start_byte>:<end_byte>` 传入两个端点，数值从 JSON 报告复制：
 
 ```text
 deslop . --compare "<left-path>:<start-byte>:<end-byte>" --compare "<right-path>:<start-byte>:<end-byte>"
 ```
 
-命令先扫描根目录，重新计算配对证据，再向 stdout 输出 JSON 判定。偏移量按字节而非行计，结束位置不包含在范围内。范围必须对应已生成指纹的出现位置；簇 ID 不能用作端点。
-
-### 嵌入
-
-混合嵌入层**默认关闭**；Deslop 不依赖它即可提供结构与词法信号。在你有可用提供方时再开启。
-
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `--embeddings <MODE>` | `off` | `off` 跳过嵌入；`auto` 探测提供方，不可用时带告警回退；`required` 在提供方不可达时硬失败。 |
-| `--embedding-provider <ID>` | `ollama` | 提供方注册键。目前仅实现了 `ollama`。 |
-| `--embedding-model <MODEL>` | `nomic-embed-text` | 提供方所理解的模型 id（对 Ollama 即 `ollama list` 中的名称）。 |
-| `--embedding-endpoint <URL>` | `http://127.0.0.1:11434` | 提供方端点。 |
-
-### 日志与颜色
-
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `--log-to-console` | 关 | 将日志发往 stderr，而非带时间戳的 `deslop-<timestamp>.log` 文件。 |
-| `--log-level <LEVEL>` | `info` | `error` \| `warn` \| `info` \| `debug` \| `trace`。被 `RUST_LOG` 覆盖。 |
-| `--no-color` | 关 | 关闭 stderr 前导与摘要中的颜色。 |
-| `--no-incremental` | 关 | 禁止读写 `<root>/.deslop/cache/` 下的磁盘指纹缓存和嵌入缓存。报告和日志仍会正常写出。 |
-
-### 开发与模拟参数
-
-这些参数绕过或重放流水线，不属于常规使用：`--from-report <FILE>` 将已有的 JSON 报告重新渲染为 `.txt`/`.html`；`--debug-ast <FILE>` 打印单个文件的归一化 AST 后退出；`--rerun-touch`、`--rerun-remove` 和 `--rerun-add` 通过增量会话重放文件变更，以演练实时更新路径。
-
-## 优先级与环境
-
-当同一项设置来自多处时，由谁胜出如下：
-
-- **阈值：** `--no-fail-over` → `--fail-over <n>` → `[threshold] max_duplication_percent` → 关闭。
-- **按语言拆分：** `--split-by-language` 参数**或** `[report] split_by_language` — 任一项都会启用。
-- **排名（`structural_only`）：** VS Code 扩展设置覆盖 `.deslop.toml`。
-
-另有两个环境变量同样生效：
-
-- **`RUST_LOG`** — 以标准 `tracing` 过滤器语法覆盖 `--log-level`。
-- **`NO_COLOR`** — 即使没有 `--no-color` 也关闭颜色。当 stderr 不是终端时也会自动抑制颜色。
+Deslop 把该代码对的 JSON 判定打印到 stdout。偏移量以字节计，结束位置不包含在内。每个范围必须对应一个已指纹化的出现位置；不接受集群 ID。
 
 <span id="report-output"></span>
 
 ## 报告输出
 
-普通扫描默认生成 JSON、文本和 HTML，除非禁用了某种格式。JSON 才是产品本身；文本和 HTML 是基于同一份数据的渲染器。TXT 或 HTML 中不会出现任何 JSON 里没有的结论。
+扫描会把 JSON、文本和 HTML 写到 `.deslop/`，除非某种格式被禁用。三者渲染同一份数据，文本或 HTML 中不会出现 JSON 里没有的内容。
 
-### JSON — 规范格式
+- **JSON**（`deslop-report.json`）是智能体和工具解析的规范报告。UTF-8、LF 换行、无 BOM。克隆按 `mass` 降序排列，平局由稳定 ID 决定；shape-only 发现排在其后，不参与排名。逐字段结构见 [For AI → 读取 JSON](/zh/docs/for-ai/#read-the-json)。
+- **文本**（`deslop-report.txt`）用于终端和 CI 日志，按排名列出类型、质量、出现次数和位置。
+- **HTML**（`deslop-report.html`）是单个自包含文件，CSS 内联、无网络请求。它额外提供语法高亮片段、按克隆类型折叠的分组，以及“Run details”页脚。
 
-`deslop-report.json` 是智能体读取的内容，也是 schema 消费方应当解析的内容。逐字段的完整结构参见[面向 AI → 读取 JSON](/zh/docs/for-ai/#read-the-json)。
-
-保证：
-
-- schema 中标记为 `optional` 的字段可能缺失。标记为 `required` 的字段始终存在。
-- 克隆按 `mass` 降序排列，相同时用稳定 ID 排序。参考信息排在克隆之后，没有克隆排名。
-- UTF-8。无 BOM。LF 行尾。
-
-### TXT — 终端格式
-
-`deslop-report.txt` 是供终端和 CI 日志读取的逐行报告。克隆条目按排名显示类型、整数质量、出现次数和源位置。配对相似度需要单独请求；报告不会声称提取必然安全。
-
-### HTML — 可移植格式
-
-`deslop-report.html` 是单个文件。所有 CSS 均已内联。无网络请求。把它放进 CI 工件、用邮件发送、在飞机上打开 — 它都能渲染。
-
-HTML 渲染器使用与 JSON 和 TXT 相同的排名和相同的簇摘要。它额外提供：
-
-- 语法高亮的示例代码片段，过长的片段和额外的出现位置会折叠进可展开的开关中
-- 每个重复组上的「AI 匹配」徽章和影响力标签
-- 在可折叠的「运行详情」页脚中，每组一张信号表（结构 / 词元 / 嵌入 / 融合）
-
-它不会额外提供：JSON 中没有的评分、超出 `summary` 字段的评论，或指向外部服务的链接。
-
-### 文件写到哪里
-
-Deslop 写出的一切都会进入被扫描项目根目录下的单个 `.deslop/` 目录，或你通过 `--output` 传入的前缀。若只想生成 JSON 报告，请抑制另外两种格式：
-
-```bash
-deslop . --notext --nohtml      # 写入 .deslop/deslop-report.json
-```
-
-诊断信息与报告是分开的。默认情况下，诊断信息通过带结构化字段的 `tracing` 写入一个带时间戳的日志文件（`.deslop/logs/deslop-<timestamp>.log`）；传入 `--log-to-console` 可改为将其发送到 `stderr`。人类可读的前言和摘要始终输出到 `stderr`。
+日志与报告分开：默认写到 `.deslop/logs/` 下带时间戳的文件，使用 `--log-to-console` 时写到 stderr。人类可读的摘要始终写到 stderr。
 
 <span id="exit-codes"></span>
 
 ## 退出码
 
-| 退出码 | 含义 |
+| 代码 | 含义 |
 | --- | --- |
-| `0` | 已完成。重复低于阈值，或未设置阈值。 |
-| `1` | 运行时错误 — 扫描路径不存在、分析失败、I/O 错误，或一个标记为 `required` 的嵌入提供方无法访问。 |
-| `2` | 用法错误 — 未知标志，或超出范围 / 非有限的阈值，在运行开始前即被拒绝。 |
-| `3` | **阈值被突破。** 完整报告仍会写入磁盘，以便呈现这些重复。 |
-
-失败通过这些退出码和 `stderr` 上的结构化错误呈现。
-
-退出码 `3` 是 **CI 门禁**。它只在你主动启用时才会触发 — 通过传入 `--fail-over <percent>`，或设置 `[threshold] max_duplication_percent`。详见[基于重复阈值设置 CI 门禁](/zh/docs/#gate-ci-on-a-duplication-threshold)的演练，或直接使用 [GitHub Action](/zh/docs/github-action/)。
+| `0` | 完成，没有门禁被突破。 |
+| `1` | 运行时错误：扫描路径不存在、`.deslop.toml` 无效、分析或 I/O 失败，或 `required` 的嵌入提供方不可达。 |
+| `2` | 用法错误：未知参数或 `--fail-over` 取值越界。 |
+| `3` | [CI 门禁](#ci-gate)被突破。报告照常写出。 |
