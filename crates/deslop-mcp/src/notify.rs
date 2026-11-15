@@ -78,38 +78,46 @@ const METHOD_RESOURCES_UPDATED: &str = "notifications/resources/updated";
 const METHOD_REPORT_CHANGED: &str = "notifications/deslop/reportChanged";
 
 /// Pushes the custom report change and, for subscribers, the standard update.
+/// A failed write is logged: a client that stopped reading must not stop
+/// the analysis thread that reports to it.
 pub(crate) fn push_report_changed(sender: &NotificationSender, generation: u64) {
-    let Ok(mut output) = sender.0.lock() else {
-        return;
-    };
+    if let Err(error) = write_report_changed(sender, generation) {
+        tracing::warn!(%error, generation, "failed to push report change");
+    }
+}
+
+/// Writes the report-change frames under one lock.
+fn write_report_changed(sender: &NotificationSender, generation: u64) -> io::Result<()> {
+    let mut output = sender
+        .0
+        .lock()
+        .map_err(|_| io::Error::other("mcp stdout mutex poisoned"))?;
     if output.report_subscribed {
         write_notification(
             &mut *output.writer,
             METHOD_RESOURCES_UPDATED,
             &json!({ "uri": REPORT_URI }),
-        );
+        )?;
     }
     write_notification(
         &mut *output.writer,
         METHOD_REPORT_CHANGED,
         &json!({ "generation": generation }),
-    );
+    )
 }
 
 /// Writes one JSON-RPC notification frame.
-fn write_notification(writer: &mut dyn Write, method: &str, params: &Value) {
+fn write_notification(writer: &mut dyn Write, method: &str, params: &Value) -> io::Result<()> {
     write_frame(
         writer,
         &json!({ "jsonrpc": JSONRPC_VERSION, "method": method, "params": params }),
-    );
+    )
 }
 
 /// Serialises `value` as a newline-terminated JSON frame and flushes `writer`.
-fn write_frame(writer: &mut dyn Write, value: &Value) {
-    let Ok(bytes) = serde_json::to_vec(value) else {
-        return;
-    };
-    let _ = writer.write_all(&bytes);
-    let _ = writer.write_all(b"\n");
-    let _ = writer.flush();
+fn write_frame(writer: &mut dyn Write, value: &Value) -> io::Result<()> {
+    let mut bytes = serde_json::to_vec(value).map_err(io::Error::other)?;
+    bytes.push(b'\n');
+    writer.write_all(&bytes)?;
+    writer.flush()
 }
