@@ -137,7 +137,22 @@ pub(crate) fn carried_text_differs<S: BuildHasher>(
             _ => false,
         }
     });
-    carried && !same_text
+    // ACCURACY QUARANTINE ([FUSED-CONTENT-GATE-LITERAL-BOUND]). Deleted: the
+    // refusal of every pair whose two endpoints are each carried by a literal
+    // whose texts are not near-copies. It judged the pair by the literal alone
+    // and ignored byte-identical code around it, so symfony/console's
+    // `testSectionOutput` / `testSectionOutputWithoutDecoration`, which the
+    // corpus register judges CLEARLY IN and which differ only by ANSI escapes
+    // inside their `<<<TABLE` heredocs, lost their link and the judged pair
+    // fell from 61/61 to 14/61 lines covered against v0.42.0.
+    // Pinned by `judged_string_pairs` (console/Tests/Helper/TableTest.php).
+    assert!(
+        !carried || same_text,
+        "[FUSED-CONTENT-GATE-LITERAL-BOUND] quarantined: refusing literal-carried \
+         pairs on literal text alone drops judged copies whose surrounding code \
+         is identical (judged_string_pairs, console TableTest.php)"
+    );
+    false
 }
 
 /// Raw source bytes of one literal.

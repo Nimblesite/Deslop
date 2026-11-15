@@ -41,9 +41,9 @@ use crate::common::{
 };
 
 /// Every judged pair in the fixture register.
-const JUDGED_PAIRS: usize = 21;
+const JUDGED_PAIRS: usize = 23;
 /// Source files in the fixture tree, licences and register excluded.
-const SOURCE_FILES: u64 = 22;
+const SOURCE_FILES: u64 = 23;
 /// Directory names of the judged-unrelated negatives inside a mixed scan.
 const OSPREY_DIR: &str = "osprey";
 const DATAPROVIDER_DIR: &str = "dataprovider";
