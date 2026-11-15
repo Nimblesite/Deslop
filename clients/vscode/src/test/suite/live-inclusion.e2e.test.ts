@@ -5,6 +5,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { DidChangeConfigurationNotification, DocumentDiagnosticRequest, type FullDocumentDiagnosticReport } from "vscode-languageclient/node";
+import type { ExtensionApi } from "../../extension";
 import type { ReportStore } from "../../reportStore";
 import type { Report } from "../../types/report";
 import { decoratableClusters } from "../../decorations/manager";
@@ -17,7 +18,10 @@ const FIRST_FILE = "Alpha.cs";
 const EXPECTED_CLUSTER_COUNT = 3;
 const DIAGNOSTICS_ENABLED = "diagnostics.enabled";
 
-function settledReport(store: ReportStore): Promise<Report> {
+/** The activated extension's store and the signals runtime it belongs to. */
+interface Live { readonly store: ReportStore; readonly run: ExtensionApi["effect"] }
+
+function settledReport(store: ReportStore, run: ExtensionApi["effect"]): Promise<Report> {
   return new Promise((resolve) => {
     const choose = () => {
       const { visibleReport, lifecycle } = store.current;
@@ -25,12 +29,12 @@ function settledReport(store: ReportStore): Promise<Report> {
         subscription.dispose(); resolve(visibleReport);
       }
     };
-    const subscription = observeStoreChanges(store, choose);
+    const subscription = observeStoreChanges(store, choose, run);
     choose();
   });
 }
 
-function changeConfig(store: ReportStore, configPath: string, content: string | null, includes: readonly string[]): Promise<Report> {
+function changeConfig({ store, run }: Live, configPath: string, content: string | null, includes: readonly string[]): Promise<Report> {
   const before = store.current.generation;
   return new Promise((resolve, reject) => {
     const subscription = observeStoreChanges(store, (state) => {
@@ -38,7 +42,7 @@ function changeConfig(store: ReportStore, configPath: string, content: string | 
       if (state.generation > before && report && JSON.stringify(report.metrics.total_includes) === JSON.stringify(includes)) {
         subscription.dispose(); resolve(report);
       }
-    });
+    }, run);
     try {
       if (content === null) fs.unlinkSync(configPath);
       else fs.writeFileSync(configPath, content);
@@ -52,7 +56,8 @@ suite("live include configuration", () => {
     const store = api.reportStore;
     const client = api.client;
     assert.ok(store && client);
-    const original = await settledReport(store);
+    const live: Live = { store, run: api.effect };
+    const original = await settledReport(store, api.effect);
     assert.deepEqual(original.metrics.total_includes, DEFAULT_INCLUDES);
     assert.ok(original.clusters.length > 0);
     const configPath = path.join(fixtureRoot(), CONFIG_NAME);
@@ -64,7 +69,7 @@ suite("live include configuration", () => {
     try {
       const initialDiagnostic = await client.sendRequest<FullDocumentDiagnosticReport>(DocumentDiagnosticRequest.method, { textDocument: { uri: fixtureUri(FIRST_FILE).toString() } });
       assert.equal(initialDiagnostic.items.length, 1, "enabled diagnostics must be visible before exclusion");
-      const excluded = await changeConfig(store, configPath, EMPTY_CONFIG, []);
+      const excluded = await changeConfig(live, configPath, EMPTY_CONFIG, []);
       assert.deepEqual(excluded.clusters, original.clusters, "cluster IDs, paths, kinds, copies, ranks and mass survive");
       assert.equal(excluded.metrics.duplicated_loc, 0);
       assert.equal(excluded.metrics.duplication_percent, 0);
@@ -76,7 +81,7 @@ suite("live include configuration", () => {
       assert.deepEqual(diagnostics.items, []);
     } finally {
       try {
-      const restored = await changeConfig(store, configPath, saved, DEFAULT_INCLUDES);
+      const restored = await changeConfig(live, configPath, saved, DEFAULT_INCLUDES);
       assert.deepEqual(restored.clusters, original.clusters);
       assert.equal(restored.metrics.duplicated_loc, original.metrics.duplicated_loc);
       assert.equal(restored.metrics.duplication_percent, original.metrics.duplication_percent);

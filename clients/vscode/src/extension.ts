@@ -79,6 +79,9 @@ export interface ExtensionApi {
   readonly reportStore: ReportStore | undefined;
   /** The Duplication panel VS Code is rendering ([VSIX-METRICS-PANEL]). */
   readonly metricsView: MetricsProvider | undefined;
+  /** The signals runtime `reportStore` belongs to: a consumer loaded
+   * outside this bundle subscribes to the store through this `effect`. */
+  readonly effect: typeof effect;
 }
 
 // [VSIX-ACTIVATION] Entry point: resolve binaries, start the LSP client,
@@ -299,6 +302,7 @@ export function currentApi(): ExtensionApi {
     get metricsView() {
       return activeMetricsView;
     },
+    effect,
   };
 }
 

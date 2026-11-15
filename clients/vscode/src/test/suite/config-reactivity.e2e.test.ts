@@ -6,6 +6,7 @@
 // file write → LSP watcher → reportChanged → store signals → the tree view
 // VS Code renders — with the bundled CLI as the oracle at every step.
 import { observeStoreChanges } from "../storeChanges";
+import type { ExtensionApi } from "../../extension";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -53,7 +54,7 @@ function readScreen(view: MetricsProvider): Screen | undefined {
   return { label, description: String(node.description ?? ""), icon };
 }
 
-function settled(store: ReportStore): Promise<void> {
+function settled(store: ReportStore, run: ExtensionApi["effect"]): Promise<void> {
   return new Promise((resolve) => {
     const check = () => {
       const { visibleReport, lifecycle } = store.current;
@@ -61,7 +62,7 @@ function settled(store: ReportStore): Promise<void> {
       subscription.dispose();
       resolve();
     };
-    const subscription = observeStoreChanges(store, check);
+    const subscription = observeStoreChanges(store, check, run);
     check();
   });
 }
@@ -148,7 +149,7 @@ suite("config reactivity", () => {
     const api = await waitForReport();
     const { metricsView: view, reportStore: store } = api;
     assert.ok(view && store, "the Duplication panel and store are exposed");
-    await settled(store);
+    await settled(store, api.effect);
     const loop: Loop = { view, store, configPath: path.join(fixtureRoot(), CONFIG_NAME) };
     const saved = fs.existsSync(loop.configPath) ? fs.readFileSync(loop.configPath, "utf8") : null;
     const plain = scanWithBundledCli(fixtureRoot()).metrics;
