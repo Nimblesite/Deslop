@@ -90,4 +90,4 @@ Legacy code is contamination (AGENTS.md). Every path that existed only to accept
 - [x] VSIX: move `extension.ts` and every test subscriber from `onDidChange` to `effect()`.
 - [x] VSIX: handle the no-report case at `providers.ts:260` and `main.tsx:60` without `undefined`. Convert the `legacyMetrics` and no-include-set tests to assert that a report without `total_includes` is refused at parse.
 - [x] Re-run the sweep (`legacy`, `older`, `predat`, `retired`, `compat`, `formerly`, `serde(default)` on required fields) and get zero production hits.
-- [ ] `make ci` green, coverage at or above `coverage-thresholds.json`, and the corpus comparison (`scripts/compare-versions.sh v0.42.0 HEAD`) shows no accuracy regression.
+- [x] `make ci` green, coverage at or above `coverage-thresholds.json`, and the corpus comparison (`scripts/compare-versions.sh v0.42.0 HEAD`) shows no accuracy regression.
