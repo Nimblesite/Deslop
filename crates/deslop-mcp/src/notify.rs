@@ -13,7 +13,7 @@
 use std::{
     fmt,
     io::{self, Write},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use serde_json::{json, Value};
@@ -52,16 +52,20 @@ impl NotificationSender {
         })))
     }
 
+    /// Locks the connection's output; a poisoned lock is an I/O error.
+    fn output(&self) -> io::Result<MutexGuard<'_, ClientOutput>> {
+        self.0
+            .lock()
+            .map_err(|_| io::Error::other("mcp stdout mutex poisoned"))
+    }
+
     /// Flushes the reply before applying its subscription change under the same lock.
     pub(crate) fn write_response(
         &self,
         bytes: &[u8],
         subscription: Option<bool>,
     ) -> io::Result<()> {
-        let mut output = self
-            .0
-            .lock()
-            .map_err(|_| io::Error::other("mcp stdout mutex poisoned"))?;
+        let mut output = self.output()?;
         output.writer.write_all(bytes)?;
         output.writer.flush()?;
         if let Some(subscribed) = subscription {
@@ -88,10 +92,7 @@ pub(crate) fn push_report_changed(sender: &NotificationSender, generation: u64) 
 
 /// Writes the report-change frames under one lock.
 fn write_report_changed(sender: &NotificationSender, generation: u64) -> io::Result<()> {
-    let mut output = sender
-        .0
-        .lock()
-        .map_err(|_| io::Error::other("mcp stdout mutex poisoned"))?;
+    let mut output = sender.output()?;
     if output.report_subscribed {
         write_notification(
             &mut *output.writer,
