@@ -18,7 +18,7 @@ private const val REPORT_HTML: String =
 
 /** A populated structured report — the shape `deslop.lsp.reportJson` emits for the native tree. */
 private const val REPORT_JSON: String =
-    "{\"clusters\":[{\"id\":\"a1\",\"weight\":1000.0,\"size\":2,\"bucket\":\"identical\"," +
+    "{\"clusters\":[{\"id\":\"a1\",\"mass\":1000,\"kind\":\"identical\"," +
         "\"occurrences\":[" +
         "{\"path\":\"lib/api/client.dart\",\"start_line\":10,\"end_line\":20,\"hidden\":false}," +
         "{\"path\":\"lib/api/server.dart\",\"start_line\":5,\"end_line\":15,\"hidden\":false}]}]}"

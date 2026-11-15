@@ -7,12 +7,12 @@ import kotlin.test.assertTrue
 
 /**
  * A crafted worst-offenders report shared by the grouping and panel tests. It holds
- * two `identical` clusters the engine stamped with different languages (Dart, C#),
+ * two `identical` clusters whose occurrences the engine stamped with different languages (Dart, C#),
  * one `nearly_identical` and one `structural_only` cluster, occurrences spanning
  * several folders, an unknown key to prove tolerance, and a cluster whose
  * `occurrence_count` exceeds its carried occurrence list (the live wire caps that
- * list). Every cluster carries the engine's `rank`, `language` and
- * `occurrence_count` because the panel reads those verbatim and derives none of
+ * list). Every cluster carries the engine's `rank`, `mass` and
+ * `occurrence_count`, and every occurrence its `language`, because the panel reads those verbatim and derives none of
  * them. Ranks run worst-first: cccc (1) > aaaa (2) > bbbb (3) > dddd (4).
  */
 internal val OFFENDERS_FIXTURE_JSON: String =
@@ -20,36 +20,35 @@ internal val OFFENDERS_FIXTURE_JSON: String =
     {
       "clusters": [
         {
-          "id": "cccc", "rank": 1, "weight": 1200.0, "size": 2, "occurrence_count": 2,
-          "bucket": "nearly_identical", "language": "dart",
-          "category": "logic", "unknown_field": "ignored",
+          "id": "cccc", "rank": 1, "mass": 1200, "occurrence_count": 2,
+          "kind": "nearly_identical", "unknown_field": "ignored",
           "occurrences": [
-            { "path": "lib/api/thing.dart", "start_line": 5, "end_line": 9, "hidden": false },
-            { "path": "app/thing.dart", "start_line": 1, "end_line": 5, "hidden": false }
+            { "language": "dart", "path": "lib/api/thing.dart", "start_line": 5, "end_line": 9, "hidden": false },
+            { "language": "dart", "path": "app/thing.dart", "start_line": 1, "end_line": 5, "hidden": false }
           ]
         },
         {
-          "id": "aaaa", "rank": 2, "weight": 1000.0, "size": 3, "occurrence_count": 3,
-          "bucket": "identical", "language": "dart", "category": "logic",
+          "id": "aaaa", "rank": 2, "mass": 1000, "occurrence_count": 3,
+          "kind": "identical",
           "occurrences": [
-            { "path": "lib/api/client.dart", "start_line": 10, "end_line": 40, "hidden": false },
-            { "path": "lib/api/client2.dart", "start_line": 10, "end_line": 40, "hidden": false }
+            { "language": "dart", "path": "lib/api/client.dart", "start_line": 10, "end_line": 40, "hidden": false },
+            { "language": "dart", "path": "lib/api/client2.dart", "start_line": 10, "end_line": 40, "hidden": false }
           ]
         },
         {
-          "id": "bbbb", "rank": 3, "weight": 800.0, "size": 2, "occurrence_count": 2,
-          "bucket": "identical", "language": "csharp", "category": "data",
+          "id": "bbbb", "rank": 3, "mass": 800, "occurrence_count": 2,
+          "kind": "identical",
           "occurrences": [
-            { "path": "src/Service.cs", "start_line": 1, "end_line": 20, "hidden": false },
-            { "path": "src/Other.cs", "start_line": 1, "end_line": 20, "hidden": false }
+            { "language": "csharp", "path": "src/Service.cs", "start_line": 1, "end_line": 20, "hidden": false },
+            { "language": "csharp", "path": "src/Other.cs", "start_line": 1, "end_line": 20, "hidden": false }
           ]
         },
         {
-          "id": "dddd", "rank": 4, "weight": 500.0, "size": 2, "occurrence_count": 2,
-          "bucket": "structural_only", "language": "python", "category": "logic",
+          "id": "dddd", "rank": 4, "mass": 500, "occurrence_count": 2,
+          "kind": "structural_only",
           "occurrences": [
-            { "path": "lib/util/helper.py", "start_line": 3, "end_line": 10, "hidden": false },
-            { "path": "tools/helper.py", "start_line": 3, "end_line": 10, "hidden": false }
+            { "language": "python", "path": "lib/util/helper.py", "start_line": 3, "end_line": 10, "hidden": false },
+            { "language": "python", "path": "tools/helper.py", "start_line": 3, "end_line": 10, "hidden": false }
           ]
         }
       ]
@@ -80,7 +79,7 @@ internal class DeslopOffenderGroupingTest {
         )
         assertEquals(
             listOf("Dart", "C#"),
-            members.map { DeslopSupportedFiles.languageName(it.language) },
+            members.map { DeslopSupportedFiles.languageName(it.firstOccurrence.language) },
             "the two identical clusters are in different languages yet share the Identical node",
         )
     }
@@ -152,7 +151,7 @@ internal class DeslopOffenderGroupingTest {
         assertEquals(
             listOf("Identical", "Nearly identical", "Structural only"),
             cloneTypeGroups.map { assertIs<GroupNode>(it).value },
-            "groups order by their summed weight: Identical 1800 > Nearly identical 1200 > Structural only 500",
+            "groups order by their summed mass: Identical 1800 > Nearly identical 1200 > Structural only 500",
         )
     }
 
@@ -161,9 +160,9 @@ internal class DeslopOffenderGroupingTest {
         val flat = DeslopOffenderGrouping.build(OFFENDERS_FIXTURE_JSON, emptyList())
         val clientCluster = flat.map { assertIs<ClusterNode>(it) }.first { it.cluster.id == "aaaa" }
         assertEquals(
-            "3 clones · client.dart · w=1000",
+            "3 clones · client.dart · mass 1000",
             clientCluster.label,
-            "a cluster leaf reads as clone count, first-occurrence basename, and rounded weight",
+            "a cluster leaf reads as clone count, first-occurrence basename, and mass",
         )
         assertEquals(
             listOf("lib/api/client.dart:10", "lib/api/client2.dart:10"),
@@ -192,26 +191,26 @@ internal class DeslopOffenderGroupingTest {
         assertEquals("TypeScript", DeslopSupportedFiles.languageName("tsx"), "TSX renders under TypeScript")
         assertEquals("F#", DeslopSupportedFiles.languageName("fsharp"))
         assertEquals("Other", DeslopSupportedFiles.languageName("unknown"), "the engine's own fallback id groups under Other")
-        assertEquals("Other", DeslopSupportedFiles.languageName(""), "a report predating the field groups under Other")
+        assertEquals("Other", DeslopSupportedFiles.languageName(""), "an empty id groups under Other")
         assertEquals("Other", DeslopSupportedFiles.languageName(null))
     }
 
     @Test
-    fun clusterOrderIsTheEnginesRankNotALocalWeightSort() {
-        // Deliberately out of weight order in the JSON: the engine ranked the
+    fun clusterOrderIsTheEnginesRankNotALocalMassSort() {
+        // Deliberately out of mass order in the JSON: the engine ranked the
         // lighter cluster first, and the panel must not re-sort it
         // ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
         val json =
             """{"clusters":[
-              {"id":"light","rank":1,"weight":10.0,"size":2,"occurrence_count":2,"bucket":"identical",
-               "language":"rust","occurrences":[{"path":"a/one.rs","start_line":1,"end_line":2}]},
-              {"id":"heavy","rank":2,"weight":900.0,"size":2,"occurrence_count":2,"bucket":"identical",
-               "language":"rust","occurrences":[{"path":"a/two.rs","start_line":1,"end_line":2}]}
+              {"id":"light","rank":1,"mass":10,"occurrence_count":2,"kind":"identical",
+               "occurrences":[{"language":"rust","path":"a/one.rs","start_line":1,"end_line":2}]},
+              {"id":"heavy","rank":2,"mass":900,"occurrence_count":2,"kind":"identical",
+               "occurrences":[{"language":"rust","path":"a/two.rs","start_line":1,"end_line":2}]}
             ]}""".trimIndent()
         assertEquals(
             listOf("light", "heavy"),
             DeslopOffenderGrouping.build(json, emptyList()).map { assertIs<ClusterNode>(it).cluster.id },
-            "the engine's rank decides worst-first order, even against the weights",
+            "the engine's rank decides worst-first order, even against the masses",
         )
     }
 
@@ -220,13 +219,13 @@ internal class DeslopOffenderGroupingTest {
         // The live wire caps `occurrences`, so the count comes off the engine's
         // `occurrence_count` and never off the carried list.
         val json =
-            """{"clusters":[{"id":"capped","rank":1,"weight":5.0,"size":2,"occurrence_count":57,
-              "bucket":"identical","language":"rust",
-              "occurrences":[{"path":"a/one.rs","start_line":1,"end_line":2}]}]}""".trimIndent()
+            """{"clusters":[{"id":"capped","rank":1,"mass":5,"occurrence_count":57,
+              "kind":"identical",
+              "occurrences":[{"language":"rust","path":"a/one.rs","start_line":1,"end_line":2}]}]}""".trimIndent()
         val node = assertIs<ClusterNode>(DeslopOffenderGrouping.build(json, emptyList()).single())
         assertEquals(1, node.cluster.occurrences.size, "fixture: only one occurrence travelled")
         assertEquals(
-            "57 clones · one.rs · w=5",
+            "57 clones · one.rs · mass 5",
             node.label,
             "the leaf reports the engine's count, not the length of the truncated list",
         )
@@ -235,7 +234,7 @@ internal class DeslopOffenderGroupingTest {
     @Test
     fun rootLevelFileGroupsUnderRootFolderAndOtherLanguage() {
         val json =
-            """{"clusters":[{"id":"zzzz","weight":10.0,"size":2,"bucket":"loosely_similar",""" +
+            """{"clusters":[{"id":"zzzz","mass":10,"kind":"loosely_similar",""" +
                 """"occurrences":[{"path":"Makefile","start_line":1,"end_line":2}]}]}"""
         assertEquals(
             "(root) (1)",
@@ -255,23 +254,23 @@ internal class DeslopOffenderGroupingTest {
     }
 
     @Test
-    fun everyCloneTypeBucketRendersItsHumanLabel() {
-        val buckets = mapOf(
+    fun everyCloneKindRendersItsHumanLabel() {
+        val kinds = mapOf(
             "identical" to "Identical",
             "nearly_identical" to "Nearly identical",
             "structural_only" to "Structural only",
             "loosely_similar" to "Loosely similar",
             "same_behavior" to "Same behavior",
-            "mystery_bucket" to "mystery_bucket",
+            "mystery_kind" to "mystery_kind",
         )
-        for ((bucket, expected) in buckets) {
+        for ((kind, expected) in kinds) {
             val json =
-                """{"clusters":[{"id":"x","weight":1.0,"size":2,"bucket":"$bucket",""" +
+                """{"clusters":[{"id":"x","mass":1,"kind":"$kind",""" +
                     """"occurrences":[{"path":"a/b.rs","start_line":1,"end_line":2}]}]}"""
             assertEquals(
                 "$expected (1)",
                 DeslopOffenderGrouping.build(json, listOf(Axis.CLONE_TYPE)).single().label,
-                "bucket '$bucket' renders as '$expected'",
+                "kind '$kind' renders as '$expected'",
             )
         }
     }

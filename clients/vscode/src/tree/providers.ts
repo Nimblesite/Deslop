@@ -363,8 +363,7 @@ export class MetricsProvider extends LifecycleAwareProvider {
 // totals, with the configured duplication gate and an over/within verdict
 // appended whenever `.deslop.toml` sets one.
 function metricsHeadline(metrics: RepoMetrics): MetricsHeadlineNode {
-  const caption = totalCountsCaption(metrics.total_includes);
-  const includes = caption ? ` · total counts: ${caption}` : "";
+  const includes = ` · total counts: ${totalCountsCaption(metrics.total_includes)}`;
   const detail =
     `${metrics.analysed_loc.toLocaleString()} LOC analysed · ` +
     `${metrics.duplicated_loc.toLocaleString()} duplicated · ` +

@@ -69,8 +69,7 @@ object DeslopSupportedFiles {
     /**
      * Human display name for the language id the engine stamped on a cluster
      * ([PIPELINE-LANG-TRAIT]). Unknown or absent ids map to [OTHER_LANGUAGE] so
-     * every cluster lands in a group — including one from a report written
-     * before the engine carried the field.
+     * every cluster lands in a group.
      */
     fun languageName(languageId: String?): String =
         languages[languageId?.lowercase()]?.label ?: OTHER_LANGUAGE

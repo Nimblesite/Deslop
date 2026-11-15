@@ -67,8 +67,7 @@ export function cluster(
  * A store already carrying `snapshot`. The `new ReportStore()` +
  * `setSnapshot(..)` pair was the single largest scaffolding cluster in
  * the TypeScript corpus — Deslop scored the copies against this repo's
- * own report. Suites that must observe the seeding `onDidChange` still
- * wire the listener themselves before calling `setSnapshot`.
+ * own report.
  */
 export function storeWith(snapshot: Report, generation = 0): ReportStore {
   const store = new ReportStore();
