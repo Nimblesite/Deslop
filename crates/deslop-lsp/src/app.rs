@@ -264,7 +264,8 @@ fn required_flag_value<'a>(args: &'a [String], index: usize, flag: &str) -> Resu
         .ok_or_else(|| anyhow!("{flag} requires a value"))
 }
 
-/// Rejects removed startup flags before they can silently change state.
+/// Rejects every startup flag the server does not define, so no flag is
+/// accepted and ignored.
 fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
@@ -274,7 +275,9 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
             }
             "--debug" | "--stdio" => index = index.saturating_add(1),
             flag if flag.starts_with('-') => {
-                return Err(anyhow!("unsupported LSP startup flag {flag}"));
+                return Err(anyhow!(
+                    "unsupported LSP startup flag {flag}; configure Deslop through settings"
+                ));
             }
             _ => index = index.saturating_add(1),
         }

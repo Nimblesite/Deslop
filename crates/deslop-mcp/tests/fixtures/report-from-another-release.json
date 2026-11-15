@@ -21,12 +21,14 @@
     "per_file": [
       {
         "path": "Alpha.cs",
+        "language": "csharp",
         "analysed_loc": 17,
         "duplicated_loc": 17,
         "duplication_percent": 100.0
       },
       {
         "path": "Beta.cs",
+        "language": "csharp",
         "analysed_loc": 17,
         "duplicated_loc": 17,
         "duplication_percent": 100.0
@@ -47,6 +49,7 @@
       "occurrences": [
         {
           "path": "Alpha.cs",
+          "language": "csharp",
           "start_byte": 0,
           "end_byte": 391,
           "start_line": 1,
@@ -55,6 +58,7 @@
         },
         {
           "path": "Beta.cs",
+          "language": "csharp",
           "start_byte": 0,
           "end_byte": 392,
           "start_line": 1,

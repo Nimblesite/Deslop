@@ -257,7 +257,18 @@ pub(super) fn cached_report() -> serde_json::Value {
             "duplication_percent": 20.0,
             "clusters_total": 1,
             "duplicated_files": 2,
-            "threshold": {"percent": 0.0, "breached": false, "source": "none"}
+            "threshold": {"percent": 0.0, "breached": false, "source": "none"},
+            "total_includes": ["identical", "nearly_identical"],
+            "per_kind": [],
+            "per_file": [],
+            "folders": []
+        },
+        "files_skipped": [],
+        "routing": {
+            "nearly_identical_min_shape": 0.9,
+            "nearly_identical_min_content": 0.7,
+            "similar_min_content": 0.5,
+            "shape_only_max_content": 0.05
         },
         "schema_doc": "",
         "boilerplate_hints": [],
@@ -270,8 +281,8 @@ pub(super) fn cached_report() -> serde_json::Value {
             "mass": 12,
             "canonical_node_count": 6,
             "occurrences": [
-                {"path": "Alpha.cs", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false},
-                {"path": "Beta.cs", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false}
+                {"path": "Alpha.cs", "language": "csharp", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false},
+                {"path": "Beta.cs", "language": "csharp", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false}
             ],
             "occurrences_total": 2,
             "occurrence_count": 2,

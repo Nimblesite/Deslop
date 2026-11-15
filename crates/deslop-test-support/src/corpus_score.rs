@@ -429,8 +429,9 @@ fn score_list(report: &Value, register: &Value, verdict: &str) -> Result<Vec<Sco
 ///
 /// Returns an error when a register range or clone type is malformed — an
 /// entry that names nothing must fail loudly rather than silently score as
-/// correct.
+/// correct — or when a report cluster carries no `kind`.
 pub fn score_repo(name: &str, register: &Value, report: &Value) -> Result<RepoScore> {
+    coverage::require_kinds(name, report)?;
     let mut entries = score_list(report, register, CLEARLY_IN)?;
     entries.extend(score_list(report, register, CLEARLY_OUT)?);
 

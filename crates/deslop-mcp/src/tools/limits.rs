@@ -330,11 +330,12 @@ mod tests {
         const END_BYTE: usize = 383;
         const START_LINE: usize = 1;
         const END_LINE: usize = 19;
+        const LANGUAGE: &str = "csharp";
         let path = format!(
             "/workspace{}/Calculation{index}.cs",
             PATH_SEGMENT.repeat(PATH_DEPTH)
         );
-        json!({"path": path, "start_byte": START_BYTE, "end_byte": END_BYTE,
+        json!({"path": path, "language": LANGUAGE, "start_byte": START_BYTE, "end_byte": END_BYTE,
             "start_line": START_LINE, "end_line": END_LINE, "hidden": false})
     }
 

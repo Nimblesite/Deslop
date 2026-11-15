@@ -291,7 +291,7 @@ fn assert_table_cluster_is_honest(root: &Path, cluster: &Value) -> Result<()> {
 /// section nothing consumes ([RANK-MASS-SUM]).
 #[test]
 fn retired_data_clone_knobs_are_refused_on_a_corpus_with_tables() -> Result<()> {
-    const RANKING_RETIRED: &str = "the [ranking] section is retired";
+    const RANKING_RETIRED: &str = "unknown field `ranking`";
     const TABLE_MIN_NODES: &str = "20";
     let (_baseline_workspace, _baseline_root, baseline) = tables_report(None)?;
     assert_ne!(rankable(&baseline), Vec::new());

@@ -236,7 +236,7 @@ fn mass_ranks_family_first_and_pair_second() -> Result<()> {
 }
 
 /// What a config that still carries `[ranking]` is told.
-const RANKING_RETIRED: &str = "the [ranking] section is retired";
+const RANKING_RETIRED: &str = "unknown field `ranking`";
 const CONFIG_FILE: &str = ".deslop.toml";
 /// Every body the section used to accept, valid or not.
 const RETIRED_RANKING_BODIES: [&str; 8] = [
