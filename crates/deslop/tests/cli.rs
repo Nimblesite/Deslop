@@ -6,7 +6,7 @@
 pub(crate) mod support;
 
 #[path = "cli/bucket_groups.rs"]
-mod bucket_groups;
+pub(crate) mod bucket_groups;
 #[path = "cli/cache_and_debug.rs"]
 mod cache_and_debug;
 #[path = "cli/category_members.rs"]

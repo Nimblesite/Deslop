@@ -53,7 +53,7 @@ pub fn vowel_count(text: &str) -> usize {\n\
 
 /// Seeds the nested corpus: the clone pair split across `src/a` and
 /// `src/b`, a clean file beside the first copy, and a clean-only `lib`.
-fn seed_nested_corpus(scan_root: &Path) -> Result<()> {
+pub(crate) fn seed_nested_corpus(scan_root: &Path) -> Result<()> {
     for dir in ["src/a", "src/b", "lib"] {
         fs::create_dir_all(scan_root.join(dir))?;
     }
