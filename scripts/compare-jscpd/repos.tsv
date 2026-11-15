@@ -1,0 +1,12 @@
+# register name (corpus/register/<name>.json)	checkout dir under ~/clone-judging-queued-claude
+benchmarkdotnet	BenchmarkDotNet
+console	console
+date-fns	date-fns
+express	express
+fastapi	fastapi
+flask	flask
+http	http
+monolog	monolog
+serde	serde
+viper	viper
+vite	vite
