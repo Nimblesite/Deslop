@@ -226,9 +226,19 @@ pub(crate) fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
 }
 
 /// Loads a canonical JSON report from disk for `--from-report`.
+///
+/// [OUTPUT-REPLAY-REQUIRED-FIELDS] Every field the engine writes is
+/// required on read: a report whose shape is not this build's is a usage
+/// error naming the field, never a report completed with assumed values.
 pub(crate) fn load_report(path: &std::path::Path) -> Result<Report> {
     let source =
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
-    serde_json::from_str::<Report>(&source)
-        .with_context(|| format!("parse report {}", path.display()))
+    serde_json::from_str::<Report>(&source).map_err(|error| match error.classify() {
+        serde_json::error::Category::Data => UsageError::new(format!(
+            "report {} is not a report this Deslop build writes: {error}. Re-scan to write a fresh report.",
+            path.display()
+        ))
+        .into(),
+        _ => anyhow::Error::new(error).context(format!("parse report {}", path.display())),
+    })
 }
