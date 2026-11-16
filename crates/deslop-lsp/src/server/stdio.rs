@@ -12,7 +12,7 @@ use lspkit_server::{jsonrpc::read_message, FramingError, Message, MessageWriter}
 use serde_json::Value;
 use tokio::{
     io::{AsyncRead, AsyncWrite, BufReader},
-    sync::{mpsc, Semaphore},
+    sync::{mpsc, watch, Semaphore},
     task::JoinSet,
 };
 
@@ -41,6 +41,10 @@ struct Link {
     requests: JoinSet<()>,
     /// Bounds how many requests run at once.
     permits: Arc<Semaphore>,
+    /// Notifications queued so far.
+    queued: u64,
+    /// Notifications the worker has finished, for requests to wait on.
+    handled: watch::Receiver<u64>,
 }
 
 /// Serves `session` over `reader`/`writer` until the client says `exit` or
@@ -59,12 +63,15 @@ where
     let session = Arc::new(session);
     let pump = tokio::spawn(pump(socket.frames, MessageWriter::new(writer)));
     let (notifications, queue) = mpsc::channel(INBOUND_CAPACITY);
-    let worker = tokio::spawn(run_notifications(Arc::clone(&session), queue));
+    let (progress, handled) = watch::channel(0);
+    let worker = tokio::spawn(run_notifications(Arc::clone(&session), queue, progress));
     let mut link = Link {
         session: Arc::clone(&session),
         notifications,
         requests: JoinSet::new(),
         permits: Arc::new(Semaphore::new(REQUEST_CONCURRENCY)),
+        queued: 0,
+        handled,
     };
     let end = link.read(BufReader::new(reader)).await;
     session.dispatcher.cancel_all();
@@ -86,10 +93,16 @@ where
     }
 }
 
-/// Runs notifications one at a time, in the order they were read.
-async fn run_notifications(session: Arc<Session>, mut queue: mpsc::Receiver<Queued>) {
+/// Runs notifications one at a time, in the order they were read, and
+/// publishes how many are done.
+async fn run_notifications(
+    session: Arc<Session>,
+    mut queue: mpsc::Receiver<Queued>,
+    progress: watch::Sender<u64>,
+) {
     while let Some((method, params)) = queue.recv().await {
-        session.notify(&method, params).await;
+        super::routes::notify(&session.backend, &method, params).await;
+        progress.send_modify(|handled| *handled = handled.saturating_add(1));
     }
 }
 
@@ -126,11 +139,17 @@ impl Link {
         None
     }
 
-    /// Runs one admitted request and queues its response.
+    /// Runs one admitted request and queues its response. The request
+    /// starts only once every notification read before it has been handled,
+    /// so a report asked for after an edit is a report of that edit.
     fn spawn(&mut self, answer: super::Answer) {
         let permits = Arc::clone(&self.permits);
         let client = self.session.client.clone();
+        let mut handled = self.handled.clone();
+        let before = self.queued;
         let _task = self.requests.spawn(async move {
+            let caught_up = handled.wait_for(|done| *done >= before).await.is_ok();
+            tracing::trace!(caught_up, "request released behind earlier notifications");
             let _permit = permits.acquire_owned().await;
             let _queued = client.send(answer.await).await;
         });
@@ -146,7 +165,9 @@ impl Link {
                 .dispatcher
                 .cancellation_handle()
                 .cancel_request(&params),
+            _ if !self.session.takes_notifications(&method) => (),
             _ => {
+                self.queued = self.queued.saturating_add(1);
                 if self.notifications.send((method, params)).await.is_err() {
                     tracing::error!("notification worker stopped");
                 }

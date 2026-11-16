@@ -242,3 +242,31 @@ async fn dropping_the_session_releases_the_backend() -> TestResult {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn a_request_waits_for_the_notifications_read_before_it() -> TestResult {
+    let mut editor = editor()?;
+    editor.notify("initialized").await?;
+    let request = Message::request(RequestId::Number(SECOND_ID), SHUTDOWN_METHOD, Value::Null);
+    editor.writer.write_message(&request).await?;
+
+    let mut before_answer = Vec::new();
+    let answer = loop {
+        let frame = timeout(NEVER, read_message(&mut editor.reader)).await??;
+        if frame.id == Some(RequestId::Number(SECOND_ID)) {
+            break frame;
+        }
+        before_answer.push(frame.method.unwrap_or_default());
+    };
+
+    assert!(answer.error.is_none(), "shutdown must not fail: {answer:?}");
+    assert!(
+        before_answer
+            .iter()
+            .any(|method| method == "window/logMessage"),
+        "everything the `initialized` notification pushed must be on the wire \
+         before the answer to a request read after it — a report asked for \
+         after an edit must be a report of that edit; saw {before_answer:?}"
+    );
+    Ok(())
+}

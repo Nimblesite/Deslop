@@ -218,17 +218,26 @@ impl Session {
             .map_err(|error| dispatch_fault(&error))
     }
 
-    /// Runs a notification's handler. Outside an initialised session the
-    /// base protocol says to drop it.
+    /// Runs a notification's handler if the session takes notifications now.
     async fn notify(&self, method: &str, params: Value) {
-        if self.phase.get() == Phase::Initialized {
+        if self.takes_notifications(method) {
             routes::notify(&self.backend, method, params).await;
-        } else {
+        }
+    }
+
+    /// Whether a notification read now is to be handled. Outside an
+    /// initialised session the base protocol says to drop it. Decided when
+    /// the frame is read, not when its turn comes: a `shutdown` read after
+    /// an edit must not make that edit vanish.
+    fn takes_notifications(&self, method: &str) -> bool {
+        let taken = self.phase.get() == Phase::Initialized;
+        if !taken {
             tracing::debug!(
                 method,
                 "notification outside an initialised session dropped"
             );
         }
+        taken
     }
 }
 
