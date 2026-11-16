@@ -318,3 +318,94 @@ const RESCOPED_HISTORY: [Step; 6] = [
 fn edits_around_a_rescoped_corpus_match_the_cold_report() -> Result<()> {
     assert_history_matches_cold(&RESCOPED_HISTORY)
 }
+
+/// The contents a walked file moves between.
+const WALKED: [Content; 5] = [
+    Content::Exact,
+    Content::Near,
+    Content::Twice,
+    Content::Unrelated,
+    Content::Gone,
+];
+/// A closed walk over [`WALKED`] that takes every ordered transition between two different contents exactly once: four passes round the five contents, stepping by one, two, three and four.
+const EVERY_TRANSITION: [usize; 21] = [
+    0, 1, 2, 3, 4, 0, 2, 4, 1, 3, 0, 3, 1, 4, 2, 0, 4, 3, 2, 1, 0,
+];
+/// The files walked in turn: the first, a middle and the last in path order.
+const WALKERS: [&str; 3] = ["a.cs", "n.cs", "z.cs"];
+/// Files that never change: a loop copy, a near loop copy and one member of the other family.
+const BYSTANDERS: [(&str, Content); 3] = [
+    ("m.cs", Content::Exact),
+    ("p.cs", Content::Near),
+    ("q.cs", Content::Unrelated),
+];
+/// The stems clustered while every walker holds an exact copy.
+const RESTING_FAMILY: [&str; 5] = ["a", "m", "n", "p", "z"];
+/// The bystander that pairs with a walker holding unrelated code.
+const OTHER_FAMILY_BYSTANDER: &str = "q";
+
+/// The stems that must be clustered while `walker` holds `content` and the other walkers rest.
+fn clustered_while(walker: &str, content: Content) -> BTreeSet<String> {
+    let stem = walker.trim_end_matches(".cs");
+    let mut expected: BTreeSet<String> = RESTING_FAMILY
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+    match content {
+        Content::Exact | Content::Near | Content::Twice | Content::Nearer => {}
+        Content::Unrelated => drop(expected.insert(OTHER_FAMILY_BYSTANDER.to_owned())),
+        Content::Gone | Content::Text(_) => drop(expected.remove(stem)),
+    }
+    expected
+}
+
+/// Moves `walker` to `content` in one pass and compares the session with a cold one.
+fn walk_one(
+    session: &mut AnalysisSession,
+    root: &Path,
+    walker: &str,
+    content: Content,
+) -> Result<()> {
+    let changed = [land(root, walker, content)?];
+    let before = session.generation();
+    drop(
+        session
+            .apply_changes(&changed)
+            .context("apply transition")?,
+    );
+    assert!(
+        session.generation() > before,
+        "{walker}: a transition publishes a generation"
+    );
+    let live = session.report();
+    assert_eq!(
+        clustered_stems(&live),
+        clustered_while(walker, content),
+        "{walker}: clustered files"
+    );
+    let cold = live_session(root)?.report();
+    assert_eq!(
+        comparable(&live)?,
+        comparable(&cold)?,
+        "{walker}: live report differs from cold"
+    );
+    Ok(())
+}
+
+#[test]
+fn every_content_transition_of_the_first_middle_and_last_file_matches_cold() -> Result<()> {
+    let workspace = tempfile::tempdir().context("tempdir")?;
+    let root = workspace.path();
+    let resting = WALKERS.map(|name| (name, Content::Exact));
+    for (name, content) in BYSTANDERS.into_iter().chain(resting) {
+        drop(land(root, name, content)?);
+    }
+    let mut session = live_session(root)?;
+    for walker in WALKERS {
+        for index in EVERY_TRANSITION.into_iter().skip(1) {
+            let content = WALKED.get(index).copied().context("walk index")?;
+            walk_one(&mut session, root, walker, content)?;
+        }
+    }
+    Ok(())
+}
