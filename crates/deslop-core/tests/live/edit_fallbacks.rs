@@ -34,6 +34,10 @@ const UNREADABLE: u32 = 0o000;
 const READABLE: u32 = 0o644;
 /// Bytes appended after the last line: they move no code piece.
 const TRAILING_BLANK_LINES: &str = "\n\n\n";
+/// The byte-identical pair the embedding scenario adds.
+const TWIN_FILES: [&str; 2] = ["Twin.cs", "TwinMirror.cs"];
+const TWIN_SOURCE: &str = "namespace Mirrors\n{\n    public class Mirror\n    {\n        public int Reflect(int depth)\n        {\n            var level = depth;\n            while (level > 1)\n            {\n                level = level / 2 + depth % 3;\n            }\n            return level * depth;\n        }\n    }\n}\n";
+const EMBEDDING_MESSAGE: &str = "embedding pass complete";
 /// One more entry per round, so every save changes structure.
 const EXTRA_ENTRY: &str = "            totals.Add(owner.Length);\n";
 
@@ -91,23 +95,46 @@ fn assert_matches(live: &Report, cold: &Report, when: &str) -> Result<()> {
     Ok(())
 }
 
-/// Runs `pass` under a capturing subscriber; returns its value and the last pairing stage's input.
-fn observed<T>(pass: impl FnOnce() -> Result<T>) -> Result<(T, u64)> {
+/// Runs `pass` under a capturing subscriber; returns its value and what it logged.
+fn observed<T>(pass: impl FnOnce() -> Result<T>) -> Result<(T, CapturedEvents)> {
     let captured = CapturedEvents::default();
     let subscriber = CaptureSubscriber::new(captured.clone());
     let value = tracing::subscriber::with_default(subscriber, pass)?;
-    let stage = captured
-        .events(STAGE_MESSAGE)?
+    Ok((value, captured))
+}
+
+/// One numeric field of the last `message` record whose `filter` field holds `value`.
+fn last_count(
+    captured: &CapturedEvents,
+    message: &str,
+    filter: Option<(&str, &str)>,
+    field: &str,
+) -> Result<u64> {
+    let event = captured
+        .events(message)?
         .into_iter()
-        .rfind(|event| event.values.get("stage").map(String::as_str) == Some(PAIRING_STAGE))
-        .ok_or_else(|| anyhow!("no {PAIRING_STAGE} record"))?;
-    let input = stage
+        .rfind(|event| {
+            filter.map_or(true, |(key, value)| {
+                event.values.get(key).map(String::as_str) == Some(value)
+            })
+        })
+        .ok_or_else(|| anyhow!("no {message} record"))?;
+    event
         .values
-        .get("input")
-        .ok_or_else(|| anyhow!("pairing record has no input"))?
+        .get(field)
+        .ok_or_else(|| anyhow!("{message} has no {field}"))?
         .parse()
-        .context("input is not a count")?;
-    Ok((value, input))
+        .with_context(|| format!("{field} is not a count"))
+}
+
+/// The records the last pairing stage was fed.
+fn pairing_input(captured: &CapturedEvents) -> Result<u64> {
+    last_count(
+        captured,
+        STAGE_MESSAGE,
+        Some(("stage", PAIRING_STAGE)),
+        "input",
+    )
 }
 
 /// Saves round `round` of the edited file and feeds it through one pass.
@@ -127,24 +154,31 @@ fn workspace() -> Result<tempfile::TempDir> {
     Ok(workspace)
 }
 
+/// Two byte-identical files: the embedding pass pairs identical snippets, so every pass has embedding pairs.
+fn add_twins(root: &Path) -> Result<()> {
+    for name in TWIN_FILES {
+        fs::write(root.join(name), TWIN_SOURCE).with_context(|| format!("write {name}"))?;
+    }
+    Ok(())
+}
+
 #[test]
 fn with_embeddings_on_every_edit_pairs_the_whole_corpus_and_matches_cold() -> Result<()> {
     let workspace = workspace()?;
     let root = workspace.path();
-    let (mut session, _) = observed(|| stub_session(root, EmbeddingMode::Auto))?;
-    let seeded = session.report();
-    ensure!(
-        seeded
-            .embedding_provenance
-            .as_ref()
-            .is_some_and(|provenance| provenance.attempted_subtrees > 0),
-        "the stub provider must embed, or this test is blind"
-    );
+    add_twins(root)?;
+    let mut session = stub_session(root, EmbeddingMode::Auto)?;
     for round in 1..=EDIT_ROUNDS {
-        let ((), edited) = observed(|| save_edit(&mut session, root, round))?;
+        let ((), edit) = observed(|| save_edit(&mut session, root, round))?;
         let (cold, whole) = observed(|| stub_session(root, EmbeddingMode::Auto))?;
+        let embedding_pairs = last_count(&edit, EMBEDDING_MESSAGE, None, "pair_count")?;
+        ensure!(
+            embedding_pairs > 0,
+            "round {round}: the edit pass must find embedding pairs, or this test is blind"
+        );
         assert_eq!(
-            edited, whole,
+            pairing_input(&edit)?,
+            pairing_input(&whole)?,
             "round {round}: with embeddings on, an edit pairs every record"
         );
         assert_matches(

@@ -256,7 +256,10 @@ impl PipelineSession {
         {
             effect = effect.merge(self.apply_one_change(path, &mut stats, &embedding, buffers)?);
         }
-        if effect == CorpusEffect::Untouched {
+        // A pass that failed after splicing some of its files left those
+        // changes unrendered: this pass owes them a report even when
+        // nothing it was handed moved ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+        if effect == CorpusEffect::Untouched && !self.store.has_pending_changes() {
             tracing::debug!(
                 changed_paths = changed.len(),
                 files_analysed = self.files_analysed,

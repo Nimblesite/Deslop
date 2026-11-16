@@ -98,6 +98,11 @@ impl CorpusStore {
         std::mem::take(&mut self.changes)
     }
 
+    /// Whether a change is waiting for a render to take it.
+    pub(super) fn has_pending_changes(&self) -> bool {
+        !self.changes.touched.is_empty()
+    }
+
     /// Every live file's span of the flat records, in record order.
     pub(super) fn spans(&self) -> Vec<FileSpan> {
         let mut offset = 0_usize;
