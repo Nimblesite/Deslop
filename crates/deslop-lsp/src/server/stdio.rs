@@ -130,7 +130,8 @@ impl Link {
         match (message.id.clone(), message.method.clone()) {
             (Some(id), Some(method)) => {
                 let answer = self.session.answer(id, &method, message.params);
-                self.spawn(answer);
+                let behind = self.notifications_before(&method);
+                self.spawn(answer, behind);
             }
             (None, Some(method)) => return self.notification(method, message.params).await,
             (Some(_), None) => self.session.client.resolve(message),
@@ -139,14 +140,24 @@ impl Link {
         None
     }
 
-    /// Runs one admitted request and queues its response. The request
-    /// starts only once every notification read before it has been handled,
-    /// so a report asked for after an edit is a report of that edit.
-    fn spawn(&mut self, answer: super::Answer) {
+    /// How many notifications a request for `method` waits behind: all that
+    /// were read before it, so a report asked for after an edit is a report
+    /// of that edit; none for a read of the published snapshot, which must
+    /// never wait on analysis ([LSP-NON-INTERFERENCE-NONBLOCKING]).
+    fn notifications_before(&self, method: &str) -> u64 {
+        if super::routes::reads_snapshot(method) {
+            0
+        } else {
+            self.queued
+        }
+    }
+
+    /// Runs one admitted request and queues its response, once `before`
+    /// notifications have been handled.
+    fn spawn(&mut self, answer: super::Answer, before: u64) {
         let permits = Arc::clone(&self.permits);
         let client = self.session.client.clone();
         let mut handled = self.handled.clone();
-        let before = self.queued;
         let _task = self.requests.spawn(async move {
             let caught_up = handled.wait_for(|done| *done >= before).await.is_ok();
             tracing::trace!(caught_up, "request released behind earlier notifications");
