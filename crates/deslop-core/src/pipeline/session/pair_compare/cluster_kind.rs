@@ -17,6 +17,7 @@ use crate::{
     cluster::{scope::DeclarationScopes, ClusterKindJudge},
     embedding::pairs::EmbeddingPair,
     fingerprint::Fingerprint,
+    overlap::RescueContext,
     pair::{
         CandidatePair, CROSS_LANGUAGE_MIN_JACCARD, FUSED_THRESHOLD, SHARED_SUBTREE_MIN_JACCARD,
         SHARED_SUBTREE_MIN_OVERLAP,
@@ -136,18 +137,21 @@ pub(crate) struct ClusterKindMeasurer<'corpus> {
 }
 
 impl<'corpus> ClusterKindMeasurer<'corpus> {
-    /// Prepares the fold over the render's trees and embedding pairs.
+    /// Prepares the fold over the render's trees and embedding pairs,
+    /// measuring against the `rescue` context the render already built
+    /// from `pairs`.
     pub(crate) fn new(
         session: &'corpus PipelineSession,
         fingerprints: &'corpus [Fingerprint],
         trees: &'corpus [NormalizedNode],
         embedding_pairs: &[EmbeddingPair],
         pairs: &[CandidatePair],
+        rescue: RescueContext<'corpus, RandomState, RandomState>,
     ) -> Self {
         Self {
             session,
             fingerprints,
-            shared: Arc::new(AxesShared::new(trees, session, pairs)),
+            shared: Arc::new(AxesShared::with_rescue(trees, rescue)),
             trees,
             rescued: rescued_exact_seed(pairs),
             pool: Mutex::new(Vec::new()),

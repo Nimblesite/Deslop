@@ -324,9 +324,9 @@ impl<'corpus> AxesShared<'corpus> {
         session: &'corpus PipelineSession,
         pairs: &[CandidatePair],
     ) -> Self {
-        Self {
-            trees: tree_index_of(trees),
-            rescue: RescueContext::new(
+        Self::with_rescue(
+            trees,
+            RescueContext::new(
                 pairs,
                 session.store.fingerprints(),
                 trees,
@@ -334,6 +334,17 @@ impl<'corpus> AxesShared<'corpus> {
                 &session.file_languages,
                 usize::try_from(session.min_nodes).unwrap_or(usize::MAX),
             ),
+        )
+    }
+
+    /// Indexes `trees` around a `rescue` context already built.
+    pub(super) fn with_rescue(
+        trees: &'corpus [NormalizedNode],
+        rescue: RescueContext<'corpus, RandomState, RandomState>,
+    ) -> Self {
+        Self {
+            trees: tree_index_of(trees),
+            rescue,
         }
     }
 }

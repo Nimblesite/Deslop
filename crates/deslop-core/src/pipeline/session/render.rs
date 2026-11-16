@@ -107,7 +107,17 @@ impl PipelineSession {
         // the pairs it could have changed ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
         let mut verdicts = VerdictPass::new(carried, pair_ledger.is_some());
         let stage_started = Instant::now();
-        let measured = self.rescue_carrying(&mut pairs, &trees, &mut verdicts);
+        // One exact-clone context serves the rescue and, later, the
+        // cluster fold: both read the same candidate pairs.
+        let rescue_context = crate::overlap::RescueContext::new(
+            &pairs,
+            fingerprints,
+            &trees,
+            &self.sources,
+            &self.file_languages,
+            usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
+        );
+        let measured = self.rescue_carrying(&mut pairs, &trees, &rescue_context, &mut verdicts);
         ledger.record(
             "shared_subtree_rescue",
             measured,
@@ -120,6 +130,7 @@ impl PipelineSession {
             &trees,
             &embedding_outcome.pairs,
             &pairs,
+            rescue_context,
         );
         let (fused_clusters, shape_families, informational_candidates) =
             self.partition_and_split(pairs, &trees, &parse_cache, &mut ledger, &mut verdicts);

@@ -12,7 +12,10 @@
 //! files did not change and whose endpoints overlap none of those records
 //! keeps its previous verdicts; every other pair is measured again.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::RandomState,
+};
 
 use super::PipelineSession;
 use crate::{
@@ -20,7 +23,7 @@ use crate::{
     cluster::Folded,
     cluster_filters::ParseCache,
     fingerprint::Fingerprint,
-    overlap::{apply_shared_subtree_rescue_to, RescueCorpus},
+    overlap::{apply_shared_subtree_rescue_in, RescueContext},
     pair::{apply_pair_content_gate, CandidatePair, FusedCluster, Recovery},
     state::FileId,
 };
@@ -459,18 +462,28 @@ impl VerdictPass {
     }
 
     /// Records the gate's verdict on every pair it was handed.
-    fn judged(&mut self, handed: &[(usize, usize)], admitted: &[CandidatePair]) {
+    fn judged(&mut self, admitted: &[CandidatePair]) {
         let Some(record) = self.record.as_mut() else {
             return;
         };
-        let kept: HashSet<(usize, usize)> = admitted
+        let mut kept: Vec<(usize, usize)> = admitted
             .iter()
             .map(|pair| (pair.left, pair.right))
             .collect();
-        record.gate = handed
-            .iter()
-            .map(|&(left, right)| (left, right, kept.contains(&(left, right))))
-            .collect();
+        kept.sort_unstable();
+        for row in &mut record.gate {
+            row.2 = kept.binary_search(&(row.0, row.1)).is_ok();
+        }
+    }
+
+    /// Opens the gate record with every pair handed to the gate.
+    fn handing(&mut self, pairs: &[CandidatePair]) {
+        if let Some(record) = self.record.as_mut() {
+            record.gate = pairs
+                .iter()
+                .map(|pair| (pair.left, pair.right, false))
+                .collect();
+        }
     }
 
     /// This render's verdicts, in key order, for the ledger.
@@ -490,18 +503,12 @@ impl PipelineSession {
         &self,
         pairs: &mut Vec<CandidatePair>,
         trees: &[NormalizedNode],
+        context: &RescueContext<'_, RandomState, RandomState>,
         pass: &mut VerdictPass,
     ) -> usize {
         let fingerprints = self.store.fingerprints();
         let measured = pass.settle_rescue(pairs, fingerprints);
-        let corpus = RescueCorpus {
-            fingerprints,
-            trees,
-            sources: &self.sources,
-            languages: &self.file_languages,
-            min_nodes: usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
-        };
-        apply_shared_subtree_rescue_to(pairs, measured, &corpus);
+        apply_shared_subtree_rescue_in(pairs, measured, context, fingerprints, trees);
         pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
         pass.rescued(pairs);
         measured
@@ -518,8 +525,7 @@ impl PipelineSession {
         pass: &mut VerdictPass,
     ) -> usize {
         let fingerprints = self.store.fingerprints();
-        let handed: Vec<(usize, usize)> =
-            pairs.iter().map(|pair| (pair.left, pair.right)).collect();
+        pass.handing(pairs);
         let carried = |pair: &CandidatePair| pass.gate(pair, fingerprints);
         let judged = pairs.iter().filter(|pair| carried(pair).is_none()).count();
         let (sources, languages) = (&self.sources, &self.file_languages);
@@ -532,7 +538,7 @@ impl PipelineSession {
             parse_cache,
             &carried,
         );
-        pass.judged(&handed, pairs);
+        pass.judged(pairs);
         judged
     }
 }
