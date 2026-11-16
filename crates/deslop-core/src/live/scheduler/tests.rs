@@ -279,7 +279,10 @@ async fn costly_pass(
     task.maybe_dispatch().await;
     clock.step.store(FROZEN, Ordering::SeqCst);
     assert_completed_pass(&mut inputs.states, &mut inputs.reports)?;
-    Ok(clock.now.load(Ordering::SeqCst) - PASS_COST_MS)
+    Ok(clock
+        .now
+        .load(Ordering::SeqCst)
+        .saturating_sub(PASS_COST_MS))
 }
 
 /// [LIVE-SCHEDULER-REST] A pass that cost a second holds the next one back
@@ -290,16 +293,21 @@ async fn a_costly_pass_holds_the_next_one_back_for_its_rest() -> Result<()> {
     let shared: Arc<dyn Clock> = clock.clone();
     let (mut task, mut inputs) = scheduler_fixture_on(tempfile::tempdir()?, shared)?;
     let ended = costly_pass(&mut task, &clock, &mut inputs).await?;
-    let rested = ended + REST_FACTOR * PASS_COST_MS;
+    let rested = ended.saturating_add(REST_FACTOR.saturating_mul(PASS_COST_MS));
+    let waits = [
+        QUIET_MS,
+        PASS_COST_MS,
+        rested.saturating_sub(ended).saturating_sub(ONE_MS),
+    ];
     task.debouncer.push(inputs.root.path().join(UNTRACKED_PATH));
-    for early in [ended + QUIET_MS, ended + PASS_COST_MS, rested - ONE_MS] {
-        clock.now.store(early, Ordering::SeqCst);
+    for waited in waits {
+        clock
+            .now
+            .store(ended.saturating_add(waited), Ordering::SeqCst);
         task.maybe_dispatch().await;
         assert!(
             matches!(inputs.states.try_recv(), Err(TryRecvError::Empty)),
-            "a pass started {} ms into a {} ms rest",
-            early - ended,
-            rested - ended
+            "a pass started {waited} ms into a rest of {REST_FACTOR} x {PASS_COST_MS} ms"
         );
         assert!(task.debouncer.has_pending(), "the waiting change is kept");
     }
