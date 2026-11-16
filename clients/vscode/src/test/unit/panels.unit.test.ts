@@ -26,7 +26,7 @@ const CLEAN_FILE = "Clean.cs";
 const TEMP_PREFIX = "deslop-open-file-";
 
 /** A two-occurrence cluster whose first occurrence starts `line` of `file`. */
-function clusterAtLine(id: string, rank: number, file: string, line: number) {
+function clusterAtLine(id: string, rank: number, file: string, line: number, hidden = false) {
   const start = line * LINE_BYTES;
   return wireCluster({
     id,
@@ -34,7 +34,7 @@ function clusterAtLine(id: string, rank: number, file: string, line: number) {
     severity: "information",
     kind: "identical",
     mass: CLUSTER_MASS,
-    occurrences: [occurrence(file, start, start + LINE_BYTES), occurrence(`${file}.other`)],
+    occurrences: [occurrence(file, start, start + LINE_BYTES, hidden), occurrence(`${file}.other`)],
   });
 }
 
@@ -103,6 +103,36 @@ suite("webview handleMessage", () => {
       // Malformed rows open nothing: the clean file stays active.
       for (const path of [undefined, 7, ""]) await handleMessage(store, { kind: "open/file", path });
       assert.deepEqual(activeLocation(), { file: clean, line: FILE_TOP_LINE });
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      store.dispose();
+    });
+  });
+
+  test("[VSIX-METRICS-REPORT-NAVIGATE] open/file never lands on a hidden or stale range", async () => {
+    await withTempDir(TEMP_PREFIX, async (dir) => {
+      const duplicated = fs.realpathSync(dir) + `/${DUPLICATED_FILE}`;
+      fs.writeFileSync(duplicated, `${SOURCE_LINES.join("\n")}\n`);
+      // The top-ranked occurrence is hidden by `report_hide`: the panel does
+      // not show it, so the row opens the highest-ranked visible duplicate.
+      const store = storeWith(
+        emptyReport({
+          clusters: [
+            clusterAtLine("hidden-top", TOP_RANK, duplicated, HEAVIER_DUPLICATE_LINE, true),
+            clusterAtLine("visible", LOWER_RANK, duplicated, LIGHTER_DUPLICATE_LINE),
+          ],
+          metrics: metrics({
+            per_file: [{ path: duplicated, language: "csharp", analysed_loc: SOURCE_LINES.length, duplicated_loc: 1, duplication_percent: 20 }],
+          }),
+        }),
+      );
+      await handleMessage(store, { kind: "open/file", path: duplicated });
+      assert.deepEqual(activeLocation(), { file: duplicated, line: LIGHTER_DUPLICATE_LINE });
+
+      // [VSIX-STATE-DIRTY] An unsaved edit makes every recorded range in the
+      // file stale; the panel elides them, so the row opens the file's top.
+      store.markFileDirty(duplicated, 2);
+      await handleMessage(store, { kind: "open/file", path: duplicated });
+      assert.deepEqual(activeLocation(), { file: duplicated, line: FILE_TOP_LINE });
       await vscode.commands.executeCommand("workbench.action.closeAllEditors");
       store.dispose();
     });
