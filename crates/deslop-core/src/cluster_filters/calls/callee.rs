@@ -12,19 +12,44 @@ use crate::ast::named_children;
 /// Terminal syntax nodes have no children.
 const LEAF_CHILD_COUNT: usize = 0;
 
-/// One unambiguous part of a callee's syntax and retained names.
-#[derive(Clone, PartialEq, Eq)]
-pub(super) enum CalleePart {
+/// [CLONE-NOISE-LITERAL-VARIATION-CALLS-BOUNDED-MEMO] A callee header,
+/// held as the digest of its canonical token stream. The header is only
+/// ever compared for equality, and a callee can be a whole module — an
+/// immediately-invoked wrapper — so holding its tokens made each memoised
+/// member cost a copy of the file.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) struct CalleeDigest([u8; blake3::OUT_LEN]);
+
+/// One token of the canonical header stream; each is framed so no two
+/// distinct streams hash the same bytes.
+#[derive(Clone, Copy)]
+enum Token<'a> {
     /// Syntax kind; receiver identifier spelling is deliberately absent.
     Node(&'static str),
     /// Called names, member selectors and non-payload terminal text.
-    Text(Vec<u8>),
+    Text(&'a [u8]),
     /// A classified string payload, compared through argument positions.
     Payload,
     /// A statement-bearing argument, guarded by the body's own evidence.
     Body,
     /// End of one syntax node, preserving nesting and argument arity.
     End,
+}
+
+impl Token<'_> {
+    /// Writes the token's tag, then its length-prefixed text when it has one.
+    fn feed(self, hasher: &mut blake3::Hasher) {
+        let (tag, text): (u8, &[u8]) = match self {
+            Self::Node(kind) => (0, kind.as_bytes()),
+            Self::Text(text) => (1, text),
+            Self::Payload => (2, &[]),
+            Self::Body => (3, &[]),
+            Self::End => (4, &[]),
+        };
+        let _tagged = hasher.update(&[tag]);
+        let _length = hasher.update(&(text.len() as u64).to_le_bytes());
+        let _text = hasher.update(text);
+    }
 }
 
 /// Extracts one call, including arguments belonging to its callee chain.
@@ -65,15 +90,15 @@ fn nested_arguments(
 }
 
 /// Reads syntax without making source whitespace part of the header.
-pub(super) fn canonical_callee(node: Node<'_>, source: &[u8], language: &str) -> Vec<CalleePart> {
-    let mut parts = Vec::new();
-    append_node(node, source, language, &mut parts);
-    parts
+pub(super) fn canonical_callee(node: Node<'_>, source: &[u8], language: &str) -> CalleeDigest {
+    let mut hasher = blake3::Hasher::new();
+    append_node(node, source, language, &mut hasher);
+    CalleeDigest(*hasher.finalize().as_bytes())
 }
 
 /// Retains syntax and called identities while normalising receiver names.
-fn append_node(node: Node<'_>, source: &[u8], language: &str, parts: &mut Vec<CalleePart>) {
-    parts.push(CalleePart::Node(node.kind()));
+fn append_node(node: Node<'_>, source: &[u8], language: &str, parts: &mut blake3::Hasher) {
+    Token::Node(node.kind()).feed(parts);
     if matches!(node.kind(), "arguments" | "argument_list") {
         for argument in named_children(node) {
             append_argument(argument, source, language, parts);
@@ -86,32 +111,32 @@ fn append_node(node: Node<'_>, source: &[u8], language: &str, parts: &mut Vec<Ca
             append_node(child, source, language, parts);
         }
     }
-    parts.push(CalleePart::End);
+    Token::End.feed(parts);
 }
 
 /// Uses the same payload classification as each outer argument slot.
-fn append_argument(node: Node<'_>, source: &[u8], language: &str, parts: &mut Vec<CalleePart>) {
+fn append_argument(node: Node<'_>, source: &[u8], language: &str, parts: &mut blake3::Hasher) {
     match arg_shape(node, source, language) {
         // A wrapper's own callee is compared across members by
         // [`super::literal_agreement`], which sees every member at once,
         // so here it needs only the same payload slot a bare string takes.
         ArgShape::StringLiteral(_, _) | ArgShape::LiteralWrapper(_, _) => {
-            parts.push(CalleePart::Payload);
+            Token::Payload.feed(parts);
         }
-        ArgShape::Body => parts.push(CalleePart::Body),
+        ArgShape::Body => Token::Body.feed(parts),
         ArgShape::Other => append_node(node, source, language, parts),
     }
 }
 
 /// Literal payloads were consumed above; remaining syntax stays exact.
-fn append_terminal(node: Node<'_>, source: &[u8], parts: &mut Vec<CalleePart>) {
+fn append_terminal(node: Node<'_>, source: &[u8], parts: &mut blake3::Hasher) {
     let identifier = matches!(
         node.kind(),
         "identifier" | "property_identifier" | "field_identifier" | "type_identifier"
     );
     if !identifier || is_called_name(node) {
         if let Some(text) = source.get(node.start_byte()..node.end_byte()) {
-            parts.push(CalleePart::Text(text.to_vec()));
+            Token::Text(text).feed(parts);
         }
     }
 }

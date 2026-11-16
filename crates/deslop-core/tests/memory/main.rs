@@ -18,15 +18,15 @@ use peak_alloc::PeakAlloc;
 #[global_allocator]
 static ALLOCATOR: PeakAlloc = PeakAlloc;
 
-/// Copies of the wrapped function in the small module.
-const SMALL_COPIES: usize = 40;
-/// Copies in the large module: four times the small one.
-const LARGE_COPIES: usize = 160;
-/// How much more heap the large scan may add than the small one. The module is four times larger, so linear growth is four; the slack covers fixed per-scan costs. Copying the module into every member's memo cell grows sixteen-fold.
-const MAX_GROWTH: usize = 6;
-/// Small enough that every wrapped function is a cluster member.
+/// Copies of the registration function in the module.
+const COPIES: usize = 160;
+/// How much more heap the wrapped module may cost than the same functions written bare, in percent. The wrapper adds one call and a few nodes; copying the module into every member's memo cell multiplied the scan's heap.
+const MAX_WRAPPER_OVERHEAD_PERCENT: usize = 125;
+/// Scale for percentages.
+const PERCENT: usize = 100;
+/// Small enough that every registration function is a cluster member.
 const MIN_NODES: u32 = 15;
-/// The wrapped module's file name.
+/// The module's file name.
 const MODULE_FILE: &str = "bundle.js";
 
 /// One registration function, varying only its string payload, so the family reaches the literal-variation filter.
@@ -36,24 +36,29 @@ fn registration(index: usize) -> String {
     )
 }
 
-/// A module of `copies` functions inside one immediately-invoked wrapper.
-fn wrapped_module(copies: usize) -> String {
-    let mut module = String::from("(function () {\n  'use strict';\n");
-    (0..copies).for_each(|index| module.push_str(&registration(index)));
-    let _written = writeln!(module, "}})();");
+/// The module's functions, inside one immediately-invoked wrapper when `wrapped`.
+fn module(wrapped: bool) -> String {
+    let mut module = String::from(if wrapped {
+        "(function () {\n  'use strict';\n"
+    } else {
+        "'use strict';\n"
+    });
+    (0..COPIES).for_each(|index| module.push_str(&registration(index)));
+    if wrapped {
+        let _written = writeln!(module, "}})();");
+    }
     module
 }
 
-/// Scans a workspace holding only the wrapped module; returns the report and the heap the scan added at its peak.
-fn scan_peak(copies: usize) -> Result<(Report, usize)> {
+/// Scans a workspace holding only the module; returns the report and the heap the scan added at its peak.
+fn scan_peak(wrapped: bool) -> Result<(Report, usize)> {
     let root = tempfile::tempdir().context("tempdir")?;
-    fs::write(root.path().join(MODULE_FILE), wrapped_module(copies)).context("write module")?;
+    fs::write(root.path().join(MODULE_FILE), module(wrapped)).context("write module")?;
     let baseline = ALLOCATOR.current_usage();
     ALLOCATOR.reset_peak_usage();
     let report = scan(root.path())?;
     Ok((report, ALLOCATOR.peak_usage().saturating_sub(baseline)))
 }
-
 /// Analyses `root` with embeddings off, so the run is deterministic.
 fn scan(root: &Path) -> Result<Report> {
     run(&PipelineConfig {
@@ -82,19 +87,18 @@ fn examined_members(report: &Report) -> usize {
 }
 
 #[test]
-fn a_wrapped_module_costs_heap_in_proportion_to_its_size() -> Result<()> {
-    let (small_report, small) = scan_peak(SMALL_COPIES)?;
-    let (large_report, large) = scan_peak(LARGE_COPIES)?;
+fn wrapping_a_module_in_one_call_does_not_multiply_its_heap() -> Result<()> {
+    let (bare_report, bare) = scan_peak(false)?;
+    let (wrapped_report, wrapped) = scan_peak(true)?;
     assert!(
-        examined_members(&small_report) > 0 && examined_members(&large_report) > 0,
-        "the wrapped functions must form a family, or this test measures nothing"
+        examined_members(&bare_report) >= COPIES && examined_members(&wrapped_report) >= COPIES,
+        "every registration function must be a cluster member, or this test measures nothing"
     );
-    assert!(small > 0, "the small scan must allocate");
+    assert!(bare > 0, "the bare scan must allocate");
     assert!(
-        large <= small.saturating_mul(MAX_GROWTH),
-        "a module {}x larger added {large} heap bytes against {small}: {:.1}x, past the {MAX_GROWTH}x linear bound",
-        LARGE_COPIES / SMALL_COPIES,
-        large as f64 / small as f64,
+        wrapped.saturating_mul(PERCENT) <= bare.saturating_mul(MAX_WRAPPER_OVERHEAD_PERCENT),
+        "the wrapped module peaked at {wrapped} heap bytes against {bare} bare: {}%, past the {MAX_WRAPPER_OVERHEAD_PERCENT}% bound",
+        wrapped.saturating_mul(PERCENT) / bare,
     );
     Ok(())
 }

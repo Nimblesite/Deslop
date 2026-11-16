@@ -6,6 +6,10 @@ The `deslop`, `deslop-core`, `deslop-lsp`, and `deslop-mcp` crates disable Cargo
 
 The four crate manifests and suite entry points implement this build contract. `crates/deslop/tests/skip_policy_contract.rs` checks that every corpus Makefile command names a test target the `deslop` manifest actually declares. This is a test-build rule; it adds no production runtime behavior. Release profile and CI consumers follow [CI-RELEASE-BUILD].
 
+## [TEST-MEMORY-BINARY] Heap bounds run in their own test binary
+
+`deslop-core` registers one more test target, `memory`, beside its suite. Its tests measure live heap bytes exactly with a counting global allocator (`peak_alloc`). A global allocator counts the whole process, so inside the shared suite every concurrently running test would count too; the separate binary is the only way the figure means one scan. The tests compare heap between two inputs in one process, so the bound holds on any machine, with no sampling and no sleeps. Only heap-bound tests belong in it.
+
 ## [SPEC-ID-GATE] A cited rule identifier must resolve to a written rule
 
 Comments cite a rule by its bracketed identifier so that searching for that identifier finds three things: the written rule, the code implementing it, and the tests holding it. The trace is the project's way of keeping documents, code and tests honest with one another, and it fails silently — searching an invented identifier returns the code and the tests and simply nothing else, which reads exactly like a rule nobody happened to link.
