@@ -3,13 +3,13 @@
 //! The arithmetic lives in `deslop_core::refactor::position` (the
 //! merge engine renders wire `WorkspaceEdit`s with the same rules);
 //! this module only projects [`LineCol`] onto
-//! `tower_lsp::lsp_types::Position` for the editor surfaces.
+//! `lsp_types::Position` for the editor surfaces.
 
 use deslop_core::{
     refactor::position::{byte_for_line_col, line_col_for_byte, LineCol},
     BufferEdit,
 };
-use tower_lsp::lsp_types::{Position, TextDocumentContentChangeEvent};
+use lsp_types::{Position, TextDocumentContentChangeEvent};
 
 /// Returns the zero-indexed `Position` corresponding to `byte_offset`
 /// in `source`. Offsets past the end of `source` clamp to the last

@@ -10,8 +10,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use lsp_types::Uri;
 use serde_json::Value;
-use tower_lsp::lsp_types::Url;
 
 use super::{
     call, call_capturing, code_action_params, handshake_request, initialize_request,
@@ -111,8 +111,8 @@ impl FixtureSession {
         call_capturing(&mut self.stdin, &mut self.stdout, method, params)
     }
 
-    /// The LSP `Url` of `file_name` inside the workspace.
-    pub fn file_uri(&self, file_name: &str) -> Result<Url> {
+    /// The LSP `Uri` of `file_name` inside the workspace.
+    pub fn file_uri(&self, file_name: &str) -> Result<Uri> {
         workspace_file_uri(self.workspace.path(), file_name)
     }
 

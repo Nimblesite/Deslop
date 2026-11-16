@@ -29,8 +29,10 @@ use deslop_core::{
     },
     pipeline::watched_source_extensions,
 };
+use lsp_types::MessageType;
 use tokio::sync::{broadcast::Receiver, Mutex};
-use tower_lsp::{lsp_types::MessageType, Client};
+
+use crate::client::Client;
 
 use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotification};
 

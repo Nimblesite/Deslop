@@ -14,8 +14,8 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use deslop_core::refactor::position::line_col_for_byte;
+use lsp_types::Uri;
 use serde_json::{json, Value};
-use tower_lsp::lsp_types::Url;
 
 use crate::common::{
     at, call, handshake, notification,
@@ -170,7 +170,7 @@ fn assert_restored_report(
 }
 
 /// The `textDocument/didOpen` VS Code sends for `uri` holding `text`.
-fn did_open(uri: &Url, text: &str) -> Result<String> {
+fn did_open(uri: &Uri, text: &str) -> Result<String> {
     notification(
         DID_OPEN,
         &json!({
@@ -187,7 +187,7 @@ fn did_open(uri: &Url, text: &str) -> Result<String> {
 /// An incremental `textDocument/didChange` replacing the byte span
 /// `start_byte..end_byte` of `text` with `replacement`.
 fn ranged_change(
-    uri: &Url,
+    uri: &Uri,
     text: &str,
     start_byte: u64,
     end_byte: u64,
@@ -211,7 +211,7 @@ fn ranged_change(
 }
 
 /// The `textDocument/didClose` for `uri`.
-fn did_close(uri: &Url) -> Result<String> {
+fn did_close(uri: &Uri) -> Result<String> {
     notification(
         DID_CLOSE,
         &json!({ "textDocument": { "uri": uri.as_str() } }),

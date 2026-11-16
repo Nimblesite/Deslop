@@ -61,8 +61,8 @@ async fn seeded_refresh(
     root: &Path,
     startup: Arc<Mutex<AnalysisState>>,
 ) -> TestResult<RefreshFixture> {
-    drop(refresh_fixture(root, Arc::clone(&startup)).await?);
-    let fixture = refresh_fixture(root, startup).await?;
+    drop(refresh_fixture(root, Arc::clone(&startup))?);
+    let fixture = refresh_fixture(root, startup)?;
     assert!(fixture.seeded);
     assert!(fixture.task.session.lock().await.is_seed_only());
     Ok(fixture)

@@ -16,8 +16,8 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Context, Result};
+use lsp_types::Uri;
 use serde_json::{json, Value};
-use tower_lsp::lsp_types::Url;
 
 /// JSON-RPC id counter shared across every harness call.
 static NEXT_ID: AtomicI64 = AtomicI64::new(10_000);
@@ -264,7 +264,7 @@ impl Drop for LspGuard {
 /// piped stderr that is merely *held open* still fills its fixed kernel
 /// pipe buffer, and the next `tracing` event then blocks its thread inside
 /// `Stderr::write_all` while holding the subscriber's stderr lock. Every
-/// other thread that logs — including the `tower-lsp` serve loop — queues
+/// other thread that logs — including the serve loop — queues
 /// behind that lock, so the server stops reading stdin and writing stdout
 /// altogether and the test waits forever on a response the server can no
 /// longer send. It is not a protocol defect: the terminal progress frame
@@ -333,8 +333,8 @@ pub fn spawn_lsp_on_fixture_guarded(
 /// Builds the `workspace/didChangeWatchedFiles` notification VS Code sends
 /// after a save of `path`.
 pub fn watched_file_changed(path: &Path) -> Result<String> {
-    let uri = tower_lsp::lsp_types::Url::from_file_path(path)
-        .map_err(|()| anyhow!("path is not absolute: {}", path.display()))?;
+    let uri = deslop_lsp::backend::path_to_uri(path)
+        .ok_or_else(|| anyhow!("path is not absolute: {}", path.display()))?;
     notification(
         "workspace/didChangeWatchedFiles",
         &serde_json::json!({ "changes": [{ "uri": uri.as_str(), "type": 2 }] }),
@@ -421,17 +421,18 @@ pub fn code_action_params(uri: &str, start_line: u32, end_line: u32) -> Value {
     })
 }
 
-/// Resolves `file_name` inside the workspace root to an LSP `Url`.
+/// Resolves `file_name` inside the workspace root to an LSP `Uri`.
 /// Every editor-surface scenario opens with the same join +
-/// `from_file_path` dance; the duplicated windows it used to form are
+/// `path_to_uri` dance; the duplicated windows it used to form are
 /// collapsed here ([CI-DESLOP] ledger, gh #397).
 ///
 /// # Errors
 ///
 /// Returns an error when the workspace path is not absolute.
-pub fn workspace_file_uri(workspace_root: &Path, file_name: &str) -> Result<Url> {
+pub fn workspace_file_uri(workspace_root: &Path, file_name: &str) -> Result<Uri> {
     let file = workspace_root.join(file_name);
-    Url::from_file_path(&file).map_err(|()| anyhow::anyhow!("fixture path is absolute"))
+    deslop_lsp::backend::path_to_uri(&file)
+        .ok_or_else(|| anyhow::anyhow!("fixture path is absolute"))
 }
 
 /// Polls `textDocument/codeAction` until the first analysis pass

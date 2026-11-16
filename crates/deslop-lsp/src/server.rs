@@ -1,39 +1,31 @@
-//! LSP server bootstrap — stdio transport and request normalisation
-//! middleware ([LSP-TRANSPORT]).
+//! LSP session over `lspkit-server` — admission, dispatch and the stdio
+//! bootstrap ([LSP-TRANSPORT], [LSP-LIFECYCLE]).
 //!
-//! Extracted from `backend` to keep that module under the 500-line
-//! budget while isolating all tower-lsp wiring in one place.
+//! `lspkit-server` supplies the framing, the dispatcher and request
+//! cancellation; this module owns only what is Deslop's: which methods
+//! exist, and which lifecycle phase admits them.
 
-use std::{
-    path::PathBuf,
-    pin::Pin,
-    process::ExitCode,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    task::{Context, Poll},
-};
+use std::{future::Future, path::PathBuf, pin::Pin, process::ExitCode, sync::Arc};
 
-use tokio::{
-    io::{AsyncRead, ReadBuf},
-    sync::Notify,
-};
-use tower::Service;
-use tower_lsp::{
-    jsonrpc::{Request, Response},
-    ExitedError, LspService, Server,
-};
+use lspkit_server::{DispatchError, Dispatcher, HandlerResult, Message, RequestId};
+use serde_json::Value;
+use tokio::sync::mpsc;
 
 use crate::{
     backend::{LspBackend, LspEmbeddingConfig},
+    client::{Client, Phase, PhaseCell},
     custom_methods,
+    jsonrpc::{
+        internal_error, invalid_request, method_not_found, not_initialized, Error, LspResult,
+    },
 };
+
+mod routes;
+mod stdio;
 
 /// Methods that accept an empty-object `params` payload and must also
 /// accept a missing `params` field — some JSON-RPC clients omit it for
-/// no-arg calls, and tower-lsp's router rejects the request with
-/// `-32602 Missing params field` before the handler runs.
+/// no-arg calls.
 const NO_PARAM_METHODS: &[&str] = &[
     custom_methods::REPORT_GET,
     custom_methods::REPORT_DELTA,
@@ -42,6 +34,9 @@ const NO_PARAM_METHODS: &[&str] = &[
     custom_methods::REPORT_SCHEMA_DOC,
     custom_methods::CPU_REPORT,
 ];
+
+/// The LSP base-protocol request that opens a session.
+const INITIALIZE_METHOD: &str = "initialize";
 
 /// The LSP base-protocol method that stops the server accepting work.
 const SHUTDOWN_METHOD: &str = "shutdown";
@@ -75,129 +70,202 @@ impl ServeEnd {
     }
 }
 
-/// Lifecycle messages seen on the wire, shared between the middleware that
-/// observes them and the caller that reports the ending.
-#[derive(Debug, Clone, Default)]
-struct Lifecycle {
-    /// Set once the client has sent `shutdown`.
-    shutdown: Arc<AtomicBool>,
-    /// Set once the client has sent `exit`.
-    exit: Arc<AtomicBool>,
-    /// Raised the moment `exit` is seen, so the serve loop can end without
-    /// waiting for a message the client is not going to send.
-    exited: Arc<Notify>,
+/// The answer to one request, ready to be awaited off the read loop.
+type Answer = Pin<Box<dyn Future<Output = Message> + Send>>;
+
+/// One editor session: the backend, its routes and its lifecycle phase.
+#[derive(Debug)]
+pub struct Session {
+    /// The analysis backend every route forwards to.
+    backend: Arc<LspBackend>,
+    /// Request routes and their cancellation registry.
+    dispatcher: Dispatcher,
+    /// Lifecycle phase, shared with the client handle.
+    phase: Arc<PhaseCell>,
+    /// Handle onto the editor.
+    client: Client,
 }
 
-impl Lifecycle {
-    /// Records `method` when it is one of the two lifecycle messages.
-    fn observe(&self, method: &str) {
-        match method {
-            SHUTDOWN_METHOD => self.shutdown.store(true, Ordering::SeqCst),
-            EXIT_METHOD => {
-                self.exit.store(true, Ordering::SeqCst);
-                self.exited.notify_one();
+/// The editor's side of an in-process session: every frame the server
+/// sends, and the way to answer the requests among them.
+#[derive(Debug)]
+pub struct ClientSocket {
+    /// Frames the server queued for the editor.
+    frames: mpsc::Receiver<Message>,
+    /// Routes the editor's answers back to the waiting requests.
+    client: Client,
+}
+
+impl ClientSocket {
+    /// The next frame the server sends; `None` once the session is gone.
+    pub async fn next(&mut self) -> Option<Message> {
+        self.frames.recv().await
+    }
+
+    /// The next frame already queued, without waiting.
+    pub fn try_next(&mut self) -> Option<Message> {
+        self.frames.try_recv().ok()
+    }
+
+    /// Answers a request the server sent.
+    pub fn answer(&self, id: RequestId, result: Value) {
+        self.client.resolve(Message::response(id, result));
+    }
+}
+
+/// Builds a session around the backend `build` constructs from its client
+/// handle, and returns the editor's side of it.
+///
+/// # Errors
+///
+/// Returns `build`'s error when the backend cannot be constructed.
+pub fn connect<F, E>(build: F) -> Result<(Session, ClientSocket), E>
+where
+    F: FnOnce(Client) -> Result<LspBackend, E>,
+{
+    let phase = Arc::new(PhaseCell::default());
+    let (client, frames) = Client::open(Arc::clone(&phase));
+    let backend = Arc::new(build(client.clone())?);
+    let dispatcher = Dispatcher::new();
+    routes::register(&dispatcher, &backend);
+    let socket = ClientSocket {
+        frames,
+        client: client.clone(),
+    };
+    let session = Session {
+        backend,
+        dispatcher,
+        phase,
+        client,
+    };
+    Ok((session, socket))
+}
+
+impl Session {
+    /// The backend this session serves.
+    #[must_use]
+    pub fn backend(&self) -> &LspBackend {
+        &self.backend
+    }
+
+    /// Handles one inbound frame to completion: the response for a request,
+    /// `None` for a notification or an answer to a server request.
+    pub async fn call(&self, message: Message) -> Option<Message> {
+        match (message.id.clone(), message.method.clone()) {
+            (Some(id), Some(method)) => Some(self.answer(id, &method, message.params).await),
+            (None, Some(method)) => {
+                self.notify(&method, message.params.unwrap_or(Value::Null))
+                    .await;
+                None
             }
-            _ => (),
+            (Some(_), None) => {
+                self.client.resolve(message);
+                None
+            }
+            (None, None) => None,
         }
     }
 
-    /// How the serve loop ended, read once it has returned.
-    fn end(&self) -> ServeEnd {
-        match (
-            self.exit.load(Ordering::SeqCst),
-            self.shutdown.load(Ordering::SeqCst),
-        ) {
-            (true, true) => ServeEnd::ExitAfterShutdown,
-            (true, false) => ServeEnd::ExitWithoutShutdown,
-            (false, _) => ServeEnd::ClientVanished,
+    /// Admits a request and registers its cancellation before returning, so
+    /// a `$/cancelRequest` read next can never miss it.
+    fn answer(&self, id: RequestId, method: &str, params: Option<Value>) -> Answer {
+        let admitted = self.admit(method);
+        let opening = admitted.is_ok() && method == INITIALIZE_METHOD;
+        let prepared = admitted.and_then(|()| self.prepare(id.clone(), method, params));
+        let phase = Arc::clone(&self.phase);
+        Box::pin(async move {
+            let result = match prepared {
+                Ok(work) => work.await,
+                Err(error) => HandlerResult::Err(error),
+            };
+            if opening {
+                settle_initialize(&phase, &result);
+            }
+            response(id, result)
+        })
+    }
+
+    /// [LSP-LIFECYCLE] Whether the current phase admits a request for `method`.
+    fn admit(&self, method: &str) -> LspResult<()> {
+        match self.phase.get() {
+            Phase::Uninitialized if method == INITIALIZE_METHOD => self
+                .phase
+                .advance(Phase::Uninitialized, Phase::Initializing)
+                .then_some(())
+                .ok_or_else(invalid_request),
+            Phase::Uninitialized | Phase::Initializing => Err(not_initialized()),
+            Phase::Initialized if method == INITIALIZE_METHOD => Err(invalid_request()),
+            Phase::Initialized => {
+                if method == SHUTDOWN_METHOD {
+                    self.phase.set(Phase::ShutDown);
+                }
+                Ok(())
+            }
+            Phase::ShutDown => Err(invalid_request()),
         }
     }
-}
 
-/// Service adapter that records the base-protocol lifecycle as it passes.
-#[derive(Debug)]
-struct WatchLifecycle<S> {
-    /// Wrapped service that handles the message.
-    inner: S,
-    /// Shared state the caller reads after the serve loop ends.
-    lifecycle: Lifecycle,
-}
-
-impl<S> Service<Request> for WatchLifecycle<S>
-where
-    S: Service<Request, Response = Option<Response>, Error = ExitedError>,
-{
-    type Response = Option<Response>;
-    type Error = ExitedError;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+    /// Registers the request with the dispatcher and returns its work.
+    fn prepare(
+        &self,
+        id: RequestId,
+        method: &str,
+        params: Option<Value>,
+    ) -> LspResult<impl Future<Output = HandlerResult> + Send + 'static> {
+        let params = params.unwrap_or_else(|| missing_params(method));
+        self.dispatcher
+            .prepare(id, method, params)
+            .map_err(|error| dispatch_fault(&error))
     }
 
-    fn call(&mut self, req: Request) -> Self::Future {
-        self.lifecycle.observe(req.method());
-        self.inner.call(req)
-    }
-}
-
-/// Service adapter that injects an empty-object `params` value on
-/// selected custom methods when the incoming request omitted it.
-#[derive(Debug)]
-struct NormaliseParams<S> {
-    /// Wrapped service that receives the normalised request.
-    inner: S,
-}
-
-impl<S> NormaliseParams<S> {
-    /// Wraps `inner` so incoming requests are normalised before reaching it.
-    fn new(inner: S) -> Self {
-        Self { inner }
-    }
-}
-
-impl<S> Service<Request> for NormaliseParams<S>
-where
-    S: Service<Request, Response = Option<Response>, Error = ExitedError>,
-{
-    type Response = Option<Response>;
-    type Error = ExitedError;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request) -> Self::Future {
-        let normalised = if req.params().is_none()
-            && NO_PARAM_METHODS
-                .iter()
-                .any(|method| *method == req.method())
-        {
-            rebuild_with_empty_params(req)
+    /// Runs a notification's handler. Outside an initialised session the
+    /// base protocol says to drop it.
+    async fn notify(&self, method: &str, params: Value) {
+        if self.phase.get() == Phase::Initialized {
+            routes::notify(&self.backend, method, params).await;
         } else {
-            req
-        };
-        self.inner.call(normalised)
+            tracing::debug!(
+                method,
+                "notification outside an initialised session dropped"
+            );
+        }
     }
 }
 
-/// Rebuilds `req` with a `params: {}` payload. Preserves method and id.
-fn rebuild_with_empty_params(req: Request) -> Request {
-    let (method, id, _params) = req.into_parts();
-    let mut builder = Request::build(method).params(serde_json::json!({}));
-    if let Some(id) = id {
-        builder = builder.id(id);
+/// The value a handler sees when the request carried no `params`.
+fn missing_params(method: &str) -> Value {
+    if NO_PARAM_METHODS.contains(&method) {
+        Value::Object(serde_json::Map::new())
+    } else {
+        Value::Null
     }
-    builder.finish()
 }
 
-/// Aborts the process with a structured diagnostic when the backend
-/// cannot construct. The editor surfaces this through the standard
-/// "server crashed" UX.
-fn report_init_failure(error: &deslop_core::live::LiveError) -> ! {
-    tracing::error!(%error, "deslop-lsp backend failed to initialise");
-    std::process::exit(1)
+/// `initialize` succeeded: the session works. It failed: the editor may retry.
+fn settle_initialize(phase: &PhaseCell, result: &HandlerResult) {
+    let next = if matches!(result, HandlerResult::Ok(_)) {
+        Phase::Initialized
+    } else {
+        Phase::Uninitialized
+    };
+    phase.set(next);
+}
+
+/// The fault a request gets when the dispatcher could not schedule it.
+fn dispatch_fault(error: &DispatchError) -> Error {
+    match error {
+        DispatchError::UnknownMethod(_) => method_not_found(),
+        other => internal_error(other.to_string()),
+    }
+}
+
+/// Shapes a handler outcome into the response frame for `id`.
+fn response(id: RequestId, result: HandlerResult) -> Message {
+    match result {
+        HandlerResult::Ok(value) => Message::response(id, value),
+        HandlerResult::Err(error) => Message::response_error(id, error),
+        _ => Message::response_error(id, internal_error("unrecognised handler outcome")),
+    }
 }
 
 /// Boots the LSP server over stdio. Used by the binary entry point
@@ -208,7 +276,8 @@ fn report_init_failure(error: &deslop_core::live::LiveError) -> ! {
 ///
 /// # Errors
 ///
-/// Returns `Err` when the backend fails to construct.
+/// Returns `Err` when the backend fails to construct; the editor surfaces
+/// the failed process through its standard "server crashed" UX.
 pub async fn run_stdio(
     workspace_root: PathBuf,
     min_nodes: u32,
@@ -222,143 +291,27 @@ pub async fn run_stdio(
         min_nodes,
         "run_stdio booting backend",
     );
-    let workspace_root_for_builder = workspace_root;
-    let (service, socket) = LspService::build(move |client| {
-        match LspBackend::new_with_config(
-            client,
-            workspace_root_for_builder.clone(),
-            min_nodes,
-            &embedding,
-            ipc_mode,
-        ) {
-            Ok(backend) => backend,
-            Err(error) => report_init_failure(&error),
-        }
+    let (session, socket) = connect(move |client| {
+        LspBackend::new_with_config(client, workspace_root, min_nodes, &embedding, ipc_mode)
     })
-    .custom_method(custom_methods::REPORT_GET, custom_methods::report_get)
-    .custom_method(custom_methods::REPORT_DELTA, custom_methods::report_delta)
-    .custom_method(
-        custom_methods::REPORT_FOR_FILE,
-        custom_methods::report_for_file,
-    )
-    .custom_method(
-        custom_methods::REPORT_FOR_RANGE,
-        custom_methods::report_for_range,
-    )
-    .custom_method(custom_methods::CLUSTER_BY_ID, custom_methods::cluster_by_id)
-    .custom_method(custom_methods::PAIR_COMPARE, custom_methods::pair_compare)
-    .custom_method(custom_methods::FIND_SIMILAR, custom_methods::find_similar)
-    .custom_method(
-        custom_methods::LIST_MODELS,
-        custom_methods::embedding_list_models,
-    )
-    .custom_method(
-        custom_methods::SET_MODEL,
-        custom_methods::embedding_set_model,
-    )
-    .custom_method(
-        custom_methods::SESSION_CONFIG,
-        custom_methods::session_config,
-    )
-    .custom_method(
-        custom_methods::REPORT_SCHEMA_DOC,
-        custom_methods::report_schema_doc,
-    )
-    .custom_method(custom_methods::CPU_REPORT, custom_methods::cpu_report)
-    .custom_method(
-        custom_methods::VIRTUAL_DOCUMENT,
-        custom_methods::virtual_document,
-    )
-    .finish();
-    let lifecycle = Lifecycle::default();
-    let stdin = EndOnEof {
-        inner: tokio::io::stdin(),
-        ended: lifecycle.exited.clone(),
-    };
-    let stdout = tokio::io::stdout();
-    let serving = Server::new(stdin, stdout, socket).serve(WatchLifecycle {
-        inner: NormaliseParams::new(service),
-        lifecycle: lifecycle.clone(),
-    });
-    serve_until_exit(serving, &lifecycle.exited).await;
-    let end = lifecycle.end();
+    .inspect_err(|error| tracing::error!(%error, "deslop-lsp backend failed to initialise"))?;
+    let end = stdio::serve(session, socket, tokio::io::stdin(), tokio::io::stdout()).await;
     tracing::info!(?end, "serve loop ended");
     Ok(end)
 }
 
-/// Serves until the transport ends or the client sends `exit`.
-///
-/// tower-lsp's read loop only notices that the server has exited when the
-/// *next* message arrives, and after `exit` the base protocol tells the
-/// client there is nothing left to send. Waiting on the transport alone
-/// therefore parks forever on a client that did exactly what it was told,
-/// and the process outlives every editor window that opened it
-/// ([LSP-LIFECYCLE]).
-///
-/// `biased` keeps the transport first, so the `exit` message is fully
-/// handled — tower-lsp cancels pending work and closes the client inside
-/// the same synchronous `call` that raises this signal — before the loop
-/// is allowed to end.
-async fn serve_until_exit<F>(serving: F, exited: &Notify)
-where
-    F: std::future::Future<Output = ()>,
-{
-    tokio::pin!(serving);
-    tokio::select! {
-        biased;
-        () = &mut serving => (),
-        () = exited.notified() => (),
-    }
-}
-
-/// A reader that raises `ended` the moment it reaches end of file.
-///
-/// [LSP-LIFECYCLE] Closing stdin is how a client that did not get to say
-/// anything says goodbye — it crashed, or the editor window went away. The
-/// base protocol treats that as `exit`, and so must this process.
-///
-/// tower-lsp's serve future does not resolve on end of file alone: it first
-/// lets the work already in flight finish. After `exit` that is right, since
-/// the client asked for an orderly stop and is still there to be answered.
-/// After the client has vanished it is the leak this module exists to
-/// prevent, because the work being waited on is unbounded — gh #370 was a
-/// refresh that ran for fourteen minutes, and nobody was left to read it.
-///
-/// The failure is invisible on a fast machine, where the pass is finished
-/// before the pipe closes, which is why it surfaced first as a CI timeout:
-/// the instrumented two-core runner held stdout open for the full
-/// two-minute ceiling. Raising the same signal `exit` raises ends the loop
-/// at once, and leaves the ending — and therefore the process exit code —
-/// classified as [`ServeEnd::ClientVanished`] rather than as an `exit`.
-struct EndOnEof<R> {
-    /// The reader being watched, normally the process's stdin.
-    inner: R,
-    /// Raised once, when `inner` first reports end of file.
-    ended: Arc<Notify>,
-}
-
-impl<R: AsyncRead + Unpin> AsyncRead for EndOnEof<R> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        context: &mut Context<'_>,
-        buffer: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        let before = buffer.filled().len();
-        // Only a read that was *offered* room can report end of file by
-        // filling none. A caller that polls with a full buffer gets a ready,
-        // zero-filled read while the client is still very much there, and
-        // treating that as the client going away kills a live session.
-        let offered_room = buffer.remaining() > 0;
-        let polled = Pin::new(&mut self.inner).poll_read(context, buffer);
-        // A ready read that was offered room and filled none is end of file;
-        // one that filled bytes is ordinary traffic, and an error is not an
-        // ending this signal may claim.
-        if offered_room && matches!(polled, Poll::Ready(Ok(()))) && buffer.filled().len() == before
-        {
-            self.ended.notify_one();
-        }
-        polled
-    }
+/// A client handle in an initialised session and the editor's side of it,
+/// for tests that exercise server pushes without a backend.
+#[cfg(test)]
+pub(crate) fn loopback() -> (Client, ClientSocket) {
+    let phase = Arc::new(PhaseCell::default());
+    phase.set(Phase::Initialized);
+    let (client, frames) = Client::open(phase);
+    let socket = ClientSocket {
+        frames,
+        client: client.clone(),
+    };
+    (client, socket)
 }
 
 #[cfg(test)]

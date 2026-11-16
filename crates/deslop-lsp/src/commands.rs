@@ -6,16 +6,16 @@ use deslop_core::{
     render::render_html,
     report::{Report, LIVE_WIRE_OCCURRENCE_CAP},
 };
-use serde_json::{json, Value};
-use tower_lsp::{
-    jsonrpc::{Error, Result as LspResult},
-    lsp_types::{
-        ExecuteCommandOptions, ExecuteCommandParams, ShowDocumentParams, Url,
-        WorkDoneProgressOptions,
-    },
+use lsp_types::{
+    ExecuteCommandOptions, ExecuteCommandParams, ShowDocumentParams, Uri, WorkDoneProgressOptions,
 };
+use serde_json::{json, Value};
 
-use crate::{backend::LspBackend, notifications::ReportChangedLspNotification};
+use crate::{
+    backend::LspBackend,
+    jsonrpc::{self, Error, LspResult},
+    notifications::ReportChangedLspNotification,
+};
 
 /// JSON-RPC field naming the command in an `executeCommand` request.
 const COMMAND_FIELD: &str = "command";
@@ -81,7 +81,7 @@ pub async fn execute(
         OPEN_CLUSTER => open_cluster(backend, &params.arguments).await,
         PICK_EMBEDDING_MODEL => pick_embedding_model(backend).await,
         TOGGLE_INCREMENTAL => toggle_incremental(backend).await,
-        _ => Err(Error::method_not_found()),
+        _ => Err(jsonrpc::method_not_found()),
     }
 }
 
@@ -151,9 +151,7 @@ async fn report_json(backend: &LspBackend) -> LspResult<Option<Value>> {
 
 /// Maps a report serialisation failure onto a JSON-RPC internal error.
 fn serialisation_error(error: &serde_json::Error) -> Error {
-    let mut out = Error::internal_error();
-    out.message = error.to_string().into();
-    out
+    jsonrpc::internal_error(error.to_string())
 }
 
 /// Pushes `deslop/reportChanged` only when refresh changed visible clusters.
@@ -219,22 +217,21 @@ async fn toggle_incremental(backend: &LspBackend) -> LspResult<Option<Value>> {
 }
 
 /// Parses a Deslop virtual-document URI for `window/showDocument`.
-fn parse_uri(uri: &str) -> LspResult<Url> {
+fn parse_uri(uri: &str) -> LspResult<Uri> {
     uri.parse()
         .map_err(|_| invalid_params("command produced an invalid deslop URI"))
 }
 
 /// Builds an `Invalid params` JSON-RPC error with structured data.
 fn invalid_params(message: &str) -> Error {
-    let mut error = Error::invalid_params(message.to_owned());
-    error.data = Some(Value::String(message.to_owned()));
-    error
+    jsonrpc::invalid_params(message).with_data(Value::String(message.to_owned()))
 }
 
 /// Converts live-analysis failures into JSON-RPC internal errors.
 fn live_error(error: &LiveError) -> Error {
-    let mut out = Error::internal_error();
-    out.message = error.to_string().into();
-    out.data = serde_json::to_value(error.to_wire()).ok();
-    out
+    let fault = jsonrpc::internal_error(error.to_string());
+    match serde_json::to_value(error.to_wire()) {
+        Ok(wire) => fault.with_data(wire),
+        Err(_) => fault,
+    }
 }

@@ -4,6 +4,11 @@
 
 use std::time::Instant;
 
+use crate::{
+    backend::LspBackend,
+    jsonrpc::{self, Error, LspResult},
+    observability::CpuPhase,
+};
 use deslop_core::{
     live::{FindSimilarRequest, LiveApi},
     render::{render_cluster_markdown, render_text},
@@ -14,9 +19,6 @@ use deslop_core::{
     },
 };
 use serde::{Deserialize, Serialize};
-use tower_lsp::jsonrpc::Result as LspResult;
-
-use crate::{backend::LspBackend, observability::CpuPhase};
 
 /// Method name for `deslop/reportSchemaDoc`. Serves the markdown
 /// `schema_doc` that used to ride every `deslop/reportGet` response;
@@ -80,8 +82,7 @@ pub const VIRTUAL_DOCUMENT: &str = "deslop/virtualDocument";
 // top of the file.
 
 /// Forwards `report/get`. Accepts and ignores any params the client
-/// happens to send (tower-lsp rejects `params: {}` unless the handler
-/// declares a param type, and the VSIX sends `{}`).
+/// happens to send (the VSIX sends `{}`).
 ///
 /// # Errors
 ///
@@ -340,14 +341,14 @@ pub async fn session_config(
 }
 
 /// Lifts a [`deslop_core::live::LiveError`] into the JSON-RPC fault
-/// shape `tower-lsp` exposes.
-fn into_jsonrpc(error: &deslop_core::live::LiveError) -> tower_lsp::jsonrpc::Error {
+/// shape.
+fn into_jsonrpc(error: &deslop_core::live::LiveError) -> Error {
     let wire = error.to_wire();
-    let message = wire.message.clone();
-    let mut out = tower_lsp::jsonrpc::Error::internal_error();
-    out.message = message.into();
-    out.data = serde_json::to_value(wire).ok();
-    out
+    let fault = jsonrpc::internal_error(wire.message.clone());
+    match serde_json::to_value(wire) {
+        Ok(data) => fault.with_data(data),
+        Err(_) => fault,
+    }
 }
 
 /// Serves markdown for a `deslop://` virtual-document URI
@@ -412,10 +413,8 @@ fn parse_virtual_uri(uri: &str) -> Option<VirtualDocument> {
 }
 
 /// Builds a JSON-RPC `-32602 Invalid params` error with `message`.
-fn invalid_params(message: String) -> tower_lsp::jsonrpc::Error {
-    let mut error = tower_lsp::jsonrpc::Error::invalid_params(message.clone());
-    error.data = Some(serde_json::Value::String(message));
-    error
+fn invalid_params(message: String) -> Error {
+    jsonrpc::invalid_params(message.clone()).with_data(serde_json::Value::String(message))
 }
 
 #[cfg(test)]

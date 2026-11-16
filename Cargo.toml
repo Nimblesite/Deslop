@@ -52,8 +52,8 @@ ureq = { version = "=3.4.2", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
 notify = "=8.2.0"
 tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "sync", "io-util", "io-std", "time"] }
-tower = { version = "=0.5.3", default-features = false }
-tower-lsp = "=0.20.0"
+lspkit-server = "=0.5.0"
+lsp-types = "=0.97.0"
 futures = "=0.3.34"
 async-trait = "=0.1.92"
 

@@ -4,8 +4,8 @@ use std::fs;
 
 use anyhow::Result;
 use deslop_lsp::commands::REFRESH_REPORT;
+use lsp_types::Uri;
 use serde_json::{json, Value};
-use tower_lsp::lsp_types::Url;
 
 use super::{did_close, did_open, report_for_range, EDITED_FILE, FIXTURE, FIXTURE_FILE_COUNT};
 use crate::common::{
@@ -40,7 +40,7 @@ fn deleted_disk_source_survives_reconciliation_and_refresh_until_buffer_closes()
 }
 
 /// Remove the saved file while the editor still holds its complete clone text.
-fn remove_open_source(session: &mut FixtureSession) -> Result<Url> {
+fn remove_open_source(session: &mut FixtureSession) -> Result<Uri> {
     let file = session.workspace.path().join(EDITED_FILE);
     let uri = session.file_uri(EDITED_FILE)?;
     let text = fs::read_to_string(&file)?;
@@ -76,7 +76,7 @@ fn refresh_workspace(session: &mut FixtureSession, initial: &Value) -> Result<()
 }
 
 /// Closing the last authoritative source publishes the removal and clears range queries.
-fn close_deleted_source(session: &mut FixtureSession, uri: &Url) -> Result<()> {
+fn close_deleted_source(session: &mut FixtureSession, uri: &Uri) -> Result<()> {
     write_frame(&mut session.stdin, &did_close(uri)?)?;
     let closed = wait_for_report(&mut session.stdin, &mut session.stdout, |report| {
         at(report, "files_analysed") == CLOSED_FILE_COUNT

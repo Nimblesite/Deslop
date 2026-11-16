@@ -2,11 +2,30 @@
 
 Thin Language Server Protocol shell over [LIVE-BINARY]. Makes the live Deslop report available to any LSP-compatible editor (VS Code via the VSIX, Neovim, Helix, Zed, Emacs `lsp-mode`, JetBrains via LSP4IJ). The VSIX is the polished reference client; the LSP is the open interface.
 
-Crate: `crates/deslop-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-lsp` (pure Rust, no C deps; already used by `rust-analyzer` and dozens of other servers).
+Crate: `crates/deslop-lsp`. Transport: JSON-RPC over stdio. Framework: `lspkit-server`, pinned to an exact release (framing, request dispatch and cancellation); the session, its routes and its lifecycle are Deslop's own ([LSP-TRANSPORT-DISPATCH]).
 
 ### [LSP-TRANSPORT] Transport + framing
 
 Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSockets. The editor spawns the binary; the binary speaks LSP on stdin/stdout; `tracing` goes to stderr (picked up as the "server log" in the client). That stderr is a pipe into the client's log file, so log lines carry no ANSI colour unless stderr is a terminal ([UX-NO-COLOR]; `NO_COLOR` and `DESLOP_FORCE_COLOR` apply as for the CLI): escape codes would split every `key=value` field a reader greps for. `deslop-mcp` follows the same rule, `deslop_core::logging_colour::stderr_wants_colour`. One process per workspace root.
+
+#### [LSP-TRANSPORT-DISPATCH] Reading never waits on analysis
+
+The read loop only reads. What it reads is handed on at once, so `exit`, a cancellation or a closed stream is seen the moment it arrives, however long an analysis pass is taking.
+
+| Frame | What happens to it |
+|---|---|
+| Request | Registered for cancellation, then run on its own task. Four run at once; the rest wait their turn and can still be cancelled. |
+| Notification | Queued for one worker that runs them in the order they were read, so `didOpen`, `didChange` and `didClose` for a file can never overtake each other. |
+| `$/cancelRequest` | Handled in the read loop. The cancelled request stops waiting on its work and is answered `-32800 Request cancelled`. |
+| Answer to a request the server sent | Delivered to whoever is waiting for it. |
+
+Everything the server writes — responses, notifications, its own requests — goes through one queue of 16 frames, and the notification worker has a queue of 16 as well. Both are bounded on purpose: an editor that stops reading its pipe stops being read, instead of the server queueing output without limit ([LIVE-OPEN-BUFFERS]).
+
+A request before `initialize` is answered `-32002 Server not initialized`; a second `initialize`, or any request after `shutdown`, `-32600 Invalid request`; an unknown method `-32601`. Notifications outside an initialised session are dropped, and the server sends none of its own before `initialize` is answered except `window/showMessage` and `window/logMessage`.
+
+A request the server sends to the editor (`window/showDocument`, `workspace/diagnostic/refresh`) is remembered only while something waits for the answer. When the wait is abandoned — the handler was cancelled, the editor never answered — the entry goes with it, and dropping a session frees its backend ([LSPKIT-ADOPT-LEAKS]).
+
+Implemented in `deslop-lsp/src/server.rs`, `server/stdio.rs`, `server/routes.rs` and `client.rs`; pinned by `src/server/tests.rs`, `src/client/tests.rs`, `tests/lifecycle.rs` and `tests/state_file_and_ipc/slow_editor.rs`.
 
 ### [LSP-IPC] A second endpoint, for tools that are not the editor
 
@@ -41,7 +60,7 @@ A server that ignores `exit` outlives every editor window that opened it, and ea
 
 Two things had to be true for this to work, and neither is automatic:
 
-- **The read loop has to stop on `exit`.** `tower-lsp` only notices that the server has exited when the *next* message arrives — and after `exit` the protocol tells the client there is nothing left to send. `server.rs` watches the wire for the two lifecycle methods and ends the loop on that signal instead of on a message that never comes.
+- **The read loop has to stop on `exit` and on a closed stream, at once.** After `exit` the protocol tells the client there is nothing left to send, and a client that vanished will never collect the pass still running. The loop in `server/stdio.rs` ends on either the moment it reads it, and drops the work in flight rather than waiting for it ([LSP-TRANSPORT-DISPATCH]).
 - **The process must not wait for stdin.** The stdio reader is a Tokio blocking task parked in a read that only returns at EOF, and dropping a runtime joins its blocking tasks. A client that says `exit` never closes stdin, so `app.rs` detaches the runtime rather than waiting on it.
 
 Pinned by `crates/deslop-lsp/tests/lifecycle.rs`, which drives the real binary and asserts every row of the table above, exit code included.

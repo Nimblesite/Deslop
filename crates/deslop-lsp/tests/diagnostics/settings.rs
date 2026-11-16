@@ -1,10 +1,10 @@
 //! [SEVERITY-TESTING] Settings update a real LSP without another scan.
 
 use anyhow::{ensure, Context, Result};
-use serde_json::{json, Value};
-use tower_lsp::lsp_types::{
+use lsp_types::{
     ClientCapabilities, DiagnosticWorkspaceClientCapabilities, WorkspaceClientCapabilities,
 };
+use serde_json::{json, Value};
 
 use crate::common::{
     notification, path as json_path, read_frame, session::FixtureSession, write_frame,

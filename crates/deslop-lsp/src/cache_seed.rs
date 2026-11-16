@@ -2,6 +2,7 @@
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
+use crate::client::Client;
 use deslop_core::{
     embedding::{EmbeddingMode, EmbeddingProvider},
     live::{
@@ -11,7 +12,6 @@ use deslop_core::{
     EmbeddingSettings, PipelineSession, ReportDelta,
 };
 use tokio::sync::Mutex;
-use tower_lsp::Client;
 
 use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotification};
 

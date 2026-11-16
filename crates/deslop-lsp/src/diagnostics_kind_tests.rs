@@ -123,7 +123,7 @@ fn disabled_diagnostics_suppress_even_explicit_error_overrides() {
         let report = report_for(kind, MASSES[0]);
         assert_eq!(
             build_for_file(&report, Path::new(WORKSPACE), &settings, &DEFAULT_INCLUDES),
-            Vec::<tower_lsp::lsp_types::Diagnostic>::new()
+            Vec::<lsp_types::Diagnostic>::new()
         );
     }
 }
@@ -136,7 +136,7 @@ fn excluded_kinds_publish_nothing_unless_the_user_opts_in() {
     let report = report_for(ClusterKind::LooselySimilar, MASSES[0]);
     assert_eq!(
         build_for_file(&report, Path::new(WORKSPACE), &enabled(), &DEFAULT_INCLUDES),
-        Vec::<tower_lsp::lsp_types::Diagnostic>::new(),
+        Vec::<lsp_types::Diagnostic>::new(),
         "excluded kind under the default include set publishes nothing"
     );
     assert_eq!(

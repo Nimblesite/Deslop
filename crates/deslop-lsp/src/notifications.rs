@@ -12,32 +12,32 @@ pub const REPORT_CHANGED: &str = "deslop/reportChanged";
 /// whenever a watcher-driven pass starts, finishes, or errors.
 pub const ANALYSIS_STATE: &str = "deslop/analysisState";
 
-/// Type-only marker so `tower_lsp::Client::send_notification` can
+/// Type-only marker so [`crate::Client::send_notification`] can
 /// dispatch our custom method.
 #[derive(Debug)]
 pub enum EmbeddingProgressNotification {}
 
-impl tower_lsp::lsp_types::notification::Notification for EmbeddingProgressNotification {
+impl lsp_types::notification::Notification for EmbeddingProgressNotification {
     type Params = EmbeddingProgress;
     const METHOD: &'static str = EMBEDDING_PROGRESS;
 }
 
-/// Type-only marker so `tower_lsp::Client::send_notification` can
+/// Type-only marker so [`crate::Client::send_notification`] can
 /// dispatch `deslop/reportChanged`.
 #[derive(Debug)]
 pub enum ReportChangedLspNotification {}
 
-impl tower_lsp::lsp_types::notification::Notification for ReportChangedLspNotification {
+impl lsp_types::notification::Notification for ReportChangedLspNotification {
     type Params = ReportChangedNotification;
     const METHOD: &'static str = REPORT_CHANGED;
 }
 
-/// Type-only marker so `tower_lsp::Client::send_notification` can
+/// Type-only marker so [`crate::Client::send_notification`] can
 /// dispatch `deslop/analysisState`.
 #[derive(Debug)]
 pub enum AnalysisStateLspNotification {}
 
-impl tower_lsp::lsp_types::notification::Notification for AnalysisStateLspNotification {
+impl lsp_types::notification::Notification for AnalysisStateLspNotification {
     /// The generated [`AnalysisState`] tagged object — e.g.
     /// `{"state":"running","started_at_ms":…}`. The VSIX reads
     /// `state.state`, so the previous bare-`String` payload silently

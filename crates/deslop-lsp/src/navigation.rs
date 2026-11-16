@@ -4,16 +4,16 @@
 
 use std::path::PathBuf;
 
-use tower_lsp::lsp_types::FileEvent;
+use lsp_types::FileEvent;
 
-use crate::backend::url_to_path;
+use crate::backend::uri_to_path;
 
 /// Extracts filesystem paths from watched-file events.
 #[must_use]
 pub fn paths_from_file_events(events: &[FileEvent]) -> Vec<PathBuf> {
     events
         .iter()
-        .filter_map(|event| url_to_path(&event.uri))
+        .filter_map(|event| uri_to_path(&event.uri))
         .collect()
 }
 
@@ -21,13 +21,13 @@ pub fn paths_from_file_events(events: &[FileEvent]) -> Vec<PathBuf> {
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use tower_lsp::lsp_types::{FileChangeType, FileEvent, Url};
+    use lsp_types::{FileChangeType, FileEvent, Uri};
 
     use super::paths_from_file_events;
 
     /// A path in an imagined repository, absolute on this host.
     ///
-    /// `Url::from_file_path` refuses a relative path, and `/repo/A.cs` is
+    /// `path_to_uri` refuses a relative path, and `/repo/A.cs` is
     /// relative on Windows: a path with no volume names a location on
     /// whatever drive the caller happens to be on. The crate directory is
     /// absolute everywhere and fixed for a checkout, so the test stays
@@ -42,9 +42,9 @@ mod tests {
     fn paths_from_file_events_keeps_file_uris_and_drops_non_file_uris(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let (path_a, path_b) = (in_repo("A.cs"), in_repo("B.cs"));
-        let file_a = Url::from_file_path(&path_a).map_err(|()| "A.cs is a file url")?;
-        let file_b = Url::from_file_path(&path_b).map_err(|()| "B.cs is a file url")?;
-        let non_file = Url::parse("untitled:Untitled-1")?;
+        let file_a = crate::backend::path_to_uri(&path_a).ok_or("A.cs is a file url")?;
+        let file_b = crate::backend::path_to_uri(&path_b).ok_or("B.cs is a file url")?;
+        let non_file: Uri = "untitled:Untitled-1".parse()?;
         let events = vec![
             FileEvent::new(file_a, FileChangeType::CHANGED),
             FileEvent::new(non_file, FileChangeType::CREATED),

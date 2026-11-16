@@ -139,8 +139,8 @@ fn result_string(response: &Value) -> Result<String> {
 fn open_fixture_files(stdin: &mut std::process::ChildStdin, root: &Path) -> Result<()> {
     for name in ["Alpha.cs", "Beta.cs"] {
         let path = root.join(name);
-        let uri = tower_lsp::lsp_types::Url::from_file_path(&path)
-            .map_err(|()| anyhow!("fixture path not absolute: {}", path.display()))?;
+        let uri = deslop_lsp::backend::path_to_uri(&path)
+            .ok_or_else(|| anyhow!("fixture path not absolute: {}", path.display()))?;
         let text = std::fs::read_to_string(&path)?;
         write_frame(
             stdin,

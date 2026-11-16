@@ -2,9 +2,9 @@
 
 ## [LSPKIT-ADOPT-SCOPE] What this plan covers
 
-The sibling `lspkit` repository proved five ownership leaks on 2026-11-16 and is repairing them (its `docs/plans/memory-leak-audit.md` and `docs/plans/memory-leak-fixes.md`). The fixes are not released: the latest lspkit release is v0.4.0 and the repairs sit on a work-in-progress branch.
+The sibling `lspkit` repository proved five ownership leaks on 2026-11-16 and is repairing them (its `docs/plans/memory-leak-audit.md` and `docs/plans/memory-leak-fixes.md`). The fixes shipped in lspkit v0.5.0 (crates.io, 2026-11-16).
 
-Deslop does not depend on lspkit today. `deslop-lsp` is built on `tower-lsp` 0.20.0 and the MCP, watcher and scheduler scaffolding is Deslop's own; [the repository index](../repo-index.md) maps each piece to the lspkit crate meant to replace it. So the fixes reach Deslop in two ways, and this plan does both:
+`deslop-lsp` now runs on `lspkit-server` 0.5.0 in place of `tower-lsp` ([LSP-TRANSPORT-DISPATCH]); the MCP, watcher and scheduler scaffolding is still Deslop's own; [the repository index](../repo-index.md) maps each piece to the lspkit crate meant to replace it. So the fixes reach Deslop in two ways, and this plan does both:
 
 1. Each leak class lspkit proved is checked against Deslop's own scaffolding now, test-first, because the same shape of code exists here.
 2. Once lspkit publishes a release that contains the repairs, Deslop adopts the lspkit crates for those pieces, pinned to that release.
@@ -27,16 +27,16 @@ Related growth already found in Deslop and tracked with this work: `FileRegistry
 
 ## [LSPKIT-ADOPT-CHECKLIST] Steps
 
-- [ ] lspkit agent confirms the release version that carries all five repairs, where it is published (crates.io or a git tag), and the date.
+- [x] lspkit agent confirms the release version that carries all five repairs, where it is published (crates.io or a git tag), and the date: v0.5.0, crates.io, 2026-11-16.
 - [ ] For each row above, a Deslop test that proves the allocation is released when the work ends (weak-count or live-entry assertions, no RSS, no sleeps). A red test is a confirmed Deslop leak: fix it under the fix-bug skill, failing test committed first.
 - [x] `FileRegistry` growth: failing test, then removal on delete and rename ([LIVE-SCHEDULER-REGISTRY-BOUNDED], `tests/live/file_handles.rs`).
-- [ ] The dependency change is its own pull request, opened after the current regression fixes are released.
-- [ ] After the lspkit release exists: add `lspkit` and `lspkit-server` at that exact version to `Cargo.toml` (never a branch, path or unreleased revision), with the same pin in `.github/workflows/ci.yml` and `.devcontainer/` where versions are listed.
+- [x] The dependency change is its own pull request, opened after the current regression fixes are released (v0.43.0).
+- [x] After the lspkit release exists: add `lspkit-server` at that exact version to `Cargo.toml` (never a branch, path or unreleased revision): `lspkit-server = "=0.5.0"`, which brings `lspkit` 0.5.0 with it. Neither CI nor the devcontainer lists crate versions.
 - [ ] Replace Deslop's scaffolding piece by piece in the order of the migration table in the repository index, starting with the pieces that had a leak class above. Each replacement deletes the Deslop code it replaces in the same change; no parallel path.
 - [ ] Re-run every leak test from step 2 against the lspkit-backed code; they must stay green.
 - [ ] `scripts/reports/edit_cost.py` and `scripts/reports/idle_churn.py` before and after each replacement; reports under `reports/`. Resident memory and CPU per edit must not rise.
 - [ ] `scripts/compare-versions.sh <last release> HEAD` after the last replacement: the scaffolding swap must move no judged pair.
-- [ ] Any defect found in lspkit during adoption is logged on the lspkit repository and raised with its agent over Too Many Cooks; Deslop does not work around it.
+- [x] Any defect found in lspkit during adoption is logged on the lspkit repository and raised with its agent over Too Many Cooks; Deslop does not work around it. Logged: lspkit has no handle for requests the server sends to the editor, its sidecar correlator cannot be resolved from an id read off the wire, and its JSON-RPC error has no `Display`. Until that ships, `deslop-lsp/src/client/pending.rs` holds the waiting-request table, with the leak tests below.
 
 ## [LSPKIT-ADOPT-GATES] What blocks adoption
 
@@ -46,4 +46,16 @@ Related growth already found in Deslop and tracked with this work: `FileRegistry
 
 ## [LSPKIT-ADOPT-STATUS] Status
 
-2026-11-16: plan written; release version and date requested from the lspkit agent over Too Many Cooks. Nothing adopted yet.
+2026-11-16: plan written; lspkit v0.5.0 published the same day.
+
+2026-11-16: first replacement landed. `deslop-lsp` dropped `tower-lsp` and `tower` for `lspkit-server` 0.5.0: framing, request dispatch and cancellation are lspkit's, so its repaired dispatcher (a rejected request releases its registration) is the code Deslop runs. `lsp-types` moved from 0.94 to 0.97 with it, so one version is compiled.
+
+| lspkit finding | Deslop state after this change | Proof |
+|---|---|---|
+| Abandoned requests keep their channel | A request sent to the editor is forgotten when its wait is dropped | `client::tests::an_abandoned_request_leaves_nothing_behind` |
+| Detached task owns state after its owner is gone | The serve loop aborts its writer, its notification worker and every request in flight when it ends | `server::tests::a_closed_stream_ends_the_session_while_work_is_still_running` |
+| Rejected request keeps its registration | lspkit 0.5.0 dispatcher; an unknown method answers `-32601` | `server::tests::an_unknown_request_is_method_not_found` |
+| `didClose` keeps the buffer | Unchanged: `close_buffer` releases it | `tests/open_buffers.rs` |
+| Handlers capture their own dispatcher | Routes hold the backend, the session holds the routes, nothing holds the session | `server::tests::dropping_the_session_releases_the_backend` |
+
+Still Deslop's own, in migration-table order: the live watcher and scheduler, the MCP server and tool registry, the config loader, tracing setup.

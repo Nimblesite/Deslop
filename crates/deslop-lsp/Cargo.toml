@@ -22,8 +22,8 @@ profiling = ["dep:fxprof-processed-profile", "dep:pprof"]
 
 [dependencies]
 deslop-core = { path = "../deslop-core", features = ["live"] }
-tower.workspace = true
-tower-lsp.workspace = true
+lspkit-server.workspace = true
+lsp-types.workspace = true
 tokio.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
@@ -44,7 +44,6 @@ assert_cmd.workspace = true
 deslop-core = { path = "../deslop-core", features = ["live", "test-support"] }
 deslop-test-support = { path = "../deslop-test-support" }
 tempfile.workspace = true
-tower-lsp.workspace = true
 
 [lints]
 workspace = true

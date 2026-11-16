@@ -10,7 +10,9 @@
 //! behaves identically whether or not a threshold is configured.
 
 use deslop_core::live::{LiveApi, LiveService};
-use tower_lsp::{lsp_types::MessageType, Client};
+use lsp_types::MessageType;
+
+use crate::client::Client;
 
 /// Pushes a single non-blocking warning when measured duplication has
 /// smashed the `.deslop.toml` threshold. No-op when the file opts out of
