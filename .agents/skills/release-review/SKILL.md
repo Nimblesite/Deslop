@@ -28,6 +28,11 @@ Find what this branch breaks that the last release got right. One measure outran
 - Tests that re-implement the code they test, assert less than their name claims, pass when the detector goes blind, or were deleted or softened are findings
 - Run deslop on the changed crates: new duplication in a duplicate detector is a finding
 
+## Tests
+
+- This is a review, not [ci-prep](../ci-prep/SKILL.md): never run `make ci`, `make test`, `make lint` or a whole test suite
+- Run a test only to settle a suspicion: the one named test or the one new failing test that proves or refutes a finding (`cargo test <name> -- --nocapture`)
+
 ## Legwork
 
 - Up to two `pi` sessions may each take one bounded slice (a file set plus concrete questions); give them the diff range and these rules. Models, registration on Too Many Cooks and PiNotes records follow [AGENTS.md](../../../AGENTS.md)
