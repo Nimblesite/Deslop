@@ -221,6 +221,7 @@ impl Session {
     /// Runs a notification's handler if the session takes notifications now.
     async fn notify(&self, method: &str, params: Value) {
         if self.takes_notifications(method) {
+            routes::observe(&self.backend, method, &params);
             routes::notify(&self.backend, method, params).await;
         }
     }

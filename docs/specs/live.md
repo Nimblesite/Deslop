@@ -254,7 +254,7 @@ A path already known to be missing resolves its nearest surviving ancestor direc
 
 ### [LIVE-SCHEDULER-REGISTRY-BOUNDED] File handles end with the file
 
-A long-running session holds one file handle per file it currently analyses, no more. Deleting a file releases its handle; saving a file by writing a temporary copy and renaming it over the original, as many editors do, leaves the handle count where it was. A path that comes back after removal gets a fresh handle, so nothing cached under the old handle can attach to the new file. `tests/live/file_handles.rs` drives delete, recreate and rename cycles through a live session and asserts the handle count equals the analysed file count after every step.
+A long-running session holds one file handle per file it currently analyses, no more. A file that cannot be analysed is skipped and holds none, whether it was found at startup or broke later; once repaired it gets a fresh handle. Deleting a file releases its handle; saving a file by writing a temporary copy and renaming it over the original, as many editors do, leaves the handle count where it was. A path that comes back after removal gets a fresh handle, so nothing cached under the old handle can attach to the new file. `tests/live/file_handles.rs` drives delete, recreate and rename cycles through a live session and asserts the handle count equals the analysed file count after every step.
 
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 

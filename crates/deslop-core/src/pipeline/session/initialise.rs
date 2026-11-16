@@ -165,6 +165,13 @@ impl PipelineSession {
             let _prev_language = file_languages.insert(discovered.file_id, discovered.language);
         }
         let files_analysed = live_paths.len();
+        // [LIVE-SCHEDULER-REGISTRY-BOUNDED] A skipped file is not analysed, so it holds no handle.
+        let mut registry = discovery.registry;
+        for discovered in &discovery.files {
+            if corpus.skipped.contains_key(&discovered.path) {
+                let _released = registry.release(discovered.file_id);
+            }
+        }
         let mut session = Self {
             osprey_projects: discovery.projects,
             root,
@@ -175,7 +182,7 @@ impl PipelineSession {
             extension_to_language,
             exclusion,
             ignore_matcher,
-            registry: discovery.registry,
+            registry,
             store,
             pair_ledger: None,
             takes_edits,

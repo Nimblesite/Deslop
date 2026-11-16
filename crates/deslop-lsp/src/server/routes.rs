@@ -55,6 +55,20 @@ macro_rules! route {
     }};
 }
 
+/// Requests answered from the published report snapshot. They never wait
+/// for an analysis pass, so they do not wait for the edits read before them
+/// either ([LSP-NON-INTERFERENCE-NONBLOCKING]).
+const SNAPSHOT_READS: [&str; 3] = [
+    DocumentDiagnosticRequest::METHOD,
+    CodeActionRequest::METHOD,
+    CodeLensRequest::METHOD,
+];
+
+/// Whether `method` is answered from the snapshot without waiting on the session.
+pub(super) fn reads_snapshot(method: &str) -> bool {
+    SNAPSHOT_READS.contains(&method)
+}
+
 /// Registers every request Deslop answers.
 pub(super) fn register(dispatcher: &Dispatcher, backend: &Arc<LspBackend>) {
     register_standard(dispatcher, backend);
@@ -161,6 +175,18 @@ fn register_session(dispatcher: &Dispatcher, backend: &Arc<LspBackend>) {
         custom::session_config
     );
     route!(dispatcher, backend, custom::CPU_REPORT, custom::cpu_report);
+}
+
+/// Applies the part of a notification that must take effect as it is read,
+/// before any request read after it: settings, which snapshot reads consult.
+pub(super) fn observe(backend: &LspBackend, method: &str, params: &Value) {
+    if method != DidChangeConfiguration::METHOD {
+        return;
+    }
+    match serde_json::from_value(params.clone()) {
+        Ok(params) => backend.configuration_read(&params),
+        Err(error) => tracing::warn!(method, %error, "notification params not understood"),
+    }
 }
 
 /// Runs the handler for one notification; an unknown method is ignored, as

@@ -94,3 +94,63 @@ fn deletes_and_rename_saves_leave_one_handle_per_file() -> Result<()> {
     }
     Ok(())
 }
+
+/// A file too deeply nested to analyse, present before the session starts.
+const UNANALYSABLE_FILE: &str = "Deep.dart";
+/// Bracket depth past the parser's nesting limit.
+const UNANALYSABLE_DEPTH: usize = 5000;
+/// What the file holds once its author repairs it.
+const REPAIRED_SOURCE: &str =
+    "int settle(int a, int b) { final total = a + b; return total * 2; }\n";
+
+/// The handle count and the analysed file count the session publishes.
+fn handles_and_analysed(session: &AnalysisSession, when: &str) -> Result<(usize, usize)> {
+    let pipeline = session
+        .pipeline()
+        .ok_or_else(|| anyhow!("{when}: no installed pipeline"))?;
+    Ok((pipeline.registry().len(), session.report().files_analysed))
+}
+
+#[test]
+fn a_file_skipped_at_startup_holds_no_handle_before_or_after_it_is_repaired() -> Result<()> {
+    let workspace = tempfile::tempdir().context("tempdir")?;
+    let root = workspace.path();
+    for name in RESIDENT_FILES {
+        let stem = name.trim_end_matches(".cs");
+        fs::write(root.join(name), class_source(stem, 0))
+            .with_context(|| format!("write {name}"))?;
+    }
+    let unanalysable = root.join(UNANALYSABLE_FILE);
+    let nested = format!(
+        "var x = {}{};\n",
+        "[".repeat(UNANALYSABLE_DEPTH),
+        "]".repeat(UNANALYSABLE_DEPTH)
+    );
+    fs::write(&unanalysable, nested).context("write unanalysable")?;
+
+    let mut session = live_session(root)?;
+    let (handles, analysed) = handles_and_analysed(&session, "cold")?;
+    assert_eq!(
+        analysed,
+        RESIDENT_FILES.len(),
+        "cold: the file that cannot be analysed is skipped, the rest are analysed"
+    );
+    assert_eq!(
+        handles, analysed,
+        "cold: a skipped file is not analysed, so it holds no handle"
+    );
+
+    fs::write(&unanalysable, REPAIRED_SOURCE).context("repair")?;
+    apply(&mut session, &[&unanalysable])?;
+    let (handles, analysed) = handles_and_analysed(&session, "repaired")?;
+    assert_eq!(
+        analysed,
+        RESIDENT_FILES.len() + 1,
+        "repaired: the file joins the analysed set"
+    );
+    assert_eq!(
+        handles, analysed,
+        "repaired: one handle per analysed file, none left from when it was skipped"
+    );
+    Ok(())
+}
