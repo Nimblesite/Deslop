@@ -17,7 +17,6 @@ use super::{
         config::PipelineConfig,
         corpus::parser_for_language,
         embedding_pass::{run_embedding_pass, CorpusView},
-        signatures::build_cross_language_signatures,
     },
     pair_ledger::{PairLedger, StoreChanges},
     PipelineSession,
@@ -25,11 +24,8 @@ use super::{
 use crate::{
     cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
     error::CoreError,
-    lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
-    pair::{
-        apply_pair_content_gate, candidate_pairs_for_language_policy, cluster_by_transitive_closure,
-    },
+    pair::{apply_pair_content_gate, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
     state::FileId,
 };
@@ -329,33 +325,6 @@ impl PipelineSession {
             pair_ledger: Some(live.ledger),
             fed: live.fed,
         })
-    }
-
-    /// Pairs the whole corpus under the language policy, embedding and
-    /// cross-language pairs included.
-    fn whole_corpus_pairs(
-        &self,
-        signatures: &crate::lsh::SignatureIndex<'_>,
-        trees: Option<&[crate::ast::NormalizedNode]>,
-        embedding_outcome: &crate::pipeline::embedding_pass::EmbeddingOutcome,
-    ) -> Vec<crate::pair::CandidatePair> {
-        let fingerprints = self.store.fingerprints();
-        let cross_language_signatures = trees.map(|trees| {
-            build_cross_language_signatures(fingerprints, trees, &self.file_languages)
-        });
-        tracing::debug!(
-            signatures = signatures.len(),
-            "streaming LSH band collisions"
-        );
-        candidate_pairs_for_language_policy(
-            fingerprints,
-            signatures,
-            &BandCollisionSource::new(signatures),
-            &embedding_outcome.pairs,
-            cross_language_signatures.as_deref(),
-            &self.file_languages,
-            self.exclusion.allows_cross_language_comparison(),
-        )
     }
 
     /// Re-parses every held source into a normalised tree population,

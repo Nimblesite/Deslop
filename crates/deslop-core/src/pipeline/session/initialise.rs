@@ -6,14 +6,88 @@ use crate::{
     error::CoreError,
     pipeline::{
         corpus::{build_extension_map, default_parsers, fingerprint_corpus},
-        OpenBuffers, PipelineConfig,
+        EmbeddingSettings, OpenBuffers, PipelineConfig,
     },
     report::Report,
     state::{FileId, LivePaths},
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 impl PipelineSession {
+    /// Runs the first full analysis against `root` and returns the
+    /// session plus the initial [`Report`]. The session is then ready
+    /// to accept [`Self::update_files`] calls.
+    ///
+    /// # Errors
+    ///
+    /// Propagates every error variant the batch [`super::run::run`]
+    /// would produce: [`CoreError::Io`] on unreadable sources,
+    /// [`CoreError::ConfigParse`] / [`CoreError::ConfigPattern`] for
+    /// malformed exclusion configs, and parser errors from
+    /// [`crate::lang::LanguageParser::parse_and_normalize`].
+    pub fn initialise(
+        root: PathBuf,
+        min_nodes: u32,
+        incremental: bool,
+        config_path: Option<PathBuf>,
+        embedding: EmbeddingSettings<'_>,
+    ) -> Result<(Self, Report), CoreError> {
+        Self::initialise_with_diff(root, min_nodes, incremental, config_path, embedding, None)
+    }
+
+    /// [`Self::initialise`] for a session that will take edits through
+    /// [`Self::update_files`]: it keeps the pairs each render discovers so
+    /// an edit re-pairs only what it touched
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+    ///
+    /// # Errors
+    ///
+    /// Everything [`Self::initialise`] produces.
+    pub fn initialise_for_edits(
+        root: PathBuf,
+        min_nodes: u32,
+        incremental: bool,
+        config_path: Option<PathBuf>,
+        embedding: EmbeddingSettings<'_>,
+    ) -> Result<(Self, Report), CoreError> {
+        let config = PipelineConfig {
+            root,
+            min_nodes,
+            config_path,
+            embedding,
+            incremental,
+        };
+        Self::initialise_from_sources(config, None, &OpenBuffers::default(), true)
+    }
+
+    /// [`Self::initialise`] with an optional parsed unified diff
+    /// ([CLI-ARG-DIFF]): the diff is byte-verified against the freshly
+    /// analysed corpus and, when clean, tags the initial report and
+    /// every later render ([OUTPUT-SCHEMA-DIFF-TAGS]).
+    ///
+    /// # Errors
+    ///
+    /// Everything [`Self::initialise`] produces, plus
+    /// [`CoreError::DiffStale`] when the diff does not match the
+    /// scanned tree.
+    pub fn initialise_with_diff(
+        root: PathBuf,
+        min_nodes: u32,
+        incremental: bool,
+        config_path: Option<PathBuf>,
+        embedding: EmbeddingSettings<'_>,
+        diff: Option<&crate::diff_scope::ParsedDiff>,
+    ) -> Result<(Self, Report), CoreError> {
+        let config = PipelineConfig {
+            root,
+            min_nodes,
+            config_path,
+            embedding,
+            incremental,
+        };
+        Self::initialise_from_sources(config, diff, &OpenBuffers::default(), false)
+    }
+
     /// Builds one report from a stable editor-buffer snapshot, before
     /// embedding, for a live session that takes edits.
     #[cfg(feature = "live")]

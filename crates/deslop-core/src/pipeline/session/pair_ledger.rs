@@ -158,4 +158,35 @@ impl PipelineSession {
         };
         candidate_pairs_after_edit(&corpus, carried)
     }
+
+    /// Pairs the whole corpus under the language policy, embedding and
+    /// cross-language pairs included.
+    pub(super) fn whole_corpus_pairs(
+        &self,
+        signatures: &crate::lsh::SignatureIndex<'_>,
+        trees: Option<&[crate::ast::NormalizedNode]>,
+        embedding_outcome: &crate::pipeline::embedding_pass::EmbeddingOutcome,
+    ) -> Vec<crate::pair::CandidatePair> {
+        let fingerprints = self.store.fingerprints();
+        let cross_language_signatures = trees.map(|trees| {
+            crate::pipeline::signatures::build_cross_language_signatures(
+                fingerprints,
+                trees,
+                &self.file_languages,
+            )
+        });
+        tracing::debug!(
+            signatures = signatures.len(),
+            "streaming LSH band collisions"
+        );
+        crate::pair::candidate_pairs_for_language_policy(
+            fingerprints,
+            signatures,
+            &BandCollisionSource::new(signatures),
+            &embedding_outcome.pairs,
+            cross_language_signatures.as_deref(),
+            &self.file_languages,
+            self.exclusion.allows_cross_language_comparison(),
+        )
+    }
 }
