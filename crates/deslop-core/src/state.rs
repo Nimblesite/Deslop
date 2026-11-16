@@ -50,6 +50,18 @@ impl FileRegistry {
         FileId(index)
     }
 
+    /// Number of files that currently hold a handle ([LIVE-SCHEDULER-REGISTRY-BOUNDED]).
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.paths.len()
+    }
+
+    /// True when no file holds a handle.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.paths.is_empty()
+    }
+
     /// Returns the path associated with `id`, if any.
     #[must_use]
     pub fn path(&self, id: FileId) -> Option<&std::path::Path> {

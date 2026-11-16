@@ -252,6 +252,10 @@ A removed path that matches no analysed file must be rejected through the corpus
 
 A path already known to be missing resolves its nearest surviving ancestor directly, without first attempting a doomed canonical lookup of the missing leaf or its removed parents. Existing paths retain native alias resolution, and dangling symlinks retain their fallback behavior. Corpus updates, editor buffers, and path guards share `pipeline/open_buffers.rs::canonicalise_path`. `pipeline/session/change/tests.rs` keeps the one-resolution assertion even when a parent is absent and checks existing-file and real/broken-symlink controls; `tests/live/scope.rs` pins removal of a buffer whose parent directory disappeared.
 
+### [LIVE-SCHEDULER-REGISTRY-BOUNDED] File handles end with the file
+
+A long-running session holds one file handle per file it currently analyses, no more. Deleting a file releases its handle; saving a file by writing a temporary copy and renaming it over the original, as many editors do, leaves the handle count where it was. A path that comes back after removal gets a fresh handle, so nothing cached under the old handle can attach to the new file. `tests/live/file_handles.rs` drives delete, recreate and rename cycles through a live session and asserts the handle count equals the analysed file count after every step.
+
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 
 A changeset whose every path is rejected before it can touch the corpus — an unsupported extension, an `exclude` match, an ignore-rule match ([LIVE-WATCHER]), a removal naming a file the corpus never held, or **an analysed file whose bytes on disk are identical to the bytes already ingested** — leaves the fingerprint set byte-identical. The report is therefore provably identical too, so `update_files` returns `None` and the scheduler:

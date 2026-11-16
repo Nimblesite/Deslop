@@ -15,6 +15,8 @@ mod live_edit_equivalence;
 mod live_edit_fallbacks;
 #[path = "live/edit_stage_cost.rs"]
 mod live_edit_stage_cost;
+#[path = "live/file_handles.rs"]
+mod live_file_handles;
 #[path = "live/rescope.rs"]
 mod live_rescope;
 #[path = "live/scope.rs"]
