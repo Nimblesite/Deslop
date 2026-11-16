@@ -97,3 +97,36 @@ async fn a_closed_connection_fails_the_wait_instead_of_parking_it() -> TestResul
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn a_refresh_request_waits_for_no_answer() -> TestResult {
+    let (client, mut socket) = loopback();
+
+    timeout(NEVER, client.workspace_diagnostic_refresh()).await?;
+
+    let request = timeout(NEVER, socket.next())
+        .await?
+        .ok_or("no request sent")?;
+    assert_eq!(
+        request.method.as_deref(),
+        Some("workspace/diagnostic/refresh")
+    );
+    assert!(
+        request.id.is_some(),
+        "a refresh is a request, so it has an id"
+    );
+    assert!(
+        request.params.is_none(),
+        "a method that takes nothing must carry no params member"
+    );
+    assert_eq!(
+        client.pending_requests(),
+        0,
+        "an editor slow to answer a refresh must hold nothing, and above all \
+         not the notifications queued behind the handler that asked"
+    );
+    let id = request.id.ok_or("request carried no id")?;
+    socket.answer(id, serde_json::Value::Null);
+    assert_eq!(client.pending_requests(), 0);
+    Ok(())
+}

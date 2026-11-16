@@ -23,7 +23,7 @@ Everything the server writes — responses, notifications, its own requests — 
 
 A request before `initialize` is answered `-32002 Server not initialized`; a second `initialize`, or any request after `shutdown`, `-32600 Invalid request`; an unknown method `-32601`. Notifications outside an initialised session are dropped, and the server sends none of its own before `initialize` is answered except `window/showMessage` and `window/logMessage`.
 
-A request the server sends to the editor (`window/showDocument`, `workspace/diagnostic/refresh`) is remembered only while something waits for the answer. When the wait is abandoned — the handler was cancelled, the editor never answered — the entry goes with it, and dropping a session frees its backend ([LSPKIT-ADOPT-LEAKS]).
+A request the server sends to the editor is remembered only while something waits for the answer. `window/showDocument` waits, because the command reports whether the document was shown; when that wait is abandoned — the handler was cancelled, the editor never answered — the entry goes with it. `workspace/diagnostic/refresh` waits for nothing: its answer is empty, and waiting would let an editor slow to answer hold back every notification queued behind it. Dropping a session frees its backend ([LSPKIT-ADOPT-LEAKS]).
 
 Implemented in `deslop-lsp/src/server.rs`, `server/stdio.rs`, `server/routes.rs` and `client.rs`; pinned by `src/server/tests.rs`, `src/client/tests.rs`, `tests/lifecycle.rs` and `tests/state_file_and_ipc/slow_editor.rs`.
 

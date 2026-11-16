@@ -110,13 +110,7 @@ impl DiagnosticSession {
     pub(crate) async fn refresh(&self, client: &Client) {
         self.publish_workspace(client).await;
         if self.refresh_supported.load(Ordering::Relaxed) {
-            if let Err(error) = client.workspace_diagnostic_refresh().await {
-                tracing::warn!(
-                    code = error.code,
-                    message = %error.message,
-                    "diagnostic refresh request failed"
-                );
-            }
+            client.workspace_diagnostic_refresh().await;
         }
     }
 

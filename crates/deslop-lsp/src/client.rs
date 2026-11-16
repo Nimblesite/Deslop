@@ -13,7 +13,7 @@ use lsp_types::{
     Diagnostic, LogMessageParams, MessageType, PublishDiagnosticsParams, ShowDocumentParams,
     ShowMessageParams, Uri,
 };
-use lspkit_server::Message;
+use lspkit_server::{Message, RequestId};
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -147,14 +147,17 @@ impl Client {
         Ok(shown.success)
     }
 
-    /// `workspace/diagnostic/refresh`.
-    ///
-    /// # Errors
-    ///
-    /// Returns the editor's error, or a fault when the session is not
-    /// initialised or the connection closed before the answer.
-    pub async fn workspace_diagnostic_refresh(&self) -> LspResult<()> {
-        self.send_request::<WorkspaceDiagnosticRefresh>(()).await
+    /// `workspace/diagnostic/refresh`. The answer carries nothing, so
+    /// nothing waits for it: an editor slow to answer cannot hold back the
+    /// notifications queued behind the handler that asked
+    /// ([LSP-TRANSPORT-DISPATCH]).
+    pub async fn workspace_diagnostic_refresh(&self) {
+        if !self.inner.phase.get().accepts_work() {
+            return;
+        }
+        let id = self.inner.replies.unawaited_id();
+        let request = outbound_request(id, WorkspaceDiagnosticRefresh::METHOD, Value::Null);
+        let _queued = self.send(request).await;
     }
 
     /// Sends request `R` and waits for the editor's answer. Abandoning the
@@ -171,7 +174,7 @@ impl Client {
         }
         let params = serde_json::to_value(params).map_err(|e| internal_error(e.to_string()))?;
         let (id, reply) = self.inner.replies.register();
-        if !self.send(Message::request(id, R::METHOD, params)).await {
+        if !self.send(outbound_request(id, R::METHOD, params)).await {
             return Err(internal_error(CONNECTION_CLOSED));
         }
         let value = reply.await?;
@@ -194,6 +197,14 @@ impl Client {
     pub fn pending_requests(&self) -> usize {
         self.inner.replies.len()
     }
+}
+
+/// A request frame; a method that takes nothing carries no `params`
+/// member, since JSON-RPC allows only an object or an array there.
+fn outbound_request(id: RequestId, method: &str, params: Value) -> Message {
+    let mut request = Message::request(id, method, Value::Null);
+    request.params = (!params.is_null()).then_some(params);
+    request
 }
 
 #[cfg(test)]

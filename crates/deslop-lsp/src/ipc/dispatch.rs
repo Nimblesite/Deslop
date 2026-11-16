@@ -10,6 +10,8 @@ use deslop_core::live::{LiveApi, LiveService};
 use serde_json::{json, Value};
 use tokio::runtime::Handle;
 
+use crate::jsonrpc::{INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
+
 /// JSON-RPC error-object field carrying the numeric code.
 const RPC_CODE_KEY: &str = "code";
 /// JSON-RPC error-object field carrying the human-readable message.
@@ -70,8 +72,8 @@ fn dispatch_report_for_range(
     let end_byte = required_u64_param(params, "end_byte")?;
     let start = usize::try_from(start_byte)
         .map_err(|_| rpc_error(INVALID_PARAMS, "start_byte overflow"))?;
-    let end = usize::try_from(end_byte)
-        .map_err(|_| rpc_error(INVALID_PARAMS, "end_byte overflow"))?;
+    let end =
+        usize::try_from(end_byte).map_err(|_| rpc_error(INVALID_PARAMS, "end_byte overflow"))?;
     let clusters = handle.block_on(service.report_for_range(Path::new(path), start, end));
     serde_json::to_value(&clusters).map_err(|err| rpc_serialise_error(&err))
 }

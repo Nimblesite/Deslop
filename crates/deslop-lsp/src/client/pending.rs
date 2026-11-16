@@ -62,14 +62,18 @@ impl PendingReplies {
         (RequestId::Number(id), reply)
     }
 
+    /// An id for a request whose answer nobody will wait for.
+    pub(super) fn unawaited_id(&self) -> RequestId {
+        RequestId::Number(self.next.fetch_add(1, Ordering::SeqCst))
+    }
+
     /// Delivers `outcome` to the request `id` names, if one still waits.
     pub(super) fn resolve(&self, id: &RequestId, outcome: Reply) {
         let RequestId::Number(number) = id else {
             return;
         };
         let Some(sender) = lock(&self.waiting).remove(number) else {
-            tracing::debug!(id = number, "answer to a request nobody waits for");
-            return;
+            return unawaited(*number, &outcome);
         };
         if sender.send(outcome).is_err() {
             tracing::debug!(id = number, "request abandoned as its answer arrived");
@@ -79,6 +83,13 @@ impl PendingReplies {
     /// Requests in flight.
     pub(super) fn len(&self) -> usize {
         lock(&self.waiting).len()
+    }
+}
+
+/// An answer nobody waits for is only worth a line when the editor refused.
+fn unawaited(id: i64, outcome: &Reply) {
+    if let Err(error) = outcome {
+        tracing::warn!(id, code = error.code, message = %error.message, "editor refused a request");
     }
 }
 
