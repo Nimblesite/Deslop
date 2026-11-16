@@ -32,6 +32,11 @@ const ENDLESS_METHOD: &str = "test/endless";
 const MIN_NODES: u32 = 30;
 const FIRST_ID: i64 = 1;
 const SECOND_ID: i64 = 2;
+/// The file the editor opens while an analysis pass is in flight.
+const EDITED_FILE: &str = "Edited.cs";
+const EDITED_LANGUAGE: &str = "csharp";
+const EDITED_TEXT: &str = "class Edited {}\n";
+const FIRST_VERSION: i32 = 1;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -66,16 +71,21 @@ fn session() -> TestResult<(Session, ClientSocket, tempfile::TempDir)> {
 /// Serves a fresh session over an in-memory pipe.
 fn editor() -> TestResult<Editor> {
     let (session, socket, workspace) = session()?;
+    Ok(serve(session, socket, workspace))
+}
+
+/// Serves `session` over an in-memory pipe.
+fn serve(session: Session, socket: ClientSocket, workspace: tempfile::TempDir) -> Editor {
     let (ours, theirs) = duplex(PIPE_BYTES);
     let (server_reader, server_writer) = split(theirs);
     let (reader, writer) = split(ours);
     let serving = tokio::spawn(stdio::serve(session, socket, server_reader, server_writer));
-    Ok(Editor {
+    Editor {
         reader: BufReader::new(reader),
         writer: MessageWriter::new(writer),
         serving,
         _workspace: workspace,
-    })
+    }
 }
 
 impl Editor {
@@ -267,6 +277,59 @@ async fn a_request_waits_for_the_notifications_read_before_it() -> TestResult {
         "everything the `initialized` notification pushed must be on the wire \
          before the answer to a request read after it — a report asked for \
          after an edit must be a report of that edit; saw {before_answer:?}"
+    );
+    Ok(())
+}
+
+/// [LSP-NON-INTERFERENCE-NONBLOCKING] The session mutex held here is the
+/// analysis pass in flight; the opened file's own pass waits behind it.
+#[tokio::test]
+async fn an_editor_read_is_answered_while_an_edit_is_still_being_analysed() -> TestResult {
+    let (session, socket, workspace) = session()?;
+    let uri = crate::backend::path_to_uri(&workspace.path().join(EDITED_FILE))
+        .ok_or("the edited file has a file URI")?;
+    let analysis = session.backend().service().session();
+    let pass_in_flight = analysis.lock().await;
+    let mut editor = serve(session, socket, workspace);
+
+    let opened = json!({ "textDocument": {
+        "uri": uri, "languageId": EDITED_LANGUAGE, "version": FIRST_VERSION, "text": EDITED_TEXT,
+    }});
+    let open = Message::notification("textDocument/didOpen", opened);
+    editor.writer.write_message(&open).await?;
+    let lenses = Message::request(
+        RequestId::Number(SECOND_ID),
+        "textDocument/codeLens",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    editor.writer.write_message(&lenses).await?;
+
+    let answered = timeout(NEVER, async {
+        loop {
+            match read_message(&mut editor.reader).await {
+                Ok(frame) if frame.id == Some(RequestId::Number(SECOND_ID)) => break Some(frame),
+                Ok(_) => {}
+                Err(_) => break None,
+            }
+        }
+    })
+    .await;
+    drop(pass_in_flight);
+
+    let answer = answered
+        .map_err(|_| {
+            "code lenses read the published report snapshot, so they must be answered while \
+             the analysis of an earlier edit still holds the session; they waited for it"
+        })?
+        .ok_or("the server closed the connection instead of answering")?;
+    assert!(
+        answer.error.is_none(),
+        "code lenses must not fail: {answer:?}"
+    );
+    assert_eq!(
+        answer.result,
+        Some(json!([])),
+        "an empty workspace has no clone badges to show"
     );
     Ok(())
 }
