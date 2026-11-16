@@ -126,3 +126,77 @@ fn an_edit_to_one_file_measures_only_that_files_pairs() -> Result<()> {
     }
     Ok(())
 }
+
+/// The copy-recovery stage, whose `input` is the shape families it walked.
+const RECOVERY_STAGE: &str = "shape_families_and_copy_recovery";
+/// Three files holding one method byte for byte: the pairing star joins each copy to the first, so recovery must weld the other two.
+const COPY_FILES: [&str; 3] = ["Ledger.cs", "Journal.cs", "Register.cs"];
+
+/// A class around the copied method, named after its file.
+fn copy_source(stem: &str) -> String {
+    format!(
+        "namespace Books{stem}\n{{\n    public class {stem}\n    {{\n        public int Settle(int[] amounts, int limit)\n        {{\n            var total = 0;\n            foreach (var amount in amounts)\n            {{\n                if (amount > limit)\n                {{\n                    total = total + limit;\n                    continue;\n                }}\n                total = total + amount * 2;\n            }}\n            return total - limit;\n        }}\n    }}\n}}\n"
+    )
+}
+
+/// The families the last pass's recovery stage walked.
+fn recovery_input(captured: &CapturedEvents) -> Result<u64> {
+    captured
+        .events(STAGE_MESSAGE)?
+        .iter()
+        .rfind(|event| event.values.get("stage").map(String::as_str) == Some(RECOVERY_STAGE))
+        .and_then(|event| event.values.get("input"))
+        .ok_or_else(|| anyhow!("no {RECOVERY_STAGE} record"))?
+        .parse()
+        .context("recovery input is not a count")
+}
+
+/// Runs `pass` under a capturing subscriber; returns its value and the recovery stage's input.
+fn observed_recovery<T>(pass: impl FnOnce() -> Result<T>) -> Result<(T, u64)> {
+    let captured = CapturedEvents::default();
+    let subscriber = CaptureSubscriber::new(captured.clone());
+    let value = tracing::subscriber::with_default(subscriber, pass)?;
+    Ok((value, recovery_input(&captured)?))
+}
+
+#[test]
+fn an_edit_to_one_file_walks_only_the_copy_families_it_touches() -> Result<()> {
+    let workspace = tempfile::tempdir().context("tempdir")?;
+    let root = workspace.path();
+    for name in COPY_FILES {
+        let stem = name.trim_end_matches(".cs");
+        fs::write(root.join(name), copy_source(stem)).with_context(|| format!("write {name}"))?;
+    }
+    fs::write(root.join(EDITED_FILE), inventory_source(0)).context("write inventory")?;
+    let (mut session, cold) = observed_recovery(|| live_session(root))?;
+    assert!(
+        cold > 0,
+        "cold recovery must walk the three-copy family, or this test is blind"
+    );
+    for round in 1..=EDIT_ROUNDS {
+        let ((), edited) = observed_recovery(|| save_edit(&mut session, root, round))?;
+        let alone = tempfile::tempdir().context("tempdir")?;
+        fs::write(alone.path().join(EDITED_FILE), inventory_source(round))
+            .context("write lone file")?;
+        let (_, lone) = observed_recovery(|| live_session(alone.path()))?;
+        assert!(
+            edited <= lone,
+            "round {round}: recovery walked {edited} families for an edit to a file that holds {lone} alone; the cold workspace walked {cold}"
+        );
+        let report = session.report();
+        let copies = report.clusters.iter().find(|cluster| {
+            COPY_FILES.iter().all(|name| {
+                cluster
+                    .occurrences
+                    .iter()
+                    .any(|occurrence| occurrence.path.ends_with(name))
+            })
+        });
+        assert_eq!(
+            copies.map(|cluster| cluster.occurrences.len()),
+            Some(COPY_FILES.len()),
+            "round {round}: the three copies stay one cluster of three"
+        );
+    }
+    Ok(())
+}
