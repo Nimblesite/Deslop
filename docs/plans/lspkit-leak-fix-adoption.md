@@ -29,7 +29,7 @@ Related growth already found in Deslop and tracked with this work: `FileRegistry
 
 - [ ] lspkit agent confirms the release version that carries all five repairs, where it is published (crates.io or a git tag), and the date.
 - [ ] For each row above, a Deslop test that proves the allocation is released when the work ends (weak-count or live-entry assertions, no RSS, no sleeps). A red test is a confirmed Deslop leak: fix it under the fix-bug skill, failing test committed first.
-- [ ] `FileRegistry` growth: failing test, then removal on delete and rename.
+- [x] `FileRegistry` growth: failing test, then removal on delete and rename ([LIVE-SCHEDULER-REGISTRY-BOUNDED], `tests/live/file_handles.rs`).
 - [ ] The dependency change is its own pull request, opened after the current regression fixes are released.
 - [ ] After the lspkit release exists: add `lspkit` and `lspkit-server` at that exact version to `Cargo.toml` (never a branch, path or unreleased revision), with the same pin in `.github/workflows/ci.yml` and `.devcontainer/` where versions are listed.
 - [ ] Replace Deslop's scaffolding piece by piece in the order of the migration table in the repository index, starting with the pieces that had a leak class above. Each replacement deletes the Deslop code it replaces in the same change; no parallel path.
