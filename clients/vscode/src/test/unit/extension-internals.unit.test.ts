@@ -12,6 +12,7 @@ import {
   buildServerArgs,
   syncEmbeddingSettingsToLsp,
   resolveWorkspaceRoot,
+  watchReportReadyContext,
 } from "../../extension";
 import { wireNotifications } from "../../notifications";
 import { ReportStore } from "../../reportStore";
@@ -312,3 +313,29 @@ function optionalManifest() {
     hosts: {},
   };
 }
+
+suite("report-ready context key", () => {
+  const TYPED_VERSIONS = [2, 3, 4, 5, 6];
+  const EDITED_FILE = "/workspace/Edited.cs";
+
+  test("[VSIX-STATE-DIRTY] is set once per change, never per keystroke", () => {
+    const store = new ReportStore();
+    const sent: boolean[] = [];
+    const stop = watchReportReadyContext(store, (ready) => sent.push(ready));
+    assert.deepEqual(sent, [false], "the key is seeded once at activation");
+
+    for (const version of TYPED_VERSIONS) store.markFileDirty(EDITED_FILE, version);
+    assert.deepEqual(sent, [false], "typing changes no report, so nothing is re-sent");
+
+    store.setSnapshot(emptyReport(), 1);
+    assert.deepEqual(sent, [false, true], "the first report flips the key once");
+
+    for (const version of TYPED_VERSIONS) store.markFileDirty(EDITED_FILE, version);
+    store.clearFileDirty(EDITED_FILE);
+    store.setSnapshot(emptyReport(), 2);
+    assert.deepEqual(sent, [false, true], "edits and later generations leave a ready report ready");
+
+    stop();
+    store.dispose();
+  });
+});
