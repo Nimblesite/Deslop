@@ -321,8 +321,11 @@ fn whitespace_inside_a_string_literal_is_a_near_copy_content_change() -> Result<
 // Identical, at the start of the literal or deeper inside it.
 #[test]
 fn whitespace_inside_a_long_string_literal_is_never_identical() -> Result<()> {
-    let long = function_source(SHAPE_ONLY_DISJOINT, ORIGINAL_FUNCTION)?
-        .replacen(SHORT_LITERAL, LONG_LITERAL, ONE_GROUP);
+    let long = function_source(SHAPE_ONLY_DISJOINT, ORIGINAL_FUNCTION)?.replacen(
+        SHORT_LITERAL,
+        LONG_LITERAL,
+        ONE_GROUP,
+    );
     let spaced_once = change_literal_spacing(&long)?;
     let spaced_twice = change_literal_spacing(&spaced_once)?;
     for (original, changed) in [(&long, &spaced_once), (&spaced_once, &spaced_twice)] {
