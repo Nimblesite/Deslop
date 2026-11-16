@@ -18,6 +18,10 @@ use crate::fingerprint::Fingerprint;
 mod candidates;
 pub(crate) use candidates::CopyProbe;
 pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
+pub(crate) use candidates::{
+    candidate_pairs_after_edit, sourced_candidate_pairs, EditedCorpus, RetiredKeys, SourcedKey,
+    SourcedPairs,
+};
 
 /// Pair-content admission guard applied before transitive closure.
 mod content_gate;

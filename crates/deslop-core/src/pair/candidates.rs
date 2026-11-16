@@ -30,6 +30,12 @@ use crate::{
 
 /// The insertion-time admission builder ([PERF-FLUTTER-TODO-PAIRS]).
 mod builder;
+/// Re-pairing only what an edit touched ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+mod delta;
+
+pub(crate) use delta::{
+    candidate_pairs_after_edit, EditedCorpus, RetiredKeys, SourcedKey, SourcedPairs,
+};
 
 #[cfg(test)]
 #[path = "candidates/tests.rs"]
@@ -75,6 +81,12 @@ pub trait LshPairs {
     /// Invokes `emit` for every collision pair `(i, j)`, `i < j`, in a
     /// deterministic order.
     fn for_each(&self, emit: &mut dyn FnMut(usize, usize));
+
+    /// [`Self::for_each`] with the band each pair collided in, when the
+    /// source knows it. A materialised list does not, and says `None`.
+    fn for_each_in_band(&self, emit: &mut dyn FnMut(Option<usize>, usize, usize)) {
+        self.for_each(&mut |left, right| emit(None, left, right));
+    }
 }
 
 impl LshPairs for [(usize, usize)] {
@@ -174,12 +186,41 @@ fn build_candidates<S: BuildHasher>(
     file_languages: Option<&HashMap<FileId, &'static str, S>>,
     allow_cross_language: bool,
 ) -> Vec<CandidatePair> {
-    let mut builder = PairBuilder::new(
+    let builder = PairBuilder::new(
         fingerprints,
         signatures,
         file_languages,
         allow_cross_language,
     );
+    discover(builder, lsh_pairs, embedding_pairs).0
+}
+
+/// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] The live session's cold build: the pairs
+/// [`candidate_pairs_for_language_policy`] returns with embeddings off and
+/// cross-language comparison off, each with the bits of the sources that
+/// emitted it, so a later edit can re-pair only what it touched
+/// ([`candidate_pairs_after_edit`]).
+pub(crate) fn sourced_candidate_pairs<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    signatures: &dyn SignatureLookup,
+    lsh_pairs: &dyn LshPairs,
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> SourcedPairs {
+    let mut builder = PairBuilder::new(fingerprints, signatures, Some(file_languages), false);
+    builder.track_sources();
+    let (pairs, sources) = discover(builder, lsh_pairs, &[]);
+    SourcedPairs {
+        pairs,
+        sources: sources.unwrap_or_default(),
+    }
+}
+
+/// Runs every discovery source through `builder` and resolves the kept set.
+fn discover<S: BuildHasher>(
+    mut builder: PairBuilder<'_, S>,
+    lsh_pairs: &dyn LshPairs,
+    embedding_pairs: &[EmbeddingPair],
+) -> (Vec<CandidatePair>, Option<Vec<u64>>) {
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
         "pairs: pre-structural"
@@ -193,9 +234,9 @@ fn build_candidates<S: BuildHasher>(
     builder.merge_embedding_pairs(embedding_pairs);
     builder.flush_evidence();
     let mut lsh_scanned = 0_u64;
-    lsh_pairs.for_each(&mut |left, right| {
+    lsh_pairs.for_each_in_band(&mut |band, left, right| {
         lsh_scanned = lsh_scanned.saturating_add(1);
-        builder.add_zero_evidence(left, right);
+        builder.add_zero_evidence(band, left, right);
     });
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
@@ -206,7 +247,7 @@ fn build_candidates<S: BuildHasher>(
     let resolved = builder.finish();
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
-        resolved = resolved.len(),
+        resolved = resolved.0.len(),
         "pairs: post-resolve"
     );
     resolved

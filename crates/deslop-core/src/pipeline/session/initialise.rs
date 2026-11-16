@@ -14,13 +14,14 @@ use crate::{
 use std::{collections::HashMap, sync::Arc};
 
 impl PipelineSession {
-    /// Builds one report from a stable editor-buffer snapshot, before embedding.
+    /// Builds one report from a stable editor-buffer snapshot, before
+    /// embedding, for a live session that takes edits.
     #[cfg(feature = "live")]
     pub(crate) fn initialise_with_buffers(
         config: PipelineConfig<'_>,
         buffers: &OpenBuffers,
     ) -> Result<(Self, Report), CoreError> {
-        Self::initialise_from_sources(config, None, buffers)
+        Self::initialise_from_sources(config, None, buffers, true)
     }
 
     /// Shared cold pass; editor sources are installed before any report is rendered.
@@ -28,6 +29,7 @@ impl PipelineSession {
         config: PipelineConfig<'_>,
         diff: Option<&crate::diff_scope::ParsedDiff>,
         buffers: &OpenBuffers,
+        takes_edits: bool,
     ) -> Result<(Self, Report), CoreError> {
         let PipelineConfig {
             root,
@@ -101,6 +103,8 @@ impl PipelineSession {
             ignore_matcher,
             registry: discovery.registry,
             store,
+            pair_ledger: None,
+            takes_edits,
             sources: corpus.sources,
             live_paths,
             file_languages,

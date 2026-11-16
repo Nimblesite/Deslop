@@ -65,7 +65,7 @@ pub(super) fn report_running_progress(
     }
 }
 
-/// Calls [`PipelineSession::initialise`] with the supplied embedding
+/// Calls [`PipelineSession::initialise_for_edits`] with the supplied embedding
 /// provider. Extracted so [`super::session::AnalysisSession::new`]
 /// stays under the 20-line function budget.
 pub(super) fn initialise_pipeline(
@@ -82,7 +82,7 @@ pub(super) fn initialise_pipeline(
         batch_yield: None,
         progress: None,
     };
-    Ok(PipelineSession::initialise(
+    Ok(PipelineSession::initialise_for_edits(
         root,
         min_nodes,
         incremental,

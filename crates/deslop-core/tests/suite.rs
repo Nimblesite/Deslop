@@ -11,6 +11,8 @@ mod common;
 mod live_edit_cost;
 #[path = "live/edit_equivalence.rs"]
 mod live_edit_equivalence;
+#[path = "live/edit_fallbacks.rs"]
+mod live_edit_fallbacks;
 #[path = "live/rescope.rs"]
 mod live_rescope;
 #[path = "live/scope.rs"]

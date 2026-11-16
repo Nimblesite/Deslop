@@ -14,6 +14,7 @@ mod change;
 mod diff;
 mod initialise;
 mod pair_compare;
+mod pair_ledger;
 mod render;
 /// Where a snippet's code already lives ([MCP-TOOL-FINDSIMILAR-EXISTING]).
 mod snippet_matches;
@@ -94,6 +95,13 @@ pub struct PipelineSession {
     /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Private: session
     /// submodules reach it as descendants; nothing outside does.
     store: CorpusStore,
+    /// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] The pairs the last render kept, when a live
+    /// edit may re-pair incrementally from them.
+    pair_ledger: Option<pair_ledger::PairLedger>,
+    /// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] Whether this session takes
+    /// edits and so keeps a pair ledger. A one-shot run never reads one,
+    /// so it pairs on the lean batch path.
+    takes_edits: bool,
     /// Per-`FileId` source bytes so the embedding pass can read the
     /// exact snippet covered by a fingerprint without re-reading
     /// from disk.
@@ -145,6 +153,31 @@ impl PipelineSession {
         Self::initialise_with_diff(root, min_nodes, incremental, config_path, embedding, None)
     }
 
+    /// [`Self::initialise`] for a session that will take edits through
+    /// [`Self::update_files`]: it keeps the pairs each render discovers so
+    /// an edit re-pairs only what it touched
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+    ///
+    /// # Errors
+    ///
+    /// Everything [`Self::initialise`] produces.
+    pub fn initialise_for_edits(
+        root: PathBuf,
+        min_nodes: u32,
+        incremental: bool,
+        config_path: Option<PathBuf>,
+        embedding: EmbeddingSettings<'_>,
+    ) -> Result<(Self, Report), CoreError> {
+        let config = PipelineConfig {
+            root,
+            min_nodes,
+            config_path,
+            embedding,
+            incremental,
+        };
+        Self::initialise_from_sources(config, None, &OpenBuffers::default(), true)
+    }
+
     /// [`Self::initialise`] with an optional parsed unified diff
     /// ([CLI-ARG-DIFF]): the diff is byte-verified against the freshly
     /// analysed corpus and, when clean, tags the initial report and
@@ -170,7 +203,7 @@ impl PipelineSession {
             embedding,
             incremental,
         };
-        Self::initialise_from_sources(config, diff, &OpenBuffers::default())
+        Self::initialise_from_sources(config, diff, &OpenBuffers::default(), false)
     }
 
     /// Re-parses (or drops) each path in `changed` and returns the
@@ -356,6 +389,7 @@ impl PipelineSession {
         self.exclusion = exclusion;
         self.ignore_matcher = ignore_matcher;
         self.store.forget_anchors();
+        self.pair_ledger = None;
         Ok(())
     }
 }

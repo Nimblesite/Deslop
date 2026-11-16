@@ -15,7 +15,8 @@
 
 mod banding;
 
-pub use banding::{for_each_band_collision, BandCollisionSource};
+pub(crate) use banding::{band_key, emit_sorted_star};
+pub use banding::{for_each_band_collision, for_each_band_collision_in_band, BandCollisionSource};
 
 /// Signature length. Product of [`BANDS`] and [`ROWS_PER_BAND`]; a 128-length
 /// signature gives a band-collision probability curve that starts rising
