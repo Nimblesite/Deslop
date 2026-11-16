@@ -27,7 +27,7 @@ fn cluster_paths(cluster: &serde_json::Value) -> BTreeSet<String> {
     cluster
         .get("occurrences")
         .and_then(serde_json::Value::as_array)
-        .map(|occurrences| {
+        .map_or_default(|occurrences| {
             occurrences
                 .iter()
                 .filter_map(|occurrence| {
@@ -38,7 +38,6 @@ fn cluster_paths(cluster: &serde_json::Value) -> BTreeSet<String> {
                 })
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn occurrence_slices(cluster: &serde_json::Value, scan_root: &Path) -> Result<Vec<Vec<u8>>> {

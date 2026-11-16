@@ -220,7 +220,12 @@ fn index_as_usize(index: u32) -> usize {
 pub(crate) fn band_key(signature: &Signature, band: usize) -> [u8; 32] {
     let mut key = [0; ROWS_PER_BAND * size_of::<u64>()];
     let start = band.saturating_mul(ROWS_PER_BAND);
-    for (offset, key_row) in key.chunks_exact_mut(size_of::<u64>()).enumerate() {
+    for (offset, key_row) in key
+        .as_chunks_mut::<{ size_of::<u64>() }>()
+        .0
+        .iter_mut()
+        .enumerate()
+    {
         let slot_index = start.saturating_add(offset);
         let value = signature.get(slot_index).copied().unwrap_or(0);
         key_row.copy_from_slice(&value.to_le_bytes());

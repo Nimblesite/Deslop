@@ -9,11 +9,11 @@ use deslop_lsp::{
     commands::{
         OPEN_CLUSTER, OPEN_REPORT, PICK_EMBEDDING_MODEL, REFRESH_REPORT, TOGGLE_INCREMENTAL,
     },
+    jsonrpc::{INVALID_PARAMS, METHOD_NOT_FOUND},
     notifications::REPORT_CHANGED,
-    LspBackend,
+    ClientSocket, Session,
 };
 use serde_json::{json, Value};
-use tower_lsp::{jsonrpc::ErrorCode, ClientSocket, LspService};
 
 use super::{
     harness::{
@@ -39,7 +39,7 @@ pub(super) fn assert_advertised_commands(init: &Value) -> Result<()> {
 }
 
 pub(super) async fn assert_open_report_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, shows) =
@@ -54,7 +54,7 @@ pub(super) async fn assert_open_report_command(
 }
 
 pub(super) async fn assert_render_html_report_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, shows) = execute_in_process(
@@ -78,7 +78,7 @@ pub(super) async fn assert_render_html_report_command(
 /// worst-first `clusters` array, each cluster with a clone-type `bucket` and
 /// located `occurrences` — and the lean wire shape (no `schema_doc`).
 pub(super) async fn assert_report_json_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, shows) = execute_in_process(
@@ -119,7 +119,7 @@ pub(super) fn assert_report_json_shape(report: &Value) -> Result<()> {
     assert!(path.is_some(), "cluster occurrence needs a path: {first}");
     let schema_doc = report.get("schema_doc").and_then(Value::as_str);
     assert!(
-        schema_doc.map_or(true, str::is_empty),
+        schema_doc.is_none_or(str::is_empty),
         "reportJson must strip schema_doc for the lean wire shape",
     );
     Ok(())
@@ -183,7 +183,7 @@ pub(super) fn assert_well_formed_report_html(html: &str) {
 }
 
 pub(super) async fn assert_open_cluster_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, shows) = execute_in_process(
@@ -202,7 +202,7 @@ pub(super) async fn assert_open_cluster_command(
 }
 
 pub(super) async fn assert_toggle_incremental_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, shows) = execute_in_process(
@@ -217,7 +217,7 @@ pub(super) async fn assert_toggle_incremental_command(
 }
 
 pub(super) async fn assert_pick_embedding_model_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, shows) = execute_in_process(
@@ -250,7 +250,7 @@ pub(super) async fn assert_pick_embedding_model_command(
 }
 
 pub(super) async fn assert_open_cluster_invalid_id(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, requests) = execute_raw_in_process(
@@ -264,7 +264,7 @@ pub(super) async fn assert_open_cluster_invalid_id(
         "invalid cluster command must not contact the client"
     );
     let error = response_error(response)?;
-    assert_eq!(error.code, ErrorCode::InvalidParams);
+    assert_eq!(error.code, INVALID_PARAMS);
     assert_eq!(
         error.data,
         Some(Value::String(
@@ -275,7 +275,7 @@ pub(super) async fn assert_open_cluster_invalid_id(
 }
 
 pub(super) async fn assert_unknown_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, requests) = execute_raw_in_process(
@@ -288,12 +288,12 @@ pub(super) async fn assert_unknown_command(
         requests.is_empty(),
         "unknown command must not contact the client"
     );
-    assert_eq!(response_error(response)?.code, ErrorCode::MethodNotFound);
+    assert_eq!(response_error(response)?.code, METHOD_NOT_FOUND);
     Ok(())
 }
 
 pub(super) async fn assert_refresh_report_command(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
 ) -> Result<()> {
     let (response, shows) =
@@ -313,7 +313,7 @@ pub(super) async fn assert_refresh_report_command(
 /// Without this the notification could be unwired entirely and every existing
 /// assertion would still pass, because an empty delta returns before it.
 pub(super) async fn assert_refresh_after_edit_notifies_report_changed(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
     workspace_root: &Path,
 ) -> Result<()> {

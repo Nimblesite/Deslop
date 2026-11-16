@@ -4,18 +4,11 @@ mod readiness;
 use std::{path::Path, sync::Arc};
 
 use deslop_core::{embedding::test_support::StubProvider, live::LiveService};
-use futures::StreamExt as _;
 use serde_json::{json, Value};
-use tower::Service as _;
-use tower_lsp::{
-    async_trait,
-    jsonrpc::{Request, Response},
-    lsp_types::{InitializeParams, InitializeResult, ServerCapabilities},
-    Client, ClientSocket, LanguageServer, LspService,
-};
 
 use super::*;
 use crate::notifications::{ANALYSIS_STATE, REPORT_CHANGED};
+use crate::server::ClientSocket;
 
 const METHOD_POINTER: &str = "/method";
 const STATE_POINTER: &str = "/params/state";
@@ -57,7 +50,7 @@ fn live_batch_yield_tracks_embedding_mode() {
 async fn background_initialise_and_commit_pushes_report_and_idle_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
-    let mut fixture = refresh_fixture(temp.path(), new_startup_state(true)).await?;
+    let mut fixture = refresh_fixture(temp.path(), new_startup_state(true))?;
     assert!(
         !fixture.seeded,
         "test setup should start with a fresh session"
@@ -109,7 +102,7 @@ async fn spawn_refresh_pushes_running_then_report_then_idle(
     // and that the retained cold-pass state becomes Idle once committed.
     let temp = tempfile::tempdir()?;
     let startup_state = new_startup_state(true);
-    let mut fixture = refresh_fixture(temp.path(), Arc::clone(&startup_state)).await?;
+    let mut fixture = refresh_fixture(temp.path(), Arc::clone(&startup_state))?;
 
     spawn_refresh(fixture.task);
 
@@ -140,7 +133,7 @@ async fn spawn_refresh_pushes_running_then_report_then_idle(
 
 #[tokio::test]
 async fn refresh_error_pushes_errored_state() -> Result<(), Box<dyn std::error::Error>> {
-    let (client, mut socket) = initialized_loopback_client().await?;
+    let (client, mut socket) = initialized_loopback_client();
     let startup_state = new_startup_state(true);
     report_refresh_error(
         &client,
@@ -179,7 +172,7 @@ async fn refresh_error_pushes_errored_state() -> Result<(), Box<dyn std::error::
 #[tokio::test]
 async fn initial_state_is_running_while_cold_pass_active() -> Result<(), Box<dyn std::error::Error>>
 {
-    let (client, mut socket) = initialized_loopback_client().await?;
+    let (client, mut socket) = initialized_loopback_client();
     push_initial_state(&client, &new_startup_state(true)).await;
 
     let frame = next_client_frame(&mut socket).await?;
@@ -199,7 +192,7 @@ async fn initial_state_is_running_while_cold_pass_active() -> Result<(), Box<dyn
 #[tokio::test]
 async fn initial_state_is_idle_once_the_scan_has_settled() -> Result<(), Box<dyn std::error::Error>>
 {
-    let (client, mut socket) = initialized_loopback_client().await?;
+    let (client, mut socket) = initialized_loopback_client();
     push_initial_state(&client, &new_startup_state(false)).await;
 
     let frame = next_client_frame(&mut socket).await?;
@@ -227,14 +220,14 @@ struct RefreshFixture {
 
 /// Writes the two-duplicate fixture under `root`, opens a live session over
 /// it, and assembles the cold-pass task against a loopback LSP client.
-async fn refresh_fixture(
+fn refresh_fixture(
     root: &Path,
     startup_state: Arc<Mutex<AnalysisState>>,
 ) -> Result<RefreshFixture, Box<dyn std::error::Error>> {
     write_fixture(root)?;
     let (session, provider, seeded) = open_fixture_session(root)?;
     let session = Arc::new(Mutex::new(session));
-    let (client, socket) = initialized_loopback_client().await?;
+    let (client, socket) = initialized_loopback_client();
     let (report_changed, report_changed_rx) = tokio::sync::broadcast::channel(8);
     let task = RefreshTask {
         service: Arc::new(LiveService::new(Arc::clone(&session))),
@@ -286,75 +279,22 @@ fn write_fixture(root: &Path) -> std::io::Result<()> {
     )
 }
 
-async fn initialized_loopback_client() -> Result<(Client, ClientSocket), Box<dyn std::error::Error>>
-{
-    let captured = Arc::new(std::sync::Mutex::new(None));
-    let captured_client = Arc::clone(&captured);
-    let (mut service, socket) = LspService::build(move |client| {
-        if let Ok(mut captured) = captured_client.lock() {
-            *captured = Some(client.clone());
-        }
-        DummyBackend
-    })
-    .finish();
-    let request = Request::build("initialize")
-        .params(json!({ "capabilities": {} }))
-        .id(1_i64)
-        .finish();
-    futures::future::poll_fn(|cx| service.poll_ready(cx)).await?;
-    let response = service.call(request).await?;
-    assert_initialize_ok(response)?;
-    let client = captured_client_from(&captured)?;
-    Ok((client, socket))
-}
-
-fn captured_client_from(
-    captured: &Arc<std::sync::Mutex<Option<Client>>>,
-) -> Result<Client, Box<dyn std::error::Error>> {
-    let guard = captured
-        .lock()
-        .map_err(|_| std::io::Error::other("capture client lock poisoned"))?;
-    guard
-        .clone()
-        .ok_or_else(|| std::io::Error::other("loopback client was not captured").into())
+/// A client handle in an initialised session, with the editor's side of it.
+fn initialized_loopback_client() -> (Client, ClientSocket) {
+    crate::server::loopback()
 }
 
 async fn next_client_frame(socket: &mut ClientSocket) -> Result<Value, Box<dyn std::error::Error>> {
-    let request = socket
+    let frame = socket
         .next()
         .await
         .ok_or_else(|| std::io::Error::other("client socket closed before notification"))?;
-    let (method, id, params) = request.into_parts();
-    assert!(id.is_none(), "expected notification without request id");
+    assert!(
+        frame.id.is_none(),
+        "expected notification without request id"
+    );
     Ok(json!({
-        "method": method,
-        "params": params.unwrap_or(Value::Null),
+        "method": frame.method,
+        "params": frame.params.unwrap_or(Value::Null),
     }))
-}
-
-fn assert_initialize_ok(response: Option<Response>) -> Result<(), Box<dyn std::error::Error>> {
-    let response = response.ok_or_else(|| std::io::Error::other("initialize response missing"))?;
-    let (_id, body) = response.into_parts();
-    let _result = body.map_err(|_| std::io::Error::other("initialize returned an error"))?;
-    Ok(())
-}
-
-#[derive(Debug)]
-struct DummyBackend;
-
-#[async_trait]
-impl LanguageServer for DummyBackend {
-    async fn initialize(
-        &self,
-        _: InitializeParams,
-    ) -> tower_lsp::jsonrpc::Result<InitializeResult> {
-        Ok(InitializeResult {
-            capabilities: ServerCapabilities::default(),
-            server_info: None,
-        })
-    }
-
-    async fn shutdown(&self) -> tower_lsp::jsonrpc::Result<()> {
-        Ok(())
-    }
 }

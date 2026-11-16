@@ -292,9 +292,7 @@ fn can_reassign(
         .get(index)
         .copied()
         .flatten()
-        .map_or(true, |previous| {
-            assign_range(previous, ranges, shown, visited, assigned)
-        })
+        .is_none_or(|previous| assign_range(previous, ranges, shown, visited, assigned))
 }
 
 /// Try one candidate, reassigning its previous range when necessary.

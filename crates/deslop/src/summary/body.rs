@@ -304,8 +304,7 @@ fn summarise_files(occurrences: &[ReportOccurrence]) -> String {
         let name = occurrence
             .path
             .file_name()
-            .map(|value| value.to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .map_or_default(|value| value.to_string_lossy().into_owned());
         if !names.contains(&name) {
             names.push(name);
         }

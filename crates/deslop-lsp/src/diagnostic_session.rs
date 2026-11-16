@@ -13,13 +13,12 @@ use deslop_core::{
     live::{read_report_snapshot, report_for_file_in, ReportChangedNotification},
     report::Report,
 };
+use lsp_types::{Diagnostic, InitializeParams, MessageType};
 use tokio::sync::{broadcast, Mutex};
-use tower_lsp::{
-    lsp_types::{Diagnostic, InitializeParams, MessageType, Url},
-    Client,
-};
 
 use crate::{
+    backend::path_to_uri,
+    client::Client,
     diagnostic_settings::{DiagnosticScope, DiagnosticSettings},
     diagnostics,
 };
@@ -111,9 +110,7 @@ impl DiagnosticSession {
     pub(crate) async fn refresh(&self, client: &Client) {
         self.publish_workspace(client).await;
         if self.refresh_supported.load(Ordering::Relaxed) {
-            if let Err(error) = client.workspace_diagnostic_refresh().await {
-                tracing::warn!(%error, "diagnostic refresh request failed");
-            }
+            client.workspace_diagnostic_refresh().await;
         }
     }
 
@@ -157,7 +154,7 @@ impl DiagnosticSession {
         } else {
             self.root.join(path)
         };
-        if let Ok(uri) = Url::from_file_path(absolute) {
+        if let Some(uri) = path_to_uri(&absolute) {
             client.publish_diagnostics(uri, items, None).await;
         } else {
             tracing::error!("diagnostic file could not be represented as a URI");

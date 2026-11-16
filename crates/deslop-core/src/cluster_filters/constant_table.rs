@@ -169,7 +169,7 @@ fn fsharp_declaration_cell<'a>(node: Node<'_>, source: &'a [u8]) -> Option<(&'a 
         return None;
     };
     if left.kind() != "value_declaration_left"
-        || !sole_named_child(left).is_some_and(|pattern| pattern.kind() == "identifier_pattern")
+        || sole_named_child(left).is_none_or(|pattern| pattern.kind() != "identifier_pattern")
         || right.kind() != "const"
         || !fsharp_const_has_no_interpolation(right)
     {

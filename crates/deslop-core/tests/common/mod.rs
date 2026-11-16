@@ -139,10 +139,7 @@ impl CapturedEvents {
 
     /// Returns a snapshot of every captured event in capture order.
     pub(crate) fn all(&self) -> Vec<CapturedEvent> {
-        self.events
-            .lock()
-            .map(|events| events.clone())
-            .unwrap_or_default()
+        self.events.lock().map_or_default(|events| events.clone())
     }
 }
 

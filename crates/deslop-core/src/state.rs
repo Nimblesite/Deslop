@@ -21,19 +21,23 @@ const ONE_CANDIDATE: usize = 1;
 
 /// Opaque handle assigned by the [`FileRegistry`] to a discovered file.
 ///
-/// `FileId` values are dense, monotonically increasing, and valid only within
-/// the registry instance that issued them.
+/// `FileId` values increase monotonically and are never reused, so nothing
+/// cached under a released handle can attach to a later file
+/// ([LIVE-SCHEDULER-REGISTRY-BOUNDED]). Valid only within the registry
+/// instance that issued them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FileId(u32);
 
-/// One-way mapping from [`FileId`] to absolute file paths. The
-/// discovery walker produces a de-duplicated file list, so the
-/// registry only needs forward lookup — re-registering the same path
-/// is a caller bug and is not defended against.
+/// Mapping from [`FileId`] to absolute file paths for the files a session
+/// currently holds. Re-registering a held path is a caller bug and is not
+/// defended against; a released handle frees its path
+/// ([LIVE-SCHEDULER-REGISTRY-BOUNDED]).
 #[derive(Debug, Default)]
 pub struct FileRegistry {
-    /// Dense `FileId.0 == index` storage.
-    paths: Vec<PathBuf>,
+    /// Paths of the handles still held.
+    paths: HashMap<FileId, PathBuf>,
+    /// The next handle to issue.
+    next: u32,
 }
 
 impl FileRegistry {
@@ -45,16 +49,33 @@ impl FileRegistry {
 
     /// Registers `path` and returns its freshly allocated [`FileId`].
     pub fn register(&mut self, path: PathBuf) -> FileId {
-        let index = u32::try_from(self.paths.len()).unwrap_or(u32::MAX);
-        self.paths.push(path);
-        FileId(index)
+        let id = FileId(self.next);
+        self.next = self.next.saturating_add(1);
+        let _previous = self.paths.insert(id, path);
+        id
+    }
+
+    /// Releases `id` once its file leaves the session, returning its path.
+    pub fn release(&mut self, id: FileId) -> Option<PathBuf> {
+        self.paths.remove(&id)
+    }
+
+    /// Number of files that currently hold a handle ([LIVE-SCHEDULER-REGISTRY-BOUNDED]).
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.paths.len()
+    }
+
+    /// True when no file holds a handle.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.paths.is_empty()
     }
 
     /// Returns the path associated with `id`, if any.
     #[must_use]
     pub fn path(&self, id: FileId) -> Option<&std::path::Path> {
-        let index = usize::try_from(id.0).ok()?;
-        self.paths.get(index).map(PathBuf::as_path)
+        self.paths.get(&id).map(PathBuf::as_path)
     }
 }
 

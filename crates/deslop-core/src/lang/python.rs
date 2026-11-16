@@ -220,8 +220,7 @@ fn function_text(request: &EmitRequest<'_, '_>, method_name: &str) -> String {
     let body = request
         .scopes
         .first()
-        .map(|scope| indented_body(request.source, scope))
-        .unwrap_or_default();
+        .map_or_default(|scope| indented_body(request.source, scope));
     format!("def {method_name}({parameters}):\n{body}\n\n\n")
 }
 

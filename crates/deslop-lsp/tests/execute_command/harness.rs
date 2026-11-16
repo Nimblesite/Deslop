@@ -1,19 +1,15 @@
 //! Transport plumbing for the [LSP-COMMANDS] suite: the in-process
-//! `LspService`, JSON-RPC request/response shaping, the stdio
+//! session, JSON-RPC request/response shaping, the stdio
 //! `workspace/executeCommand` round trip and the client-bound
 //! `window/showDocument` handshake.
 
 use std::process::{ChildStdin, ChildStdout};
 
 use anyhow::{anyhow, Result};
-use deslop_lsp::LspBackend;
-use futures::{FutureExt, SinkExt, StreamExt};
+use deslop_lsp::{connect, jsonrpc::Error, ClientSocket, LspBackend, Session};
+use futures::FutureExt;
+use lspkit_server::{Message, RequestId};
 use serde_json::{json, Value};
-use tower::Service;
-use tower_lsp::{
-    jsonrpc::{Error, Request, Response},
-    ClientSocket, LspService,
-};
 
 use super::EXECUTE_COMMAND;
 use crate::common::{call, read_frame, request, write_frame};
@@ -25,7 +21,7 @@ use crate::common::{call, read_frame, request, write_frame};
 /// without a sleep or a timeout.
 pub(super) fn drain_client_frames(socket: &mut ClientSocket) -> Vec<Value> {
     let mut frames = Vec::new();
-    while let Some(Some(request)) = socket.next().now_or_never() {
+    while let Some(request) = socket.try_next() {
         frames.push(client_request_frame(&request));
     }
     frames
@@ -61,32 +57,29 @@ pub(super) fn assert_json_bool(value: &Value, pointer: &str, expected: bool) {
     );
 }
 
-pub(super) fn in_process_lsp(
-    workspace_root: &std::path::Path,
-) -> (LspService<LspBackend>, ClientSocket) {
+/// Id of the in-process `initialize` request.
+const INITIALIZE_ID: i64 = 1;
+/// Id of every in-process `workspace/executeCommand` request.
+const EXECUTE_ID: i64 = 2;
+
+pub(super) fn in_process_lsp(workspace_root: &std::path::Path) -> Result<(Session, ClientSocket)> {
     let root = workspace_root.to_path_buf();
-    LspService::build(
-        move |client| match LspBackend::new_with_defaults(client, root.clone(), 30) {
-            Ok(backend) => backend,
-            Err(error) => {
-                tracing::error!(%error, "in-process lsp test backend failed to initialise");
-                std::process::exit(1);
-            }
-        },
-    )
-    .finish()
+    Ok(connect(move |client| {
+        LspBackend::new_with_defaults(client, root, 30)
+    })?)
 }
 
-pub(super) async fn initialize_in_process(service: &mut LspService<LspBackend>) -> Result<Value> {
-    let request = Request::build("initialize")
-        .params(json!({ "capabilities": {} }))
-        .id(1_i64)
-        .finish();
-    response_result(call_service(service, request).await?)
+pub(super) async fn initialize_in_process(service: &mut Session) -> Result<Value> {
+    let request = Message::request(
+        RequestId::Number(INITIALIZE_ID),
+        "initialize",
+        json!({ "capabilities": {} }),
+    );
+    response_result(call_service(service, request).await)
 }
 
 pub(super) async fn execute_in_process(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
     params: Value,
 ) -> Result<(Value, Vec<Value>)> {
@@ -95,87 +88,72 @@ pub(super) async fn execute_in_process(
 }
 
 pub(super) async fn execute_raw_in_process(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
     params: Value,
-) -> Result<(Option<Response>, Vec<Value>)> {
-    let request = Request::build(EXECUTE_COMMAND)
-        .params(params)
-        .id(2_i64)
-        .finish();
+) -> Result<(Option<Message>, Vec<Value>)> {
+    let request = Message::request(RequestId::Number(EXECUTE_ID), EXECUTE_COMMAND, params);
     call_service_with_client(service, socket, request).await
 }
 
-pub(super) async fn call_service(
-    service: &mut LspService<LspBackend>,
-    request: Request,
-) -> Result<Option<Response>> {
-    futures::future::poll_fn(|cx| service.poll_ready(cx)).await?;
-    Ok(service.call(request).await?)
+pub(super) async fn call_service(service: &mut Session, request: Message) -> Option<Message> {
+    service.call(request).await
 }
 
 pub(super) async fn call_service_with_client(
-    service: &mut LspService<LspBackend>,
+    service: &mut Session,
     socket: &mut ClientSocket,
-    request: Request,
-) -> Result<(Option<Response>, Vec<Value>)> {
-    let service_call = async {
-        futures::future::poll_fn(|cx| service.poll_ready(cx)).await?;
-        Ok::<Option<Response>, anyhow::Error>(service.call(request).await?)
-    }
-    .fuse();
+    request: Message,
+) -> Result<(Option<Message>, Vec<Value>)> {
+    let service_call = service.call(request).fuse();
     futures::pin_mut!(service_call);
     let mut client_requests = Vec::new();
 
     loop {
         futures::select! {
-            response = service_call => return Ok((response?, client_requests)),
+            response = service_call => return Ok((response, client_requests)),
             client_request = socket.next().fuse() => {
                 let request = client_request
                     .ok_or_else(|| anyhow!("client socket closed before response"))?;
                 client_requests.push(client_request_frame(&request));
-                respond_to_client_request(socket, request).await?;
+                respond_to_client_request(socket, request);
             }
         }
     }
 }
 
-pub(super) fn response_result(response: Option<Response>) -> Result<Value> {
+pub(super) fn response_result(response: Option<Message>) -> Result<Value> {
     let response = response.ok_or_else(|| anyhow!("expected JSON-RPC response"))?;
-    let (_id, body) = response.into_parts();
-    Ok(body?)
-}
-
-pub(super) fn response_error(response: Option<Response>) -> Result<Error> {
-    let response = response.ok_or_else(|| anyhow!("expected JSON-RPC response"))?;
-    let (_id, body) = response.into_parts();
-    match body {
-        Ok(value) => Err(anyhow!("expected JSON-RPC error, got result: {value}")),
-        Err(error) => Ok(error),
+    match response.error {
+        Some(error) => Err(anyhow!("JSON-RPC error {}: {}", error.code, error.message)),
+        None => Ok(response.result.unwrap_or(Value::Null)),
     }
 }
 
-pub(super) fn client_request_frame(request: &Request) -> Value {
+pub(super) fn response_error(response: Option<Message>) -> Result<Error> {
+    let response = response.ok_or_else(|| anyhow!("expected JSON-RPC response"))?;
+    response
+        .error
+        .ok_or_else(|| anyhow!("expected JSON-RPC error, got result: {:?}", response.result))
+}
+
+pub(super) fn client_request_frame(request: &Message) -> Value {
     json!({
-        "method": request.method(),
-        "params": request.params().cloned().unwrap_or(Value::Null),
+        "method": request.method,
+        "params": request.params.clone().unwrap_or(Value::Null),
     })
 }
 
-pub(super) async fn respond_to_client_request(
-    socket: &mut ClientSocket,
-    request: Request,
-) -> Result<()> {
-    let (method, id, _params) = request.into_parts();
-    let Some(id) = id else {
-        return Ok(());
+pub(super) fn respond_to_client_request(socket: &ClientSocket, request: Message) {
+    let Some(id) = request.id else {
+        return;
     };
-    let result = if method.as_ref() == "window/showDocument" {
+    let result = if request.method.as_deref() == Some("window/showDocument") {
         json!({ "success": true })
     } else {
         json!({})
     };
-    Ok(socket.send(Response::from_ok(id, result)).await?)
+    socket.answer(id, result);
 }
 
 pub(super) fn execute(

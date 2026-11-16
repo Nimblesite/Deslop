@@ -20,8 +20,8 @@ use deslop_core::{
     report::{ReportCluster, ReportOccurrence},
     report_facts::clone_kind_left_out_of_total,
 };
-use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range, Url,
+use lsp_types::{
+    Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range,
 };
 
 use crate::{
@@ -200,7 +200,7 @@ fn canonical_item(
     cache: &mut HashMap<PathBuf, String>,
 ) -> Option<DiagnosticRelatedInformation> {
     let absolute = absolute_path(&occurrence.path, workspace_root);
-    let uri = Url::from_file_path(&absolute).ok()?;
+    let uri = crate::backend::path_to_uri(&absolute)?;
     let source = load_cached_source(&absolute, cache);
     let range = byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, &source);
     Some(DiagnosticRelatedInformation {

@@ -188,14 +188,13 @@ impl<B: McpBackend> McpServer<B> {
                 let paths: Vec<std::path::PathBuf> = params
                     .get("paths")
                     .and_then(Value::as_array)
-                    .map(|items| {
+                    .map_or_default(|items| {
                         items
                             .iter()
                             .filter_map(Value::as_str)
                             .map(std::path::PathBuf::from)
                             .collect()
-                    })
-                    .unwrap_or_default();
+                    });
                 if !paths.is_empty() {
                     if let Err(err) = self.backend.mark_changed(&paths) {
                         error!(reason = %err, "mcp_mark_changed_failed");

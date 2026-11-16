@@ -46,13 +46,12 @@ fn cluster_paths(cluster: &Value) -> Vec<String> {
     cluster
         .get("occurrences")
         .and_then(Value::as_array)
-        .map(|occurrences| {
+        .map_or_default(|occurrences| {
             occurrences
                 .iter()
                 .filter_map(|o| o.get("path").and_then(Value::as_str).map(str::to_owned))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 // Issue #58's documented trio shares test boilerplate but no extractable

@@ -9,7 +9,7 @@ use deslop_core::{
     report_metrics::RepoMetrics,
     wire_generated::{MergePlan, MergeVerdict},
 };
-use tower_lsp::lsp_types::{CodeActionOrCommand, Position, Range};
+use lsp_types::{CodeActionOrCommand, Position, Range};
 
 use super::*;
 
@@ -118,7 +118,7 @@ struct Fixture {
     /// Kept alive so the written document stays on disk for the test.
     _dir: tempfile::TempDir,
     path: PathBuf,
-    uri: Url,
+    uri: Uri,
     source: String,
     report: Report,
 }
@@ -149,7 +149,7 @@ fn clustered_fixture(
     let dir = tempfile::tempdir()?;
     let path = dir.path().join(name);
     fs::write(&path, &source)?;
-    let uri = Url::from_file_path(&path).map_err(|()| anyhow!("absolute fixture path"))?;
+    let uri = crate::backend::path_to_uri(&path).ok_or_else(|| anyhow!("absolute fixture path"))?;
     let report = report_with_cluster(&path, spans_of(&source)?);
     Ok(Fixture {
         _dir: dir,
@@ -236,12 +236,11 @@ fn eligible_cluster_yields_one_complete_action() -> Result<()> {
         "kind mismatch: {:?}",
         action.kind
     );
-    let changes = action
+    let edits = action
         .edit
         .as_ref()
         .and_then(|edit| edit.changes.as_ref())
-        .context("edit changes present")?;
-    let edits = changes
+        .context("edit changes present")?
         .get(&fixture.uri)
         .context("edits target the document")?;
     ensure!(edits.len() == 3, "3 edits expected, got {}", edits.len());

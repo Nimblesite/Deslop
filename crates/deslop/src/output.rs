@@ -109,8 +109,7 @@ impl OutputPaths {
         let mut path = self.base.clone();
         let stem = path
             .file_name()
-            .map(std::ffi::OsStr::to_os_string)
-            .unwrap_or_default();
+            .map_or_default(std::ffi::OsStr::to_os_string);
         let mut new_name = stem;
         new_name.push(".");
         new_name.push(extension);

@@ -75,8 +75,7 @@ pub(crate) fn seed_nested_corpus(scan_root: &Path) -> Result<()> {
 fn folder_rows(report: &serde_json::Value) -> Vec<(String, u64, u64, f64)> {
     metric_field(report, "folders")
         .as_array()
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+        .map_or_default(Vec::as_slice)
         .iter()
         .map(|row| {
             (

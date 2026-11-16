@@ -2,7 +2,7 @@
 //!
 //! Lives in `deslop-core` so the merge engine can render a real
 //! `WorkspaceEdit` for the wire ([AUTOFIX-MERGE-MCP]); the LSP layer
-//! adapts [`LineCol`] onto `tower_lsp::lsp_types::Position`. The
+//! adapts [`LineCol`] onto `lsp_types::Position`. The
 //! `character` column counts UTF-16 code units from the last newline,
 //! per the LSP spec.
 

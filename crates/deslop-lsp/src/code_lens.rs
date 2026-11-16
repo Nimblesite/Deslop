@@ -14,8 +14,8 @@ use deslop_core::{
     report::{ReportCluster, ReportOccurrence},
     report_facts::clone_kind_left_out_of_total,
 };
+use lsp_types::{CodeLens, Command, Position, Range};
 use serde_json::json;
-use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
 
 use crate::diagnostics::occurrence_matches_path;
 

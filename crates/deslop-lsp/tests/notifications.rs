@@ -1,8 +1,7 @@
 //! End-to-end notification coverage for the LSP binary.
 //!
 //! Drives real JSON-RPC frames over stdio so normal VS Code
-//! notifications cannot regress to tower-lsp's "not implemented"
-//! warnings.
+//! notifications cannot regress to being rejected or warned about.
 
 use std::{
     fs,
@@ -26,8 +25,7 @@ mod ipc;
 #[path = "notifications/pair_compare.rs"]
 mod pair_compare;
 
-/// Accepts normal VS Code notifications without tower-lsp fallback
-/// warnings.
+/// Accepts normal VS Code notifications without fallback warnings.
 #[test]
 fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
@@ -391,8 +389,8 @@ fn recv_next(
 
 /// Builds the notification set VS Code sends during normal operation.
 fn normal_vscode_notifications(path: &Path) -> Result<Vec<String>> {
-    let uri = tower_lsp::lsp_types::Url::from_file_path(path)
-        .map_err(|()| anyhow!("path is not absolute: {}", path.display()))?;
+    let uri = deslop_lsp::backend::path_to_uri(path)
+        .ok_or_else(|| anyhow!("path is not absolute: {}", path.display()))?;
     Ok(vec![
         notification("initialized", &serde_json::json!({}))?,
         notification(

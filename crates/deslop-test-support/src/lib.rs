@@ -90,8 +90,7 @@ pub fn with_ext(base: &Path, ext: &str) -> PathBuf {
     let mut path = base.to_path_buf();
     let mut name = path
         .file_name()
-        .map(std::ffi::OsStr::to_os_string)
-        .unwrap_or_default();
+        .map_or_default(std::ffi::OsStr::to_os_string);
     name.push(".");
     name.push(ext);
     path.set_file_name(name);

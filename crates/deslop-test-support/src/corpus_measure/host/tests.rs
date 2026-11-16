@@ -80,7 +80,7 @@ fn a_scan_past_its_deadline_is_killed_and_the_refusal_names_the_deadline() -> Re
         started.elapsed() < REAP_BOUND,
         "killed at its deadline, not after its own sleep"
     );
-    let message = refusal.map(|error| error.to_string()).unwrap_or_default();
+    let message = refusal.map_or_default(|error| error.to_string());
     ensure!(
         message.contains(DEADLINE_WORD),
         "the refusal says why: {message:?}"

@@ -151,8 +151,7 @@ pub fn check_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec
     let entries = manifest
         .get("must_find")
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default();
+        .map_or_default(Vec::as_slice);
     for entry in entries {
         check_one_curated_clone(entry, report, failures);
     }
@@ -164,8 +163,7 @@ pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &m
     let entries = manifest
         .get("must_find_type2")
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default();
+        .map_or_default(Vec::as_slice);
     for entry in entries {
         check_one_curated_type2(entry, report, failures);
     }
@@ -251,8 +249,7 @@ fn curated_files(entry: &Value) -> Vec<String> {
     let files: Vec<String> = entry
         .get("files")
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+        .map_or_default(Vec::as_slice)
         .iter()
         .filter_map(|file| file.as_str().map(ToOwned::to_owned))
         .collect();

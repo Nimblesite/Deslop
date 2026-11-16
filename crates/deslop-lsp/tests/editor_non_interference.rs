@@ -66,7 +66,7 @@ fn initialize_advertises_no_standard_language_providers() -> Result<()> {
 
     for forbidden in FORBIDDEN_CAPABILITIES {
         assert!(
-            caps.get(forbidden).map_or(true, Value::is_null),
+            caps.get(forbidden).is_none_or(Value::is_null),
             "Deslop must NOT advertise the standard {forbidden} — registering it would let \
              Deslop intercept, override, or stall the editor's own feature: {caps}"
         );
@@ -393,7 +393,7 @@ fn wait_for_clusters(
 }
 
 fn file_uri(path: &Path) -> Result<String> {
-    tower_lsp::lsp_types::Url::from_file_path(path)
-        .map(|url| url.to_string())
-        .map_err(|()| anyhow!("path not absolute: {}", path.display()))
+    deslop_lsp::backend::path_to_uri(path)
+        .map(|uri| uri.as_str().to_owned())
+        .ok_or_else(|| anyhow!("path not absolute: {}", path.display()))
 }

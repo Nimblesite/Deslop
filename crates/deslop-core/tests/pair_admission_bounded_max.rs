@@ -86,8 +86,7 @@ fn a_single_axis_above_the_threshold_survives_admission() {
     );
     let members: Vec<usize> = clusters
         .first()
-        .map(|cluster| cluster.members.clone())
-        .unwrap_or_default();
+        .map_or_default(|cluster| cluster.members.clone());
     assert_eq!(
         members, EXPECTED_MEMBERS,
         "and the component must contain exactly the pair's two endpoints"

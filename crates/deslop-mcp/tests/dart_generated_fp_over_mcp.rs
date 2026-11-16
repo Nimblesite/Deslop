@@ -21,7 +21,7 @@ fn occurrence_file_names(payload: &Value) -> Vec<String> {
     payload
         .get("clusters")
         .and_then(Value::as_array)
-        .map(|clusters| {
+        .map_or_default(|clusters| {
             clusters
                 .iter()
                 .filter_map(|cluster| cluster.get("occurrences").and_then(Value::as_array))
@@ -30,7 +30,6 @@ fn occurrence_file_names(payload: &Value) -> Vec<String> {
                 .map(|path| path.rsplit('/').next().unwrap_or(path).to_owned())
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// Issue #95 over the MCP wire: a generated `.g.dart` self-duplicate must

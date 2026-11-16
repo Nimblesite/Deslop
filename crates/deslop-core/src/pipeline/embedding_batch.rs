@@ -273,8 +273,7 @@ pub(super) fn snippet_for(fingerprint: &Fingerprint, sources: &HashMap<FileId, V
     let end = fingerprint.byte_range.end.min(bytes.len());
     bytes
         .get(start..end)
-        .map(|slice| String::from_utf8_lossy(slice).into_owned())
-        .unwrap_or_default()
+        .map_or_default(|slice| String::from_utf8_lossy(slice).into_owned())
 }
 
 /// Lifts an [`EmbeddingSpec`] and a finished batch into the report-facing

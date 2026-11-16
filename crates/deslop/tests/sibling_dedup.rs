@@ -73,8 +73,7 @@ fn array_field<'a>(value: &'a serde_json::Value, key: &str) -> &'a [serde_json::
     value
         .get(key)
         .and_then(serde_json::Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+        .map_or_default(Vec::as_slice)
 }
 
 /// Returns the report's `clusters` array as an owned `Vec`, or an empty

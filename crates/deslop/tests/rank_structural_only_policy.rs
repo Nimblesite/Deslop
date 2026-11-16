@@ -118,8 +118,7 @@ fn cluster_touches(cluster: &Value, file_name: &str) -> bool {
     cluster
         .get("occurrences")
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+        .map_or_default(Vec::as_slice)
         .iter()
         .filter_map(|occ| occ.get("path").and_then(Value::as_str))
         .any(|path| path.ends_with(file_name))

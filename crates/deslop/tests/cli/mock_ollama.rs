@@ -265,7 +265,7 @@ struct HttpRequest {
 fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
     let mut data = Vec::new();
     let mut buffer = [0_u8; 1024];
-    while complete_len(&data).map_or(true, |len| data.len() < len) {
+    while complete_len(&data).is_none_or(|len| data.len() < len) {
         let read = stream.read(&mut buffer)?;
         if read == 0 {
             break;

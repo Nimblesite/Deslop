@@ -92,7 +92,7 @@ fn occurrence_ranges(members: &[Fingerprint]) -> Vec<(usize, usize)> {
         1,
         "one fused group publishes one cluster, got {clusters:#?}"
     );
-    clusters.first().map(member_ranges).unwrap_or_default()
+    clusters.first().map_or_default(member_ranges)
 }
 
 /// Asserts the occurrence ranges the collapse publishes for `members`.

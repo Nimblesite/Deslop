@@ -196,7 +196,7 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
 #[tokio::test(flavor = "current_thread")]
 async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let (mut service, mut socket) = in_process_lsp(workspace.path());
+    let (mut service, mut socket) = in_process_lsp(workspace.path())?;
     let init = initialize_in_process(&mut service).await?;
     assert_advertised_commands(&init)?;
     assert_open_report_command(&mut service, &mut socket).await?;

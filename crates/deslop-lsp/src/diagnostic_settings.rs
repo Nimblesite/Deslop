@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use deslop_core::buckets::ClusterKind;
+use lsp_types::DiagnosticSeverity;
 use serde::Deserialize;
-use tower_lsp::lsp_types::DiagnosticSeverity;
 
 /// A configured diagnostic level; `None` suppresses publication.
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]

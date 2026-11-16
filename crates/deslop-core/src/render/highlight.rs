@@ -190,7 +190,7 @@ fn osprey_class(node: &Node<'_>, kind: &str, source: &[u8]) -> Option<&'static s
 /// identifier leaf based on its parent context. Cheap heuristic, no
 /// scope analysis.
 fn identifier_class(node: &Node<'_>, source: &[u8]) -> Option<&'static str> {
-    let parent_kind = node.parent().map(|p| p.kind()).unwrap_or_default();
+    let parent_kind = node.parent().map_or_default(|p| p.kind());
     if matches!(
         parent_kind,
         "function_definition"

@@ -233,7 +233,7 @@ fn identities_substitute(
     let right = identity_counts(right);
     let one_sided = |ours: &BTreeMap<u64, usize>, theirs: &BTreeMap<u64, usize>| {
         ours.iter()
-            .any(|(key, count)| theirs.get(key).map_or(true, |have| have < count))
+            .any(|(key, count)| theirs.get(key).is_none_or(|have| have < count))
     };
     one_sided(&left, &right) && one_sided(&right, &left)
 }

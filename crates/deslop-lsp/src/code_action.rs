@@ -13,15 +13,15 @@ use deslop_core::{
     refactor::{self, ExtractMethodPlan},
     report::Report,
 };
-use tower_lsp::{
-    lsp_types::{
-        CodeAction, CodeActionKind, CodeActionOrCommand, MessageType, Range, TextEdit, Url,
-        WorkspaceEdit,
-    },
-    Client,
+use lsp_types::{
+    CodeAction, CodeActionKind, CodeActionOrCommand, MessageType, Range, TextEdit, Uri,
+    WorkspaceEdit,
 };
 
-use crate::position::{byte_for_position, position_for_byte};
+use crate::{
+    client::Client,
+    position::{byte_for_position, position_for_byte},
+};
 
 /// User-facing action title, verbatim per [AUTOFIX-EXTRACT-NORTH-STAR].
 pub const EXTRACT_ACTION_TITLE: &str = "Extract identical code to shared method";
@@ -43,7 +43,7 @@ pub const CONSOLIDATE_ACTION_TITLE: &str =
 pub fn build_for_range(
     report: &Report,
     path: &Path,
-    uri: &Url,
+    uri: &Uri,
     source: &[u8],
     range: Range,
 ) -> Vec<CodeActionOrCommand> {
@@ -118,14 +118,14 @@ pub fn resolved_action(
                 // silent no-op, so a missing/malformed edit disables.
                 Some(edit) => action.edit = Some(edit),
                 None => {
-                    action.disabled = Some(tower_lsp::lsp_types::CodeActionDisabled {
+                    action.disabled = Some(lsp_types::CodeActionDisabled {
                         reason: "the engine returned no applicable edit for this plan".to_owned(),
                     });
                 }
             }
         }
         deslop_core::wire_generated::MergeVerdict::AiOrHuman { reason } => {
-            action.disabled = Some(tower_lsp::lsp_types::CodeActionDisabled {
+            action.disabled = Some(lsp_types::CodeActionDisabled {
                 reason: reason.clone(),
             });
         }
@@ -167,7 +167,7 @@ fn plan_for_cluster(
 
 /// Maps a byte-addressed plan onto one LSP `CodeAction` with a
 /// same-document `WorkspaceEdit` ([AUTOFIX-EXTRACT-WORKSPACE-EDIT]).
-fn action_for_plan(uri: &Url, text: &str, plan: &ExtractMethodPlan) -> CodeActionOrCommand {
+fn action_for_plan(uri: &Uri, text: &str, plan: &ExtractMethodPlan) -> CodeActionOrCommand {
     let edits: Vec<TextEdit> = plan
         .edits
         .iter()
@@ -179,12 +179,11 @@ fn action_for_plan(uri: &Url, text: &str, plan: &ExtractMethodPlan) -> CodeActio
             new_text: edit.new_text.clone(),
         })
         .collect();
-    let changes = HashMap::from([(uri.clone(), edits)]);
     CodeActionOrCommand::CodeAction(CodeAction {
         title: EXTRACT_ACTION_TITLE.to_owned(),
         kind: Some(CodeActionKind::REFACTOR_EXTRACT),
         edit: Some(WorkspaceEdit {
-            changes: Some(changes),
+            changes: Some(HashMap::from([(uri.clone(), edits)])),
             ..WorkspaceEdit::default()
         }),
         ..CodeAction::default()

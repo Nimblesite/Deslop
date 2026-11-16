@@ -584,8 +584,7 @@ fn assert_operators_carry_their_token(nodes: &[DumpNode], source: &[u8], label: 
             .zip(usize::try_from(node.end).ok());
         let spanned = range
             .and_then(|(start, end)| source.get(start..end))
-            .map(String::from_utf8_lossy)
-            .unwrap_or_default();
+            .map_or_default(String::from_utf8_lossy);
         assert_eq!(
             node.kind,
             format!("{OPERATOR_KIND_PREFIX}{spanned}"),

@@ -270,8 +270,7 @@ fn a_pass_on_record_in_the_history_holds_every_later_run_of_that_commit() -> Res
     let json: serde_json::Value = crate::read_json(&second.json_path)?;
     let sections: Vec<&str> = json
         .as_object()
-        .map(|card| card.keys().map(String::as_str).collect())
-        .unwrap_or_default();
+        .map_or_default(|card| card.keys().map(String::as_str).collect());
     assert_eq!(
         sections, SCORECARD_SECTIONS,
         "the JSON scorecard writes each judged pair once, under its repository"

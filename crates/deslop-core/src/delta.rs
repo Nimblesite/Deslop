@@ -31,9 +31,7 @@ impl ReportDelta {
     /// testing.
     #[must_use]
     pub fn between(prev: Option<(u64, &Report)>, to_generation: u64, next: &Report) -> Self {
-        let prev_clusters = prev
-            .map(|(_, report)| clusters_by_id(report))
-            .unwrap_or_default();
+        let prev_clusters = prev.map_or_default(|(_, report)| clusters_by_id(report));
         let from_generation = prev.map_or(0, |(generation, _)| generation);
 
         let mut clusters_added: Vec<ReportCluster> = Vec::new();
@@ -96,7 +94,7 @@ fn literal_changes(
     previous: Option<&Report>,
     next: &Report,
 ) -> (Vec<LiteralFinding>, Vec<String>, Vec<LiteralFinding>) {
-    let previous = previous.map(literals_by_id).unwrap_or_default();
+    let previous = previous.map_or_default(literals_by_id);
     let next_by_id = literals_by_id(next);
     let added = next
         .literal_findings

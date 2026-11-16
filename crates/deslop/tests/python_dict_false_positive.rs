@@ -29,10 +29,7 @@ fn run_cli_on_fixture(fixture_name: &str) -> Result<serde_json::Value> {
     let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
     let json_path = {
         let mut p = report_base.clone();
-        let mut name = p
-            .file_name()
-            .map(std::ffi::OsStr::to_os_string)
-            .unwrap_or_default();
+        let mut name = p.file_name().map_or_default(std::ffi::OsStr::to_os_string);
         name.push(".json");
         p.set_file_name(name);
         p
@@ -45,8 +42,7 @@ fn clusters(report: &serde_json::Value) -> Vec<&serde_json::Value> {
     report
         .pointer("/clusters")
         .and_then(serde_json::Value::as_array)
-        .map(|v| v.iter().collect())
-        .unwrap_or_default()
+        .map_or_default(|v| v.iter().collect())
 }
 
 fn intra_file_clusters(report: &serde_json::Value) -> Vec<&serde_json::Value> {
@@ -56,8 +52,7 @@ fn intra_file_clusters(report: &serde_json::Value) -> Vec<&serde_json::Value> {
             let occurrences = cluster
                 .pointer("/occurrences")
                 .and_then(serde_json::Value::as_array)
-                .map(Vec::as_slice)
-                .unwrap_or_default();
+                .map_or_default(Vec::as_slice);
             let paths: std::collections::BTreeSet<&str> = occurrences
                 .iter()
                 .filter_map(|o| o.get("path").and_then(serde_json::Value::as_str))

@@ -337,8 +337,7 @@ fn function_text(request: &EmitRequest<'_, '_>, indent: &str, method_name: &str)
     let body = request
         .scopes
         .first()
-        .map(|scope| run_text(request.source, scope))
-        .unwrap_or_default();
+        .map_or_default(|scope| run_text(request.source, scope));
     format!(
         "{indent}// TODO: deslop — replace `DeslopTodo` with real types.\n\
          {indent}type DeslopTodo = ();\n\

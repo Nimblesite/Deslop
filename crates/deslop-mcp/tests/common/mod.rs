@@ -215,14 +215,13 @@ pub fn structured_content(response: &Value, tool: &str) -> Result<Value> {
 pub fn cluster_ids(page: &Value) -> Vec<String> {
     page.get("clusters")
         .and_then(Value::as_array)
-        .map(|clusters| {
+        .map_or_default(|clusters| {
             clusters
                 .iter()
                 .filter_map(|cluster| cluster.get("id").and_then(Value::as_str))
                 .map(str::to_owned)
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// Calls the `rescan` MCP tool and returns the structured payload.

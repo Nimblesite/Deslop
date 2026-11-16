@@ -211,8 +211,7 @@ fn subject_of(snippet: &Snippet<'_>, cache: &ParseCache) -> Option<OwnedSubject>
     Some(OwnedSubject {
         name: snippet.source.get(name_node.byte_range())?.to_vec(),
         bases: enclosing_container(function)
-            .map(|container| declared_bases(container, snippet.source))
-            .unwrap_or_default(),
+            .map_or_default(|container| declared_bases(container, snippet.source)),
         shape_digest: digest,
         overrides: carries_override_marker(function, snippet.language, snippet.source),
         abstract_declaration: is_abstract_declaration(function, snippet.language, snippet.source),

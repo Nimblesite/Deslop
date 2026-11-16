@@ -251,11 +251,7 @@ impl PipelineSession {
 
     /// Re-parses one held source using its registered language parser.
     fn parse_tree(&self, file_id: crate::state::FileId) -> Result<NormalizedNode, CoreError> {
-        let source = self
-            .sources
-            .get(&file_id)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+        let source = self.sources.get(&file_id).map_or_default(Vec::as_slice);
         let language = self
             .file_languages
             .get(&file_id)

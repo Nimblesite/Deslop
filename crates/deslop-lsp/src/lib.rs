@@ -9,6 +9,7 @@
 pub mod app;
 pub mod backend;
 mod cache_seed;
+pub mod client;
 pub mod code_action;
 pub mod code_lens;
 pub mod commands;
@@ -19,6 +20,7 @@ pub mod diagnostics;
 pub mod file_watch;
 mod help;
 pub mod ipc;
+pub mod jsonrpc;
 pub mod navigation;
 pub mod notifications;
 pub mod observability;
@@ -30,4 +32,5 @@ pub mod server;
 mod threshold_warning;
 
 pub use backend::LspBackend;
-pub use server::{run_stdio, ServeEnd};
+pub use client::Client;
+pub use server::{connect, run_stdio, ClientSocket, ServeEnd, Session};

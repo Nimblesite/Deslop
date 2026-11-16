@@ -66,7 +66,7 @@ pub(crate) fn classification(cluster: &Value) -> Option<String> {
 /// type must also be one the kind reports ([CORPUS-REGISTER-TYPE]).
 pub(crate) fn is_clone_finding(cluster: &Value, pinned: Option<CloneType>) -> bool {
     registered_kind(cluster)
-        .is_some_and(|kind| kind.is_clone() && pinned.map_or(true, |pin| pin.admits(kind)))
+        .is_some_and(|kind| kind.is_clone() && pinned.is_none_or(|pin| pin.admits(kind)))
 }
 
 /// [CORPUS-SCORE] A scored report names the `kind` of every cluster. One

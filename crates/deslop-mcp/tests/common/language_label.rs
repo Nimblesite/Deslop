@@ -68,7 +68,7 @@ pub fn assert_language_label_over_mcp(
 fn cluster_languages_for_extension(page: &Value, extension: &str) -> Vec<String> {
     page.get("clusters")
         .and_then(Value::as_array)
-        .map(|clusters| {
+        .map_or_default(|clusters| {
             clusters
                 .iter()
                 .filter(|cluster| first_occurrence_has_extension(cluster, extension))
@@ -76,7 +76,6 @@ fn cluster_languages_for_extension(page: &Value, extension: &str) -> Vec<String>
                 .map(ToOwned::to_owned)
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// True when a cluster's `first_occurrence.path` carries `extension`.

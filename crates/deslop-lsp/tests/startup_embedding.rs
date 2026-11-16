@@ -15,8 +15,10 @@ use deslop_core::{
     embedding::{EmbeddingMode, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID},
     live::{transport::IpcMode, LiveError},
 };
-use deslop_lsp::backend::{LspBackend, LspEmbeddingConfig};
-use tower_lsp::{Client, LspService};
+use deslop_lsp::{
+    backend::{LspBackend, LspEmbeddingConfig},
+    connect, Client,
+};
 
 use crate::{common::copy_fixture, mock_ollama::MockOllama};
 
@@ -31,24 +33,17 @@ fn client(workspace: &std::path::Path) -> Result<Client> {
     let captured: Arc<Mutex<Option<Client>>> = Arc::new(Mutex::new(None));
     let slot = Arc::clone(&captured);
     let root = workspace.to_path_buf();
-    let (_service, _socket) = LspService::build(move |client| {
+    let (_session, _socket) = connect(move |client| {
         if let Ok(mut held) = slot.lock() {
             *held = Some(client.clone());
         }
-        match LspBackend::new_with_defaults(client, root.clone(), MIN_NODES) {
-            Ok(backend) => backend,
-            Err(error) => {
-                tracing::error!(%error, "startup embedding test backend failed to initialise");
-                std::process::exit(1);
-            }
-        }
-    })
-    .finish();
+        LspBackend::new_with_defaults(client, root, MIN_NODES)
+    })?;
     let held = captured
         .lock()
         .map_err(|_| anyhow!("client slot poisoned"))?
         .clone();
-    held.ok_or_else(|| anyhow!("the service built no client"))
+    held.ok_or_else(|| anyhow!("the session built no client"))
 }
 
 fn config(mode: EmbeddingMode, provider_id: &str, endpoint: &str) -> LspEmbeddingConfig {
