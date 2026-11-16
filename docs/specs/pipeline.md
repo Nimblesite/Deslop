@@ -281,7 +281,7 @@ An exact copy between two files the edit did not touch can only appear or disapp
 
 - **What the stage records count.** The `input` of the `shared_subtree_rescue` and `pair_content_gate` stage records is the number of pairs the stage measured: every pair on a full pass, and only the re-measured pairs after an edit. `output` is still the stage's whole result.
 - **When nothing is reused.** Whenever the pass pairs from scratch ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]: no previous pairs, a configuration or ignore-rule reload, embeddings on, the cross-language audit on, or a one-shot run).
-- **What still runs over everything.** Copy recovery, the noise and structural splits, naming, ranking, metrics and rendering, and the materialised syntax trees these stages read. The ranked build's per-group fold is reused under [PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS].
+- **What still runs over everything.** Shape-family closure, the noise and structural splits, naming, ranking, metrics and rendering, and the materialised syntax trees these stages read. The ranked build's per-group fold and copy recovery's per-family walk are reused under [PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS] and [PIPELINE-INCREMENTAL-ANALYSIS-RECOVERY].
 
 Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` (an unrelated one-file edit re-measures no more pairs than that file holds on its own) and by the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
 
@@ -293,6 +293,14 @@ So a live session keeps each group's fold, keyed by its exact member set and by 
 - **When nothing is reused.** Whenever the pass pairs from scratch ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
 
 Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` and the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-RECOVERY] A live edit re-walks only the copy families it could have changed.** Pairing joins every copy of a piece of code to the first copy only, so copy recovery walks each family of near-identical code that is missing a pair between two copies, and adds the pairs the content gate accepts. A family's walk reads its members, the pairs already among them, and the exact copies around them: the same inputs the rescue reads ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
+
+So a live session keeps each family's recovered pairs, keyed by its exact member set. After an edit it reuses them for every family whose members are all unchanged and settled under the rescue's rule, and walks every other family again. The recovered pairs join the candidate list in the same order a fresh scan adds them.
+
+- **What the stage record counts.** The `input` of the `shape_families_and_copy_recovery` stage record is the number of families walked: every incomplete family on a full pass, and only the re-walked ones after an edit.
+
+Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` (`an_edit_to_one_file_walks_only_the_copy_families_it_touches`) and the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
 
 **[PIPELINE-INCREMENTAL-ANALYSIS-ADDRESSING] Reuse is addressed, not bookkept.** Reused artefacts follow [PIPELINE-INCREMENTAL-INVALIDATION]: each is stored under a key derived from the content that determines it, so a stale artefact is *unaddressable* rather than merely unused. No mtime heuristics, no watcher-maintained validity index, no invalidation step that could be skipped or drift. A key derived from anything other than that content — a version string, a path, a lossy transform of the bytes — does not satisfy this and is a defect, not an optimisation. The key's language component is load-bearing in the same way: two byte-identical files routed to different parsers must occupy two entries, or the second is served a tree built under a grammar it was never parsed with. `crates/deslop/tests/incremental_multilang_matrix.rs` pins that partition against a mixed six-language corpus.
 

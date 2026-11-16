@@ -21,7 +21,7 @@ use crate::{
     cluster_filters::ParseCache,
     fingerprint::Fingerprint,
     overlap::{apply_shared_subtree_rescue_to, RescueCorpus},
-    pair::{apply_pair_content_gate, CandidatePair, FusedCluster},
+    pair::{apply_pair_content_gate, CandidatePair, FusedCluster, Recovery},
     state::FileId,
 };
 
@@ -41,6 +41,8 @@ pub(super) struct Verdicts {
     recovered: Vec<(usize, usize)>,
     /// Every fused cluster's fold, by side and members.
     folds: HashMap<(bool, Vec<usize>), Folded>,
+    /// Each incomplete shape family's recovered pairs, by members.
+    recovery: HashMap<Vec<usize>, Vec<CandidatePair>>,
 }
 
 impl Verdicts {
@@ -55,6 +57,11 @@ impl Verdicts {
                 .folds
                 .into_iter()
                 .filter_map(|(key, folded)| remap_fold(key, folded, remap))
+                .collect(),
+            recovery: self
+                .recovery
+                .into_iter()
+                .filter_map(|(members, pairs)| remap_recovery(members, pairs, remap))
                 .collect(),
         };
         carried.sort();
@@ -108,6 +115,28 @@ fn remap_fold(
         })
         .collect::<Option<Folded>>()?;
     Some(((clones, members), folded))
+}
+
+/// One family's recovered pairs re-indexed by `remap`, or `None` when any
+/// index is rejected.
+fn remap_recovery(
+    members: Vec<usize>,
+    pairs: Vec<CandidatePair>,
+    remap: &dyn Fn(usize) -> Option<usize>,
+) -> Option<(Vec<usize>, Vec<CandidatePair>)> {
+    let members = members
+        .into_iter()
+        .map(remap)
+        .collect::<Option<Vec<usize>>>()?;
+    let pairs = pairs
+        .into_iter()
+        .map(|mut pair| {
+            pair.left = remap(pair.left)?;
+            pair.right = remap(pair.right)?;
+            Some(pair)
+        })
+        .collect::<Option<Vec<CandidatePair>>>()?;
+    Some((members, pairs))
 }
 
 /// Records whose measurements an edit may have changed, per file, with
@@ -247,6 +276,25 @@ impl CarriedVerdicts {
             .cloned()
     }
 
+    /// The previous recovered pairs of `family`, when every member is
+    /// settled under the rescue's rule: recovery reads the pairs before
+    /// the gate and the exact clones they hold.
+    fn recovery(
+        &self,
+        family: &FusedCluster,
+        fingerprints: &[Fingerprint],
+    ) -> Option<Vec<CandidatePair>> {
+        let settled = family.members.iter().all(|index| {
+            fingerprints
+                .get(*index)
+                .is_some_and(|record| self.rescue_unsettled.settles(record))
+        });
+        if !settled {
+            return None;
+        }
+        self.verdicts.recovery.get(&family.members).cloned()
+    }
+
     /// The previous gate verdict of `pair`, when it still holds.
     fn gate(&self, pair: &CandidatePair, fingerprints: &[Fingerprint]) -> Option<bool> {
         let unsettled = self.gate_unsettled.as_ref()?;
@@ -375,6 +423,28 @@ impl VerdictPass {
         fingerprints: &[Fingerprint],
     ) -> Option<Folded> {
         self.carried.as_ref()?.fold(clones, fused, fingerprints)
+    }
+
+    /// [PIPELINE-INCREMENTAL-ANALYSIS-RECOVERY] The previous recovered
+    /// pairs of `family`, when they still hold.
+    pub(super) fn recovery(
+        &self,
+        family: &FusedCluster,
+        fingerprints: &[Fingerprint],
+    ) -> Option<Vec<CandidatePair>> {
+        self.carried.as_ref()?.recovery(family, fingerprints)
+    }
+
+    /// Records each incomplete family's recovered pairs.
+    pub(super) fn families_recovered(&mut self, families: &[FusedCluster], recovery: Recovery) {
+        if let Some(record) = self.record.as_mut() {
+            let rows = recovery.by_family.into_iter().filter_map(|(index, pairs)| {
+                families
+                    .get(index)
+                    .map(|family| (family.members.clone(), pairs))
+            });
+            record.recovery.extend(rows);
+        }
     }
 
     /// Records the fold of every fused cluster on side `clones`.

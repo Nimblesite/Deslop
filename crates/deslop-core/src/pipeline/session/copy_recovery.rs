@@ -5,9 +5,14 @@ use crate::{
     ast::NormalizedNode,
     cluster_filters::ParseCache,
     fingerprint::Fingerprint,
-    pair::{CandidatePair, CopyProbe, FusedCluster, GateShared, GatedCopyWeld, PairGate},
+    pair::{
+        recover_copy_pairs_reusing, CandidatePair, CopyProbe, FusedCluster, GateShared,
+        GatedCopyWeld, PairGate, Recovery,
+    },
     pipeline::PipelineSession,
 };
+
+use super::super::verdicts::VerdictPass;
 
 impl PipelineSession {
     /// Adds the same-hash pairs the content gate welds inside each
@@ -20,7 +25,8 @@ impl PipelineSession {
         fingerprints: &[Fingerprint],
         trees: &[NormalizedNode],
         parse_cache: &ParseCache,
-    ) {
+        verdicts: &VerdictPass,
+    ) -> Recovery {
         let shared = GateShared::new(
             pairs,
             fingerprints,
@@ -31,7 +37,7 @@ impl PipelineSession {
         );
         let signatures = self.store.signatures();
         let allow_cross_language = self.exclusion.allows_cross_language_comparison();
-        crate::pair::recover_copy_pairs(pairs, families, fingerprints, || {
+        let open = || {
             GatedCopyWeld::new(
                 CopyProbe::new(
                     fingerprints,
@@ -42,6 +48,8 @@ impl PipelineSession {
                 PairGate::new(&shared, fingerprints.len()),
                 fingerprints,
             )
-        });
+        };
+        let reuse = |family: &FusedCluster| verdicts.recovery(family, fingerprints);
+        recover_copy_pairs_reusing(pairs, families, fingerprints, &open, &reuse)
     }
 }

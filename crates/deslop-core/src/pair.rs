@@ -33,7 +33,7 @@ pub(crate) use echo::ExactClones;
 
 /// [FUSED-CANDIDATE-BUCKET-RECOVERY] The copy pairs a bucket's star hides.
 mod recovery;
-pub(crate) use recovery::{recover_copy_pairs, GatedCopyWeld};
+pub(crate) use recovery::{recover_copy_pairs_reusing, GatedCopyWeld, Recovery};
 
 /// Transitive-closure clustering over surviving pairs.
 mod closure;

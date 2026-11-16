@@ -118,24 +118,67 @@ impl<S: BuildHasher, L: BuildHasher> CopyWeld for GatedCopyWeld<'_, S, L> {
     }
 }
 
+/// [PIPELINE-INCREMENTAL-ANALYSIS-RECOVERY] A family's recovered pairs
+/// from an earlier render, when they still hold.
+pub(crate) type RecoveryReuse<'a> =
+    &'a (dyn Fn(&FusedCluster) -> Option<Vec<CandidatePair>> + Sync);
+
+/// What one recovery pass did: each incomplete family's recovered pairs,
+/// by family index, in the order they joined `pairs`, and how many
+/// families it walked rather than reused.
+pub(crate) struct Recovery {
+    /// Recovered pairs per incomplete family.
+    pub(crate) by_family: Vec<(usize, Vec<CandidatePair>)>,
+    /// Families walked in this pass.
+    pub(crate) walked: usize,
+}
+
 /// Adds to `pairs` every same-hash pair the weld joins inside an
-/// incomplete shape family. `open` yields one weld per worker.
-pub(crate) fn recover_copy_pairs<W: CopyWeld + Send>(
+/// incomplete shape family; `open` yields one weld per worker. A family
+/// `reuse` answers keeps the pairs an earlier render recovered for it
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-RECOVERY]).
+pub(crate) fn recover_copy_pairs_reusing<W: CopyWeld + Send>(
     pairs: &mut Vec<CandidatePair>,
     families: &[FusedCluster],
     fingerprints: &[Fingerprint],
-    open: impl Fn() -> W + Sync,
-) {
+    open: &(impl Fn() -> W + Sync),
+    reuse: RecoveryReuse<'_>,
+) -> Recovery {
     log_recovery_workload(families, fingerprints);
     pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
     let probed = Probed::default();
-    let recovered = recovered_pairs(families, fingerprints, &open, pairs, &probed);
+    let walks = recovered_pairs(families, fingerprints, open, pairs, &probed, reuse);
+    let walked = walks.iter().filter(|walk| walk.walked).count();
+    let by_family: Vec<(usize, Vec<CandidatePair>)> = walks
+        .into_iter()
+        .map(|walk| (walk.family, walk.pairs))
+        .collect();
+    let recovered: usize = by_family.iter().map(|(_, pairs)| pairs.len()).sum();
     tracing::info!(
-        recovered = recovered.len(),
+        recovered,
+        walked,
         probed = probed.total(),
         "copy edges recovered"
     );
-    pairs.extend(recovered);
+    pairs.extend(
+        by_family
+            .iter()
+            .flat_map(|(_, pairs)| pairs.iter().copied()),
+    );
+    Recovery { by_family, walked }
+}
+
+/// A shape family with its index.
+type IndexedFamily<'a> = (usize, &'a FusedCluster);
+
+/// One incomplete family's recovered pairs, and whether they were walked.
+struct FamilyWalk {
+    /// Index of the family.
+    family: usize,
+    /// Its recovered pairs.
+    pairs: Vec<CandidatePair>,
+    /// Whether this pass walked it rather than reusing its pairs.
+    walked: bool,
 }
 
 /// The welded pairs of every incomplete family. Families whose hash
@@ -150,33 +193,57 @@ fn recovered_pairs<W: CopyWeld + Send>(
     open: &(impl Fn() -> W + Sync),
     existing: &[CandidatePair],
     probed: &Probed,
-) -> Vec<CandidatePair> {
-    let (large, small): (Vec<&FusedCluster>, Vec<&FusedCluster>) = families
+    reuse: RecoveryReuse<'_>,
+) -> Vec<FamilyWalk> {
+    let (large, small): (Vec<IndexedFamily<'_>>, Vec<IndexedFamily<'_>>) = families
         .iter()
-        .filter(|family| has_missing_pair(family))
-        .partition(|family| has_large_group(family, fingerprints));
+        .enumerate()
+        .filter(|(_, family)| has_missing_pair(family))
+        .partition(|(_, family)| has_large_group(family, fingerprints));
     let workers = crate::shard::worker_count(small.len(), RECOVERY_SHARD_MIN_FAMILIES);
     let (chunks, _welds) = crate::shard::map_chunks(
         small.chunks(RECOVERY_CHUNK_FAMILIES),
         workers,
         open,
-        |weld, chunk: &[&FusedCluster]| {
+        |weld, chunk: &[IndexedFamily<'_>]| {
             chunk
                 .iter()
-                .flat_map(|family| family_pairs(family, fingerprints, weld, existing, probed))
-                .collect::<Vec<CandidatePair>>()
+                .map(|&(index, family)| {
+                    walk_or_reuse(index, family, reuse, || {
+                        family_pairs(family, fingerprints, weld, existing, probed)
+                    })
+                })
+                .collect::<Vec<FamilyWalk>>()
         },
     );
     let pool = WeldPool::new(open);
-    chunks
-        .into_iter()
-        .flatten()
-        .chain(
-            large.iter().flat_map(|family| {
-                large_family_pairs(family, fingerprints, &pool, existing, probed)
-            }),
-        )
-        .collect()
+    let large_walks = large.iter().map(|&(index, family)| {
+        walk_or_reuse(index, family, reuse, || {
+            large_family_pairs(family, fingerprints, &pool, existing, probed)
+        })
+    });
+    chunks.into_iter().flatten().chain(large_walks).collect()
+}
+
+/// `family`'s reused pairs, or its pairs walked by `walk`.
+fn walk_or_reuse(
+    family: usize,
+    members: &FusedCluster,
+    reuse: RecoveryReuse<'_>,
+    walk: impl FnOnce() -> Vec<CandidatePair>,
+) -> FamilyWalk {
+    match reuse(members) {
+        Some(pairs) => FamilyWalk {
+            family,
+            pairs,
+            walked: false,
+        },
+        None => FamilyWalk {
+            family,
+            pairs: walk(),
+            walked: true,
+        },
+    }
 }
 
 /// Whether any hash group of `family` is large enough for the batched walk.
