@@ -117,9 +117,8 @@ impl PipelineSession {
         let Some(parser) = parser_for_language(&self.parsers, language) else {
             return Ok(CorpusEffect::Untouched);
         };
-        let file_id = self
-            .file_id_for(&absolute)
-            .unwrap_or_else(|| self.registry.register(absolute.clone()));
+        let held = self.file_id_for(&absolute);
+        let file_id = held.unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
         let mut build_stats = CorpusBuildState::default();
         let (cached, source, lines) = match parse_one_file(
@@ -135,7 +134,12 @@ impl PipelineSession {
             // [LANG-CAND-OSPREY-UNPARSED] A file that cannot be analysed,
             // including one mid-edit, must not take down the long-lived
             // server: drop it, name it, and keep serving.
-            Err(error) => return Ok(self.skip_path(absolute, skip_reason(error)?)),
+            Err(error) => {
+                if held.is_none() {
+                    let _released = self.registry.release(file_id);
+                }
+                return Ok(self.skip_path(absolute, skip_reason(error)?));
+            }
         };
         let _recovered = self.skipped_files.remove(&absolute);
         if self
@@ -366,6 +370,7 @@ impl PipelineSession {
             return CorpusEffect::from_touched(was_skipped);
         };
         let _removed_path = self.live_paths.remove(file_id);
+        let _released = self.registry.release(file_id);
         let _removed_records = self.store.remove(file_id);
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);

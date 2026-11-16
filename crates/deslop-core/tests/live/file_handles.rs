@@ -30,7 +30,10 @@ fn class_source(stem: &str, round: u32) -> String {
 /// Feeds `paths` through one pass, as a watcher flush would.
 fn apply(session: &mut AnalysisSession, paths: &[&Path]) -> Result<()> {
     let owned: Vec<_> = paths.iter().map(|path| path.to_path_buf()).collect();
-    session.apply_changes(&owned).map(drop).context("apply changes")
+    session
+        .apply_changes(&owned)
+        .map(drop)
+        .context("apply changes")
 }
 
 /// Asserts the handle count equals the analysed file count and the file count on disk.
@@ -54,7 +57,8 @@ fn deletes_and_rename_saves_leave_one_handle_per_file() -> Result<()> {
     let root = workspace.path();
     for name in RESIDENT_FILES.iter().chain([&CHURNED_FILE]) {
         let stem = name.trim_end_matches(".cs");
-        fs::write(root.join(name), class_source(stem, 0)).with_context(|| format!("write {name}"))?;
+        fs::write(root.join(name), class_source(stem, 0))
+            .with_context(|| format!("write {name}"))?;
     }
     let all_files = RESIDENT_FILES.len() + 1;
     let mut session = live_session(root)?;
@@ -65,18 +69,26 @@ fn deletes_and_rename_saves_leave_one_handle_per_file() -> Result<()> {
     for round in 1..=CHURN_ROUNDS {
         fs::remove_file(&churned).context("delete")?;
         apply(&mut session, &[&churned])?;
-        assert_one_handle_per_file(&session, RESIDENT_FILES.len(), &format!("round {round}: deleted"))?;
+        assert_one_handle_per_file(
+            &session,
+            RESIDENT_FILES.len(),
+            &format!("round {round}: deleted"),
+        )?;
 
         fs::write(&churned, class_source("Register", round)).context("recreate")?;
         apply(&mut session, &[&churned])?;
         assert_one_handle_per_file(&session, all_files, &format!("round {round}: recreated"))?;
 
-        fs::write(&temporary, class_source("Register", round + CHURN_ROUNDS)).context("temp copy")?;
+        fs::write(&temporary, class_source("Register", round + CHURN_ROUNDS))
+            .context("temp copy")?;
         fs::rename(&temporary, &churned).context("rename over")?;
         apply(&mut session, &[&temporary, &churned])?;
         assert_one_handle_per_file(&session, all_files, &format!("round {round}: rename-saved"))?;
         assert!(
-            session.pipeline().and_then(|pipeline| pipeline.file_id_for(&churned)).is_some(),
+            session
+                .pipeline()
+                .and_then(|pipeline| pipeline.file_id_for(&churned))
+                .is_some(),
             "round {round}: the saved file resolves to a live handle"
         );
     }
