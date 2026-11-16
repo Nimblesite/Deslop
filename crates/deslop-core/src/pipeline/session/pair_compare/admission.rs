@@ -295,10 +295,10 @@ pub(super) fn classify_admitted(
     measured: Measurements,
     routing: crate::config::RoutingTuning,
 ) -> Option<PairClassification> {
-    // Whitespace inside a literal is content; raw frontier agreement must still be complete.
+    // [CLONE-BUCKETS-IDENTICAL] Whitespace inside a literal is content:
+    // folded text proves identity only when every raw position matches.
     if measured.text.identical
-        && (measured.text.raw == PairTextIdentity::ByteIdentical
-            || measured.content.agreement >= 1.0)
+        && (measured.text.raw == PairTextIdentity::ByteIdentical || measured.content.exact)
     {
         return Some(PairClassification::Identical);
     }

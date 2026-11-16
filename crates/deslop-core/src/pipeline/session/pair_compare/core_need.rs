@@ -88,6 +88,7 @@ mod tests {
             },
             content: ContentEvidence {
                 agreement: content_support,
+                exact: false,
                 rename_consistency: 0.0,
                 consistent_rename: false,
                 literal_fraction: 0.0,
