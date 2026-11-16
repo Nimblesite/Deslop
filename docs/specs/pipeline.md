@@ -281,9 +281,18 @@ An exact copy between two files the edit did not touch can only appear or disapp
 
 - **What the stage records count.** The `input` of the `shared_subtree_rescue` and `pair_content_gate` stage records is the number of pairs the stage measured: every pair on a full pass, and only the re-measured pairs after an edit. `output` is still the stage's whole result.
 - **When nothing is reused.** Whenever the pass pairs from scratch ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]: no previous pairs, a configuration or ignore-rule reload, embeddings on, the cross-language audit on, or a one-shot run).
-- **What still runs over everything.** Copy recovery, clustering, ranking, metrics and rendering, and the materialised syntax trees the rescue and gate read.
+- **What still runs over everything.** Copy recovery, the noise and structural splits, naming, ranking, metrics and rendering, and the materialised syntax trees these stages read. The ranked build's per-group fold is reused under [PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS].
 
 Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` (an unrelated one-file edit re-measures no more pairs than that file holds on its own) and by the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS] A live edit re-folds only the clusters it could have changed.** Building the ranked report starts with a fold: each connected group of matching code is split into reportable clusters and given its clone kind, by comparing its members with each other. That comparison reads the members' own files and the same nearby exact copies the per-pair stages read ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
+
+So a live session keeps each group's fold, keyed by its exact member set and by whether it is a clone or an informational group. After an edit it reuses the fold of every group whose members are all unchanged and settled under the gate's rule, and folds every other group again. Naming the clusters, joining copied runs, cross-cluster subsumption and ranking still run over the whole set, so ids and ranks are exactly a fresh scan's.
+
+- **What the stage record counts.** The `input` of the `ranked_build` stage record is the number of groups folded: every group on a full pass, and only the re-folded ones after an edit.
+- **When nothing is reused.** Whenever the pass pairs from scratch ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+
+Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` and the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
 
 **[PIPELINE-INCREMENTAL-ANALYSIS-ADDRESSING] Reuse is addressed, not bookkept.** Reused artefacts follow [PIPELINE-INCREMENTAL-INVALIDATION]: each is stored under a key derived from the content that determines it, so a stale artefact is *unaddressable* rather than merely unused. No mtime heuristics, no watcher-maintained validity index, no invalidation step that could be skipped or drift. A key derived from anything other than that content — a version string, a path, a lossy transform of the bytes — does not satisfy this and is a defect, not an optimisation. The key's language component is load-bearing in the same way: two byte-identical files routed to different parsers must occupy two entries, or the second is served a tree built under a grammar it was never parsed with. `crates/deslop/tests/incremental_multilang_matrix.rs` pins that partition against a mixed six-language corpus.
 

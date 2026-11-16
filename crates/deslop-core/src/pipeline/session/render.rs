@@ -123,15 +123,14 @@ impl PipelineSession {
         );
         let (fused_clusters, shape_families, informational_candidates) =
             self.partition_and_split(pairs, &trees, &parse_cache, &mut ledger, &mut verdicts);
-        let pair_ledger = pair_ledger.map(|ledger| ledger.with_verdicts(verdicts.finish()));
-        let clusters = self.ranked_clusters(
+        let ranked = information::RankedInputs {
             fingerprints,
-            &fused_clusters,
-            &informational_candidates,
-            &trees,
-            &judge,
-            &mut ledger,
-        );
+            clones: &fused_clusters,
+            information: &informational_candidates,
+            trees: &trees,
+        };
+        let clusters = self.ranked_clusters(&ranked, &judge, &mut ledger, &mut verdicts);
+        let pair_ledger = pair_ledger.map(|ledger| ledger.with_verdicts(verdicts.finish()));
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),

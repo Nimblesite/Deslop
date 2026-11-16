@@ -131,9 +131,46 @@ pub struct ClusterBuildInputs<'a, L: BuildHasher> {
 pub fn build_ranked_fused_clusters<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
 ) -> Vec<Cluster> {
-    let mut clusters = reportable_clusters(
-        inputs,
-        &DeclarationScopes::new(inputs.trees, inputs.file_languages),
+    build_ranked_fused_clusters_reusing(inputs, &|_| None).clusters
+}
+
+/// [PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS] One fused cluster's fold:
+/// its reportable groups, as member indices with their kind.
+pub(crate) type Folded = Vec<(Vec<usize>, ClusterKind)>;
+
+/// A fold an earlier render made of the same fused cluster, when it
+/// still holds.
+pub(crate) type FoldReuse<'a> = &'a (dyn Fn(&FusedCluster) -> Option<Folded> + Sync);
+
+/// The ranked clusters, every fused cluster's fold in input order, and
+/// how many fused clusters were folded rather than reused.
+pub(crate) struct RankedBuild {
+    /// The ranked clusters.
+    pub(crate) clusters: Vec<Cluster>,
+    /// Each fused cluster's fold, positionally 1:1 with the input.
+    pub(crate) folds: Vec<Folded>,
+    /// Fused clusters folded in this build.
+    pub(crate) folded: usize,
+}
+
+/// [`build_ranked_fused_clusters`] taking each fused cluster's fold from
+/// `reuse` when it has one. Naming, coalescing and cross-cluster
+/// subsumption still run over the whole set.
+pub(crate) fn build_ranked_fused_clusters_reusing<L: BuildHasher + Sync>(
+    inputs: &ClusterBuildInputs<'_, L>,
+    reuse: FoldReuse<'_>,
+) -> RankedBuild {
+    let scopes = DeclarationScopes::new(inputs.trees, inputs.file_languages);
+    let (folds, folded) = folds_of(inputs, &scopes, reuse);
+    let drafts = inputs
+        .fused_clusters
+        .iter()
+        .zip(&folds)
+        .flat_map(|(fused, groups)| drafts_of(inputs.fingerprints, fused, groups))
+        .collect();
+    let mut clusters = name_clusters(
+        coalesce_copied_runs(drafts, inputs.trees, inputs.kinds),
+        inputs.file_paths,
     );
     let dropped_below_min_members = inputs.fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
@@ -148,21 +185,25 @@ pub fn build_ranked_fused_clusters<L: BuildHasher + Sync>(
         inputs.fused_clusters.len(),
         dropped_below_min_members,
     );
-    collapsed
+    RankedBuild {
+        clusters: collapsed,
+        folds,
+        folded,
+    }
 }
 
-/// Materialises every fused cluster that remains reportable, then names
-/// them together: an id ranks a cluster among the others sharing its
-/// shape and paths, which only the whole set can say
-/// ([PIPELINE-DETERMINISM]).
-fn reportable_clusters<L: BuildHasher + Sync>(
+/// Every fused cluster's fold, reused where `reuse` has one, and how many
+/// were folded.
+///
+/// The fold is the render's costliest stage — every member pair of every
+/// cluster is measured — and each cluster folds independently, so the
+/// clusters are dealt to workers in small chunks and the folds
+/// reassembled in cluster order ([PIPELINE-DETERMINISM]).
+fn folds_of<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
     scopes: &DeclarationScopes<'_, impl BuildHasher + Sync>,
-) -> Vec<Cluster> {
-    // The fold is the render's costliest stage — every member pair of
-    // every cluster is measured — and each cluster folds independently,
-    // so the clusters are dealt to workers in small chunks and the drafts
-    // reassembled in cluster order ([PIPELINE-DETERMINISM]).
+    reuse: FoldReuse<'_>,
+) -> (Vec<Folded>, usize) {
     let workers = crate::shard::worker_count(inputs.fused_clusters.len(), FOLD_SHARD_MIN_CLUSTERS);
     let (chunks, _states) = crate::shard::map_chunks(
         inputs.fused_clusters.chunks(FOLD_CHUNK_CLUSTERS),
@@ -171,15 +212,18 @@ fn reportable_clusters<L: BuildHasher + Sync>(
         |(), chunk: &[FusedCluster]| {
             chunk
                 .iter()
-                .flat_map(|fused| build_fused_cluster(inputs, fused, scopes))
-                .collect::<Vec<Unnamed>>()
+                .map(|fused| {
+                    reuse(fused).map_or_else(
+                        || (fold(inputs, fused, scopes), true),
+                        |folded| (folded, false),
+                    )
+                })
+                .collect::<Vec<(Folded, bool)>>()
         },
     );
-    let drafts: Vec<Unnamed> = chunks.into_iter().flatten().collect();
-    name_clusters(
-        coalesce_copied_runs(drafts, inputs.trees, inputs.kinds),
-        inputs.file_paths,
-    )
+    let rows: Vec<(Folded, bool)> = chunks.into_iter().flatten().collect();
+    let folded = rows.iter().filter(|(_, fresh)| *fresh).count();
+    (rows.into_iter().map(|(groups, _)| groups).collect(), folded)
 }
 
 /// Emits the structured GH#45 ranked-cluster distribution summary.
@@ -194,36 +238,38 @@ fn log_ranked_cluster_distribution(clusters: &[Cluster], input_total: usize, dro
     );
 }
 
-/// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
-/// Same-file overlap collapse can reduce a fused group to one logical
-/// location; those groups are artifacts, not duplicates, and are
-/// dropped before ranking.
-fn build_fused_cluster<L: BuildHasher + Sync>(
+/// Folds one `FusedCluster` into its reportable groups. Same-file overlap
+/// collapse can reduce a fused group to one logical location; those
+/// groups are artifacts, not duplicates, and fold to nothing.
+fn fold<L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, L>,
     fused: &FusedCluster,
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
-) -> Vec<Unnamed> {
-    let fingerprints = inputs.fingerprints;
-    let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints, scopes);
+) -> Folded {
+    let occurrence_indices = collapse_overlapping_per_file(fused, inputs.fingerprints, scopes);
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return Vec::new();
     }
-    inputs
-        .kinds
-        .groups(&occurrence_indices)
-        .into_iter()
+    inputs.kinds.groups(&occurrence_indices)
+}
+
+/// Rehydrates one fused cluster's folded groups into unnamed clusters.
+fn drafts_of(fingerprints: &[Fingerprint], fused: &FusedCluster, groups: &Folded) -> Vec<Unnamed> {
+    groups
+        .iter()
         .map(|(indices, kind)| {
             let members = indices
                 .iter()
                 .filter_map(|index| fingerprints.get(*index).cloned())
                 .collect();
-            materialize_cluster(members, kind, fused.shape_family)
+            materialize_cluster(members, *kind, fused.shape_family)
         })
         .collect()
 }
 
 /// Builds the reportable cluster from already-filtered members, still
-/// unnamed: its id waits on the whole set ([`reportable_clusters`]).
+/// unnamed: its id waits on the whole set
+/// ([`build_ranked_fused_clusters_reusing`]).
 fn materialize_cluster(
     members: Vec<Fingerprint>,
     kind: ClusterKind,

@@ -2,11 +2,14 @@
 
 use std::{collections::HashMap, path::PathBuf, time::Instant};
 
-use super::{super::store::relative_path_key, StageLedger};
+use super::{
+    super::{store::relative_path_key, verdicts::VerdictPass},
+    StageLedger,
+};
 use crate::{
     ast::NormalizedNode,
     buckets::ClusterKind,
-    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs, ClusterKindJudge},
+    cluster::{build_ranked_fused_clusters_reusing, Cluster, ClusterBuildInputs, ClusterKindJudge},
     content::{tree_index_of, ContentMeasurer},
     fingerprint::Fingerprint,
     overlap::endpoint_count_bound,
@@ -146,20 +149,39 @@ impl ClusterKindJudge for KindFilter<'_> {
     }
 }
 
+/// What the ranked build reads: every fingerprint, the admitted clone
+/// components, the informational candidates and the trees.
+#[derive(Clone, Copy)]
+pub(super) struct RankedInputs<'a> {
+    /// Every live fingerprint.
+    pub(super) fingerprints: &'a [Fingerprint],
+    /// Admitted clone components.
+    pub(super) clones: &'a [FusedCluster],
+    /// Informational candidate families.
+    pub(super) information: &'a [FusedCluster],
+    /// Every member's normalised tree.
+    pub(super) trees: &'a [NormalizedNode],
+}
+
 impl PipelineSession {
     /// Informational shapes cannot displace real copies during overlap suppression.
     pub(super) fn ranked_clusters(
         &self,
-        fingerprints: &[Fingerprint],
-        clones: &[FusedCluster],
-        information: &[FusedCluster],
-        trees: &[NormalizedNode],
+        inputs: &RankedInputs<'_>,
         judge: &dyn ClusterKindJudge,
         ledger: &mut StageLedger,
+        verdicts: &mut VerdictPass,
     ) -> Vec<Cluster> {
+        let RankedInputs {
+            fingerprints,
+            clones,
+            information,
+            trees,
+        } = *inputs;
         let paths = self.report_paths(fingerprints);
         let started = Instant::now();
         let mut findings = Vec::new();
+        let mut folded = 0_usize;
         let eligible = eligible_information(
             information,
             fingerprints,
@@ -170,17 +192,24 @@ impl PipelineSession {
         );
         for (fused_clusters, clones) in [(clones, true), (eligible.as_slice(), false)] {
             let kinds = KindFilter { judge, clones };
-            findings.extend(build_ranked_fused_clusters(&ClusterBuildInputs {
-                fingerprints,
-                fused_clusters,
-                trees,
-                sources: &self.sources,
-                file_languages: &self.file_languages,
-                file_paths: &paths,
-                kinds: &kinds,
-            }));
+            let reuse = |fused: &FusedCluster| verdicts.fold(clones, fused, fingerprints);
+            let build = build_ranked_fused_clusters_reusing(
+                &ClusterBuildInputs {
+                    fingerprints,
+                    fused_clusters,
+                    trees,
+                    sources: &self.sources,
+                    file_languages: &self.file_languages,
+                    file_paths: &paths,
+                    kinds: &kinds,
+                },
+                &reuse,
+            );
+            folded = folded.saturating_add(build.folded);
+            verdicts.folded(clones, fused_clusters, build.folds);
+            findings.extend(build.clusters);
         }
-        ledger.record("ranked_build", clones.len(), findings.len(), started);
+        ledger.record("ranked_build", folded, findings.len(), started);
         findings
     }
 

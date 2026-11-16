@@ -17,10 +17,11 @@ use std::collections::{HashMap, HashSet};
 use super::PipelineSession;
 use crate::{
     ast::{ByteRange, NormalizedNode},
+    cluster::Folded,
     cluster_filters::ParseCache,
     fingerprint::Fingerprint,
     overlap::{apply_shared_subtree_rescue_to, RescueCorpus},
-    pair::{apply_pair_content_gate, CandidatePair},
+    pair::{apply_pair_content_gate, CandidatePair, FusedCluster},
     state::FileId,
 };
 
@@ -38,6 +39,8 @@ pub(super) struct Verdicts {
     gate: Vec<GateRow>,
     /// Pairs copy recovery added, sorted.
     recovered: Vec<(usize, usize)>,
+    /// Every fused cluster's fold, by side and members.
+    folds: HashMap<(bool, Vec<usize>), Folded>,
 }
 
 impl Verdicts {
@@ -48,6 +51,11 @@ impl Verdicts {
             rescue: remap_rows(self.rescue, remap, |row| (&mut row.0, &mut row.1)),
             gate: remap_rows(self.gate, remap, |row| (&mut row.0, &mut row.1)),
             recovered: remap_rows(self.recovered, remap, |row| (&mut row.0, &mut row.1)),
+            folds: self
+                .folds
+                .into_iter()
+                .filter_map(|(key, folded)| remap_fold(key, folded, remap))
+                .collect(),
         };
         carried.sort();
         carried
@@ -75,6 +83,31 @@ fn remap_rows<T>(
             Some(row)
         })
         .collect()
+}
+
+/// One fold re-indexed by `remap`, or `None` when any index is rejected.
+fn remap_fold(
+    (clones, members): (bool, Vec<usize>),
+    folded: Folded,
+    remap: &dyn Fn(usize) -> Option<usize>,
+) -> Option<((bool, Vec<usize>), Folded)> {
+    let members = members
+        .into_iter()
+        .map(remap)
+        .collect::<Option<Vec<usize>>>()?;
+    let folded = folded
+        .into_iter()
+        .map(|(group, kind)| {
+            Some((
+                group
+                    .into_iter()
+                    .map(remap)
+                    .collect::<Option<Vec<usize>>>()?,
+                kind,
+            ))
+        })
+        .collect::<Option<Folded>>()?;
+    Some(((clones, members), folded))
 }
 
 /// Records whose measurements an edit may have changed, per file, with
@@ -189,6 +222,29 @@ impl CarriedVerdicts {
             .binary_search_by_key(&(pair.left, pair.right), |row| (row.0, row.1))
             .ok()?;
         rows.get(position).map(|row| (row.2, row.3))
+    }
+
+    /// The previous fold of `fused` on side `clones`, when every member
+    /// is settled.
+    fn fold(
+        &self,
+        clones: bool,
+        fused: &FusedCluster,
+        fingerprints: &[Fingerprint],
+    ) -> Option<Folded> {
+        let unsettled = self.gate_unsettled.as_ref()?;
+        let settled = fused.members.iter().all(|index| {
+            fingerprints
+                .get(*index)
+                .is_some_and(|record| unsettled.settles(record))
+        });
+        if !settled {
+            return None;
+        }
+        self.verdicts
+            .folds
+            .get(&(clones, fused.members.clone()))
+            .cloned()
     }
 
     /// The previous gate verdict of `pair`, when it still holds.
@@ -308,6 +364,28 @@ impl VerdictPass {
     /// The previous gate verdict of `pair`, when it still holds.
     pub(super) fn gate(&self, pair: &CandidatePair, fingerprints: &[Fingerprint]) -> Option<bool> {
         self.carried.as_ref()?.gate(pair, fingerprints)
+    }
+
+    /// [PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS] The previous fold of
+    /// `fused` on side `clones`, when it still holds.
+    pub(super) fn fold(
+        &self,
+        clones: bool,
+        fused: &FusedCluster,
+        fingerprints: &[Fingerprint],
+    ) -> Option<Folded> {
+        self.carried.as_ref()?.fold(clones, fused, fingerprints)
+    }
+
+    /// Records the fold of every fused cluster on side `clones`.
+    pub(super) fn folded(&mut self, clones: bool, fused: &[FusedCluster], folds: Vec<Folded>) {
+        if let Some(record) = self.record.as_mut() {
+            let rows = fused
+                .iter()
+                .zip(folds)
+                .map(|(fused, folded)| ((clones, fused.members.clone()), folded));
+            record.folds.extend(rows);
+        }
     }
 
     /// Records the gate's verdict on every pair it was handed.
