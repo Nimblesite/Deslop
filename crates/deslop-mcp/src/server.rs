@@ -26,7 +26,7 @@ use crate::{
         bounded_response_frame, jsonrpc_error, jsonrpc_error_response, jsonrpc_response_ok,
         ErrorCode, JsonRpcError, JsonRpcRequest, RequestId, JSONRPC_VERSION,
     },
-    resources::{read_resource, resources_list_payload, REPORT_URI},
+    resources::{read_resource, resources_list_payload, REPORT_URI, SCHEMA_URI},
     tools::{
         advertised_languages, dispatch_tool_call, request_id_fits_response_budget,
         tools_list_payload, wrap_tool_result, REQUEST_ID_BUDGET_MESSAGE,
@@ -157,8 +157,11 @@ impl<B: McpBackend> McpServer<B> {
             "resources/read" => self.handle_resource_read(&params),
             // [MCP-RESOURCES-SUBSCRIPTIONS] Subscription state belongs to this connection.
             "resources/subscribe" | "resources/unsubscribe" => {
-                report_subscription(&params).map(|()| {
-                    subscription = Some(method == "resources/subscribe");
+                listed_resource(&params).map(|uri| {
+                    // Only the report changes, so only it toggles updates.
+                    if uri == REPORT_URI {
+                        subscription = Some(method == "resources/subscribe");
+                    }
                     json!({})
                 })
             }
@@ -249,15 +252,19 @@ impl<B: McpBackend> McpServer<B> {
     }
 }
 
-/// Validates the URI of the one resource that emits updates.
-fn report_subscription(params: &Value) -> Result<(), JsonRpcError> {
-    if params.get("uri").and_then(Value::as_str) == Some(REPORT_URI) {
-        return Ok(());
-    }
-    Err(jsonrpc_error(
-        ErrorCode::InvalidParams,
-        format!("resource subscriptions require the uri {REPORT_URI:?}"),
-    ))
+/// The listed resource a subscription request names. Every listed resource
+/// honours the advertised `subscribe` capability; an unlisted URI is refused.
+fn listed_resource(params: &Value) -> Result<&str, JsonRpcError> {
+    params
+        .get("uri")
+        .and_then(Value::as_str)
+        .filter(|uri| [REPORT_URI, SCHEMA_URI].contains(uri))
+        .ok_or_else(|| {
+            jsonrpc_error(
+                ErrorCode::InvalidParams,
+                format!("resource subscriptions require {REPORT_URI:?} or {SCHEMA_URI:?}"),
+            )
+        })
 }
 
 /// Serialises `value` and writes it as one newline-terminated frame

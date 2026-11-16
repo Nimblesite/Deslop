@@ -75,6 +75,8 @@ pub const LANGUAGES_POINTER: &str = "/languages";
 pub const EMBEDDING_PROVENANCE_POINTER: &str = "/embedding_provenance";
 /// MCP resource uri: the live JSON report.
 pub const REPORT_URI: &str = "deslop://report";
+/// The schema documentation resource, fixed for the life of the build.
+pub const SCHEMA_URI: &str = "deslop://schema";
 /// JSON field: the `paths[]` a rescan/filesChanged names.
 pub const PATHS_FIELD: &str = "paths";
 /// CLI flag: the workspace root the server binds.
