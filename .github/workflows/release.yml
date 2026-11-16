@@ -195,8 +195,9 @@ jobs:
       - name: Stamp release version
         run: node scripts/release/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.100.0"
           targets: ${{ matrix.target }}
 
       - name: Cache cargo registry and target

@@ -236,8 +236,7 @@ fn method_text(request: &EmitRequest<'_, '_>, indent: &str, method_name: &str) -
     let body = request
         .scopes
         .first()
-        .map(|scope| run_text(request.source, scope))
-        .unwrap_or_default();
+        .map_or_default(|scope| run_text(request.source, scope));
     format!("\n{indent}{signature}\n{indent}{{\n{statement_indent}{body}\n{indent}}}\n")
 }
 

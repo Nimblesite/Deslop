@@ -257,8 +257,7 @@ fn post_embeddings(
             .read_to_string()
             .ok()
             .filter(|body| !body.is_empty())
-            .map(|body| format!(": {}", body.trim()))
-            .unwrap_or_default();
+            .map_or_default(|body| format!(": {}", body.trim()));
         return Err(ProviderError::ProviderFailed {
             provider_id: PROVIDER_ID.to_owned(),
             message: format!("http status: {status}{detail}"),

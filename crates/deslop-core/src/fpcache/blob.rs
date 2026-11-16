@@ -332,11 +332,12 @@ fn invalid_data(message: &'static str) -> io::Error {
 fn decode_signature(cursor: &mut Cursor<&[u8]>) -> io::Result<Signature> {
     let bytes = read_slice(cursor, SIGNATURE_RECORD_LEN)?;
     let mut signature: Signature = [0_u64; SIGNATURE_LEN];
-    for (slot, encoded) in signature.iter_mut().zip(bytes.chunks_exact(8)) {
-        let encoded = encoded
-            .try_into()
-            .map_err(|_| invalid_data("cached signature slot has the wrong width"))?;
-        *slot = u64::from_le_bytes(encoded);
+    let (slots, rest) = bytes.as_chunks::<8>();
+    if slots.len() != SIGNATURE_LEN || !rest.is_empty() {
+        return Err(invalid_data("cached signature slot has the wrong width"));
+    }
+    for (slot, encoded) in signature.iter_mut().zip(slots) {
+        *slot = u64::from_le_bytes(*encoded);
     }
     Ok(signature)
 }

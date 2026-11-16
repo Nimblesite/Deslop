@@ -373,8 +373,7 @@ pub(crate) fn clusters(report: &Value) -> &[Value] {
     report
         .get("clusters")
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+        .map_or_default(Vec::as_slice)
 }
 
 /// The `occurrences` array of a cluster, or an empty slice when absent.
@@ -382,8 +381,7 @@ pub(crate) fn occurrences(cluster: &Value) -> &[Value] {
     cluster
         .get("occurrences")
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+        .map_or_default(Vec::as_slice)
 }
 
 /// A cluster's stable `id`, or `"?"` when absent.
@@ -722,8 +720,7 @@ pub(crate) fn metric_field<'a>(report: &'a Value, name: &str) -> &'a Value {
 pub(crate) fn per_file_metrics(report: &Value) -> &[Value] {
     metric_field(report, "per_file")
         .as_array()
-        .map(Vec::as_slice)
-        .unwrap_or_default()
+        .map_or_default(Vec::as_slice)
 }
 
 /// Line-set cardinality as the `u64` the wire metric uses.

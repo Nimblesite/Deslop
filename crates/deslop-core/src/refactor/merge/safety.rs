@@ -203,8 +203,7 @@ fn lift_rename(hole: &Hole, rename_map: &mut HashMap<String, Vec<String>>) -> Re
     let canonical = hole
         .per_site
         .first()
-        .map(|site| site.text.clone())
-        .unwrap_or_default();
+        .map_or_default(|site| site.text.clone());
     let tuple: Vec<String> = hole.per_site.iter().map(|site| site.text.clone()).collect();
     match rename_map.get(&canonical) {
         Some(existing) if *existing != tuple => Err(format!(

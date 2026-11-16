@@ -263,7 +263,7 @@ fn family_overflows(
     family
         .iter()
         .filter_map(|index| fingerprints.get(*index))
-        .filter(|occurrence| within.map_or(true, |file| occurrence.file_id == file))
+        .filter(|occurrence| within.is_none_or(|file| occurrence.file_id == file))
         .any(|occurrence| {
             !own_family
                 .iter()

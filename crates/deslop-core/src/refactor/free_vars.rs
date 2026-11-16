@@ -117,11 +117,7 @@ pub(crate) fn bound_names(run: &[Node<'_>], source: &[u8], tables: WalkTables) -
     for node in run {
         walk(*node, source, tables, &mut state);
     }
-    state
-        .frames
-        .pop()
-        .map(|frame| frame.names)
-        .unwrap_or_default()
+    state.frames.pop().map_or_default(|frame| frame.names)
 }
 
 /// Dispatches one node to the frame / binding / reference / descend

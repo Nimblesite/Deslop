@@ -237,7 +237,7 @@ fn directory_name(path: &Path) -> Option<&str> {
 /// The file name of a `.bin` blob, or `None` for anything else so
 /// foreign files are never touched.
 fn blob_name(path: &Path) -> Option<String> {
-    if !path.extension().is_some_and(|extension| extension == "bin") {
+    if path.extension().is_none_or(|extension| extension != "bin") {
         return None;
     }
     directory_name(path).map(str::to_owned)

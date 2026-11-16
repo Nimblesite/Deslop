@@ -61,7 +61,7 @@ fn endpoint() -> PathBuf {
 fn refused_report_message(method: &str, reply: Value) -> Result<String> {
     let refusal = decode::<Report>(method, &endpoint(), reply).err();
     ensure!(refusal.is_some(), "the guard must refuse this reply");
-    Ok(refusal.map(|err| err.to_string()).unwrap_or_default())
+    Ok(refusal.map_or_default(|err| err.to_string()))
 }
 
 /// Every element the named condition must carry.
@@ -121,7 +121,7 @@ fn an_unstamped_reply_that_does_not_decode_says_it_carried_no_version() -> Resul
         refusal.is_some(),
         "a page that is not a cluster list must be refused"
     );
-    let message = refusal.map(|err| err.to_string()).unwrap_or_default();
+    let message = refusal.map_or_default(|err| err.to_string());
     ensure_names_the_condition(&message, REPORT_FOR_RANGE, UNSTAMPED)
 }
 
@@ -161,8 +161,7 @@ fn an_incomplete_find_similar_reply_is_refused_without_empty_matches() -> Result
         let reply = incomplete_find_similar_reply(field)?;
         let message = decode::<FindSimilarResult>(FIND_SIMILAR, &endpoint(), reply)
             .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+            .map_or_default(|error| error.to_string());
         ensure_names_the_condition(&message, FIND_SIMILAR, UNSTAMPED)?;
         ensure!(
             message.contains(field),
@@ -213,7 +212,7 @@ fn refused_envelope_message(method: &str, frame: &Value) -> Result<String> {
         refusal.is_some(),
         "the envelope guard must refuse this reply"
     );
-    Ok(refusal.map(|err| err.to_string()).unwrap_or_default())
+    Ok(refusal.map_or_default(|err| err.to_string()))
 }
 
 #[test]

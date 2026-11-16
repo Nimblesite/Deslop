@@ -1,0 +1,6 @@
+# One Rust toolchain for every developer, CI job, release build and devcontainer.
+# CI pins the same version through dtolnay/rust-toolchain's `toolchain` input.
+[toolchain]
+channel = "1.100.0"
+components = ["clippy", "rustfmt", "llvm-tools-preview"]
+profile = "minimal"

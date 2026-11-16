@@ -62,8 +62,7 @@ fn compare(first: &Value, second: &Value) -> Vec<Failure> {
 fn detail(failures: &[Failure]) -> String {
     failures
         .first()
-        .map(|failure| failure.detail.clone())
-        .unwrap_or_default()
+        .map_or_default(|failure| failure.detail.clone())
 }
 
 /// Asserts the pair is rejected under the determinism check, and that

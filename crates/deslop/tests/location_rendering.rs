@@ -154,13 +154,12 @@ fn collect_paths(value: &Value, at: &str, found: &mut Vec<(String, String)>) {
 fn metric_paths(report: &Value, array: &str) -> Vec<String> {
     field(field(report, "metrics"), array)
         .as_array()
-        .map(|rows| {
+        .map_or_default(|rows| {
             rows.iter()
                 .filter_map(|row| row.get(PATH_KEY).and_then(Value::as_str))
                 .map(str::to_owned)
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 // [OUTPUT-SCHEMA-PATH-SEPARATOR] Every workspace-relative path the JSON

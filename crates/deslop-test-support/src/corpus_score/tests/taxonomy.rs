@@ -102,8 +102,7 @@ fn a_report_without_kind_fails_the_run_and_names_the_cluster() {
             &report,
         )
         .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+        .map_or_default(|error| error.to_string());
         assert!(refusal.contains("without `kind`"), "{refusal:?}");
         assert!(refusal.contains(INFORMATION_ID), "{refusal:?}");
         assert!(refusal.contains(REPO), "{refusal:?}");

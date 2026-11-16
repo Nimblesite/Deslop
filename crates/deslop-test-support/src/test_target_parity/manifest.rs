@@ -40,14 +40,13 @@ pub(super) fn members(root: &toml::Table) -> Vec<String> {
     root.get(WORKSPACE_TABLE)
         .and_then(|workspace| workspace.get(MEMBERS_KEY))
         .and_then(toml::Value::as_array)
-        .map(|listed| {
+        .map_or_default(|listed| {
             listed
                 .iter()
                 .filter_map(toml::Value::as_str)
                 .map(ToOwned::to_owned)
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// Whether this crate turned Cargo's integration-test discovery off, and

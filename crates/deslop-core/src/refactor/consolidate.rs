@@ -331,8 +331,7 @@ fn deletability_gate(
     if file_becomes_empty(source, spans) {
         let display = sites
             .first()
-            .map(|site| site.path.display().to_string())
-            .unwrap_or_default();
+            .map_or_default(|site| site.path.display().to_string());
         return Err(format!(
             "{display} would become empty — file deletion needs the module declaration rewritten (v1 gate)"
         ));

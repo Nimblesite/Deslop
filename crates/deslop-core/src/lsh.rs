@@ -185,10 +185,8 @@ pub fn minhash_signature(kgrams: &[&[&'static str]]) -> Signature {
         let mut hasher = blake3::Hasher::new();
         let _ = hasher.update(&gram_bytes);
         hasher.finalize_xof().fill(&mut expanded);
-        for (slot, chunk) in signature.iter_mut().zip(expanded.chunks_exact(8)) {
-            let mut arr = [0u8; 8];
-            arr.copy_from_slice(chunk);
-            let candidate = u64::from_le_bytes(arr);
+        for (slot, chunk) in signature.iter_mut().zip(expanded.as_chunks::<8>().0) {
+            let candidate = u64::from_le_bytes(*chunk);
             if candidate < *slot {
                 *slot = candidate;
             }

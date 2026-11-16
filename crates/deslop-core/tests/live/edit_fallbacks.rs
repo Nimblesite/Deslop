@@ -114,9 +114,8 @@ fn last_count(
         .events(message)?
         .into_iter()
         .rfind(|event| {
-            filter.map_or(true, |(key, value)| {
-                event.values.get(key).map(String::as_str) == Some(value)
-            })
+            filter
+                .is_none_or(|(key, value)| event.values.get(key).map(String::as_str) == Some(value))
         })
         .ok_or_else(|| anyhow!("no {message} record"))?;
     event

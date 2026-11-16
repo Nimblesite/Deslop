@@ -109,7 +109,7 @@ fn weigh_literals(node: &NormalizedNode, heaviest: &mut Option<Weighed>) {
             nodes: fragments.saturating_add(LITERAL_NODE),
             range: node.byte_range,
         };
-        if heaviest.map_or(true, |best| literal.outweighs(best)) {
+        if heaviest.is_none_or(|best| literal.outweighs(best)) {
             *heaviest = Some(literal);
         }
     }

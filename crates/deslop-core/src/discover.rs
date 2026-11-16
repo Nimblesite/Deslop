@@ -336,7 +336,7 @@ fn scoped_walker(root: &Path, subtree: &Path, config: Option<Arc<ExclusionConfig
 /// Skips excluded directories before their descendants or ignore files are visited.
 fn admits_directory(entry: &ignore::DirEntry, config: Option<&ExclusionConfig>) -> bool {
     !entry.file_type().is_some_and(|kind| kind.is_dir())
-        || config.map_or(true, |config| !config.is_excluded(entry.path(), None))
+        || config.is_none_or(|config| !config.is_excluded(entry.path(), None))
 }
 
 /// Registers the canonical discovery stream after language and exclusion admission.

@@ -180,10 +180,10 @@ impl Unsettled {
         };
         let range = record.byte_range;
         let before_end = reach.partition_point(|(start, _)| *start <= range.end);
-        !before_end
+        before_end
             .checked_sub(1)
             .and_then(|last| reach.get(last))
-            .is_some_and(|(_, furthest)| *furthest >= range.start)
+            .is_none_or(|(_, furthest)| *furthest < range.start)
     }
 }
 

@@ -455,10 +455,8 @@ fn fallback_signature(fingerprint: &Fingerprint) -> Signature {
 /// Decodes an XOF byte stream into signature slots, little-endian.
 fn decode_slots(expanded: &[u8]) -> Signature {
     let mut signature = [0_u64; SIGNATURE_LEN];
-    for (slot, chunk) in signature.iter_mut().zip(expanded.chunks_exact(8)) {
-        let mut bytes = [0_u8; 8];
-        bytes.copy_from_slice(chunk);
-        *slot = u64::from_le_bytes(bytes);
+    for (slot, chunk) in signature.iter_mut().zip(expanded.as_chunks::<8>().0) {
+        *slot = u64::from_le_bytes(*chunk);
     }
     signature
 }

@@ -143,8 +143,7 @@ fn assert_wholly_duplicated(report: &Value, corpus: &str) {
         .get("clusters")
         .and_then(Value::as_array)
         .and_then(|clusters| clusters.first())
-        .map(crate::common::cluster_kind)
-        .unwrap_or_default();
+        .map_or_default(crate::common::cluster_kind);
     let row = per_kind_row(report, kind).unwrap_or(Value::Null);
     assert_eq!(
         field(&row, "duplication_percent").as_f64(),

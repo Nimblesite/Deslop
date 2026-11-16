@@ -48,13 +48,12 @@ impl Baseline {
         let known = document
             .get("known_failures")
             .and_then(Value::as_object)
-            .map(|entries| {
+            .map_or_default(|entries| {
                 entries
                     .iter()
                     .map(|(repo, checks)| (repo.clone(), check_ids(checks)))
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         Self { known }
     }
 
@@ -67,15 +66,12 @@ impl Baseline {
 
 /// The check ids one `known_failures` entry lists.
 fn check_ids(checks: &Value) -> BTreeSet<String> {
-    checks
-        .as_array()
-        .map(|list| {
-            list.iter()
-                .filter_map(Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+    checks.as_array().map_or_default(|list| {
+        list.iter()
+            .filter_map(Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect()
+    })
 }
 
 /// True when the suite should report known failures instead of failing on them.

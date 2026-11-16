@@ -58,11 +58,7 @@ fn a_bsd_peak_is_read_as_bytes() -> Result<()> {
 #[test]
 fn a_missing_peak_is_an_error_rather_than_zero() {
     let outcome = peak_rss_mb("nothing useful here\n");
-    let message = outcome
-        .as_ref()
-        .err()
-        .map(ToString::to_string)
-        .unwrap_or_default();
+    let message = outcome.as_ref().err().map_or_default(ToString::to_string);
     assert!(
         outcome.is_err(),
         "a stderr with no peak line must not yield a number, got: {outcome:?}"
@@ -113,11 +109,7 @@ fn gnu_and_windows_cpu_time_is_user_plus_system() -> Result<()> {
 fn a_missing_cpu_time_is_an_error_rather_than_zero() {
     let stderr = format!("Maximum resident set size (kbytes): {PEAK_KBYTES}\n");
     let outcome = cpu_seconds(&stderr);
-    let message = outcome
-        .as_ref()
-        .err()
-        .map(ToString::to_string)
-        .unwrap_or_default();
+    let message = outcome.as_ref().err().map_or_default(ToString::to_string);
     assert!(
         outcome.is_err(),
         "no CPU line must not yield a number, got {outcome:?}"

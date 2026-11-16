@@ -23,10 +23,10 @@ pub(super) fn matches_filters(filters: &DuplicatesFilters, cluster: &ReportClust
     filters
         .kinds
         .as_ref()
-        .map_or(true, |kinds| kinds.contains(&cluster.kind))
+        .is_none_or(|kinds| kinds.contains(&cluster.kind))
         && filters
             .min_size
-            .map_or(true, |minimum| cluster.canonical_node_count >= minimum)
+            .is_none_or(|minimum| cluster.canonical_node_count >= minimum)
         && matches_values(filters.severities.as_deref(), |value| {
             value == &cluster.severity
         })
@@ -38,7 +38,7 @@ pub(super) fn matches_filters(filters: &DuplicatesFilters, cluster: &ReportClust
 
 /// A path fragment can select any occurrence, not only the representative member.
 fn matches_path(needle: Option<&str>, cluster: &ReportCluster) -> bool {
-    needle.map_or(true, |needle| {
+    needle.is_none_or(|needle| {
         cluster
             .occurrences
             .iter()
@@ -48,7 +48,5 @@ fn matches_path(needle: Option<&str>, cluster: &ReportCluster) -> bool {
 
 /// Empty language and severity arrays impose no restriction ([MCP-TOOL-FILTERS]).
 fn matches_values(values: Option<&[String]>, matches: impl Fn(&String) -> bool) -> bool {
-    values.map_or(true, |values| {
-        values.is_empty() || values.iter().any(matches)
-    })
+    values.is_none_or(|values| values.is_empty() || values.iter().any(matches))
 }

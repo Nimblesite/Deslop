@@ -234,12 +234,11 @@ fn cluster_by_id_serves_this_builds_page() -> Result<()> {
     let paths: Vec<&str> = cluster
         .pointer("/occurrences")
         .and_then(Value::as_array)
-        .map(|rows| {
+        .map_or_default(|rows| {
             rows.iter()
                 .filter_map(|row| row.get("path").and_then(Value::as_str))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
     ensure!(
         paths == CURRENT_WIRE_PATHS,
         "both occurrences, in order: {paths:?}"

@@ -102,8 +102,7 @@ fn size_guard(
     }
     let mass: usize = forests
         .first()
-        .map(|forest| forest.iter().map(|node| node_count(node)).sum())
-        .unwrap_or_default();
+        .map_or_default(|forest| forest.iter().map(|node| node_count(node)).sum());
     if mass < MASS_THRESHOLD {
         return Err(format!(
             "AST mass {mass} below the merge floor {MASS_THRESHOLD}"
@@ -111,8 +110,7 @@ fn size_guard(
     }
     let lines = spans
         .first()
-        .map(|span| span_lines(source, *span))
-        .unwrap_or_default();
+        .map_or_default(|span| span_lines(source, *span));
     if lines < MIN_SPAN_LINES {
         return Err(format!(
             "span of {lines} lines below the merge floor {MIN_SPAN_LINES}"
@@ -305,6 +303,5 @@ fn node_count(node: &NormalizedNode) -> usize {
 fn span_lines(source: &[u8], span: ByteRange) -> usize {
     source
         .get(span.start..span.end)
-        .map(|slice| slice.split(|byte| *byte == b'\n').count())
-        .unwrap_or_default()
+        .map_or_default(|slice| slice.split(|byte| *byte == b'\n').count())
 }

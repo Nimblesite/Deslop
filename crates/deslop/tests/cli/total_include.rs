@@ -273,13 +273,12 @@ fn default_total_counts_only_identical_and_nearly_identical() -> Result<()> {
     // The wire names the include set so clients never re-derive it.
     let includes: Vec<String> = metric_field(&json, "total_includes")
         .as_array()
-        .map(|kinds| {
+        .map_or_default(|kinds| {
             kinds
                 .iter()
                 .filter_map(|kind| kind.as_str().map(str::to_owned))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
     assert_eq!(
         includes,
         vec![

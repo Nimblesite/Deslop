@@ -51,12 +51,11 @@ pub(crate) fn duplicated_loc_for_path(report: &Value, path: &str) -> Result<u64>
 pub(crate) fn assert_duplicated_loc_at_least(report: &Value, minimum: u64) {
     let counted: u64 = metric_field(report, "per_kind")
         .as_array()
-        .map(|rows| {
+        .map_or_default(|rows| {
             rows.iter()
                 .map(|row| field(row, "duplicated_loc").as_u64().unwrap_or(0))
                 .sum()
-        })
-        .unwrap_or_default();
+        });
     assert!(
         counted >= minimum,
         "visible duplication must count toward the metrics: \

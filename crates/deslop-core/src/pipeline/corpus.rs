@@ -240,7 +240,7 @@ fn fingerprint_corpus_with_workers(
 /// never paths or contents, per the logging rules.
 fn log_corpus_progress(position: usize, files_total: usize, fingerprints: usize, started: Instant) {
     let files_done = position.saturating_add(1);
-    if files_done % CORPUS_PROGRESS_FILE_INTERVAL != 0 {
+    if !files_done.is_multiple_of(CORPUS_PROGRESS_FILE_INTERVAL) {
         return;
     }
     tracing::info!(

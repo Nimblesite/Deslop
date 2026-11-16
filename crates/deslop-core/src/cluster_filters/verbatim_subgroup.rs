@@ -296,7 +296,7 @@ impl Progress {
             .done
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             .saturating_add(1);
-        if done % NOISE_PROGRESS_INTERVAL != 0 {
+        if !done.is_multiple_of(NOISE_PROGRESS_INTERVAL) {
             return;
         }
         tracing::info!(

@@ -164,8 +164,7 @@ fn record(item: Node<'_>, source: &str, file: &str, found: &mut Vec<IgnoredTest>
     };
     let path = attribute
         .named_child(0)
-        .map(|node| text(node, source))
-        .unwrap_or_default();
+        .map_or_default(|node| text(node, source));
     if path == CFG_ATTR_ATTRIBUTE && mentions_ignore(attribute, source) {
         bail!(
             "{file}: `#[cfg_attr(.., {IGNORE_ATTRIBUTE})]` hides a skip from the \
@@ -273,9 +272,7 @@ fn attribute_path(item: Node<'_>, source: &str) -> Option<String> {
 /// Each predicate inside a node's operand list, as its name and its own
 /// operand list.
 fn predicates(node: Node<'_>) -> Vec<(Node<'_>, Option<Node<'_>>)> {
-    child_of_kind(node, TOKEN_TREE)
-        .map(nested_predicates)
-        .unwrap_or_default()
+    child_of_kind(node, TOKEN_TREE).map_or_default(nested_predicates)
 }
 
 /// The operand list belonging to the predicate at `at`, when it has one.
@@ -289,7 +286,7 @@ fn operands_after<'tree>(children: &[Node<'tree>], at: usize) -> Option<Node<'tr
 /// Evaluates a `cfg` predicate as far as it goes without knowing the
 /// configuration. `None` means the answer depends on one.
 fn evaluate(name: &str, operands: Option<Node<'_>>, source: &str) -> Option<bool> {
-    let inner = operands.map(nested_predicates).unwrap_or_default();
+    let inner = operands.map_or_default(nested_predicates);
     let mut values = inner
         .iter()
         .map(|(id, args)| evaluate(&text(*id, source), *args, source));
@@ -353,8 +350,7 @@ fn ignored_test(
         test: decorated_function(item, source, file)?,
         reason: attribute
             .child_by_field_name(VALUE_FIELD)
-            .map(|value| literal_value(&text(value, source)))
-            .unwrap_or_default(),
+            .map_or_default(|value| literal_value(&text(value, source))),
     })
 }
 

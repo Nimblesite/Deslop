@@ -142,8 +142,7 @@ fn no_surface_carries_an_evidence_weighted_duplication_figure() -> Result<()> {
     let metrics = field(&report, "metrics");
     let mut present: Vec<&str> = metrics
         .as_object()
-        .map(|map| map.keys().map(String::as_str).collect())
-        .unwrap_or_default();
+        .map_or_default(|map| map.keys().map(String::as_str).collect());
     present.sort_unstable();
     assert_eq!(
         present, ALLOWED_METRIC_KEYS,
@@ -154,8 +153,7 @@ fn no_surface_carries_an_evidence_weighted_duplication_figure() -> Result<()> {
     let threshold = field(metrics, "threshold");
     let mut verdict_fields: Vec<&str> = threshold
         .as_object()
-        .map(|map| map.keys().map(String::as_str).collect())
-        .unwrap_or_default();
+        .map_or_default(|map| map.keys().map(String::as_str).collect());
     verdict_fields.sort_unstable();
     assert_eq!(
         verdict_fields, THRESHOLD_FIELDS,

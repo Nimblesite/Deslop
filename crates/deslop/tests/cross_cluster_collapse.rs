@@ -52,7 +52,7 @@ fn cluster_occurrences(cluster: &serde_json::Value) -> Vec<Occurrence> {
     cluster
         .get("occurrences")
         .and_then(serde_json::Value::as_array)
-        .map(|occurrences| {
+        .map_or_default(|occurrences| {
             occurrences
                 .iter()
                 .filter_map(|occurrence| {
@@ -64,7 +64,6 @@ fn cluster_occurrences(cluster: &serde_json::Value) -> Vec<Occurrence> {
                 })
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn ranges_overlap(left: &Occurrence, right: &Occurrence) -> bool {
@@ -104,7 +103,7 @@ fn clusters_for_file(report: &serde_json::Value, needle: &str) -> Vec<serde_json
     report
         .get("clusters")
         .and_then(serde_json::Value::as_array)
-        .map(|clusters| {
+        .map_or_default(|clusters| {
             clusters
                 .iter()
                 .filter(|cluster| {
@@ -115,7 +114,6 @@ fn clusters_for_file(report: &serde_json::Value, needle: &str) -> Vec<serde_json
                 .cloned()
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 const SHARED_LOGIC: &str = r"if (sharedGate()) {
