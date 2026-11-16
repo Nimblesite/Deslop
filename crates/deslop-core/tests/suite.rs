@@ -9,6 +9,8 @@ mod common;
 
 #[path = "live/edit_cost.rs"]
 mod live_edit_cost;
+#[path = "live/edit_equivalence.rs"]
+mod live_edit_equivalence;
 #[path = "live/rescope.rs"]
 mod live_rescope;
 #[path = "live/scope.rs"]
