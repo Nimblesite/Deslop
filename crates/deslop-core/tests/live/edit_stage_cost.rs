@@ -1,4 +1,4 @@
-//! [PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS] After a live edit, the stages that measure each candidate pair (the shared-subtree rescue and the content gate) measure only the pairs the edit could have changed.
+//! [PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS] After a live edit, the stages that measure each candidate pair (the shared-subtree rescue and the content gate) measure only the pairs the edit could have changed, and the ranked build folds only the clusters it could have changed ([PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS]).
 //!
 //! Wall time depends on the machine, so this suite pins the work: the `input` each stage records for one pass. An edit to one unrelated file may re-measure no more pairs than that file holds on its own; the untouched clone pair keeps its verdicts and stays reported. Black-box: it drives [`AnalysisSession`] the way a watcher event does and reads the pipeline's own `tracing` records.
 
@@ -16,8 +16,8 @@ const FIXTURE: &str = "csharp-small";
 const EDITED_FILE: &str = "Inventory.cs";
 const CLONE_FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
 const STAGE_MESSAGE: &str = "cluster stage complete";
-/// The per-pair measuring stages, in pipeline order.
-const MEASURING_STAGES: [&str; 2] = ["shared_subtree_rescue", "pair_content_gate"];
+/// The measuring stages, in pipeline order: two per pair, one per cluster.
+const MEASURING_STAGES: [&str; 3] = ["shared_subtree_rescue", "pair_content_gate", "ranked_build"];
 /// Successive saves of the edited file, each a structural change.
 const EDIT_ROUNDS: u8 = 3;
 /// One more statement per round.
@@ -32,7 +32,7 @@ fn inventory_source(round: u8) -> String {
 }
 
 /// The `input` each measuring stage recorded in the last pass, in stage order.
-fn measured_inputs(captured: &CapturedEvents) -> Result<[u64; 2]> {
+fn measured_inputs(captured: &CapturedEvents) -> Result<[u64; 3]> {
     let events = captured.events(STAGE_MESSAGE)?;
     let input = |stage: &str| -> Result<u64> {
         events
@@ -43,11 +43,12 @@ fn measured_inputs(captured: &CapturedEvents) -> Result<[u64; 2]> {
             .parse()
             .with_context(|| format!("{stage} input is not a count"))
     };
-    Ok([input(MEASURING_STAGES[0])?, input(MEASURING_STAGES[1])?])
+    let [rescue, gate, ranked] = MEASURING_STAGES;
+    Ok([input(rescue)?, input(gate)?, input(ranked)?])
 }
 
 /// Runs `pass` under a capturing subscriber; returns its value and the measuring stages' inputs.
-fn observed<T>(pass: impl FnOnce() -> Result<T>) -> Result<(T, [u64; 2])> {
+fn observed<T>(pass: impl FnOnce() -> Result<T>) -> Result<(T, [u64; 3])> {
     let captured = CapturedEvents::default();
     let subscriber = CaptureSubscriber::new(captured.clone());
     let value = tracing::subscriber::with_default(subscriber, pass)?;
@@ -55,7 +56,7 @@ fn observed<T>(pass: impl FnOnce() -> Result<T>) -> Result<(T, [u64; 2])> {
 }
 
 /// The measuring work a workspace holding only `source` costs from cold.
-fn cold_cost_of(source: &str) -> Result<[u64; 2]> {
+fn cold_cost_of(source: &str) -> Result<[u64; 3]> {
     let alone = tempfile::tempdir().context("tempdir")?;
     fs::write(alone.path().join(EDITED_FILE), source).context("write lone file")?;
     observed(|| live_session(alone.path())).map(|(_, inputs)| inputs)
@@ -119,7 +120,7 @@ fn an_edit_to_one_file_measures_only_that_files_pairs() -> Result<()> {
         {
             assert!(
                 edited <= lone,
-                "round {round}: {stage} measured {edited} pairs for an edit to a file that holds {lone} alone; the cold workspace measured {whole}",
+                "round {round}: {stage} measured {edited} items for an edit to a file that holds {lone} alone; the cold workspace measured {whole}",
             );
         }
     }
