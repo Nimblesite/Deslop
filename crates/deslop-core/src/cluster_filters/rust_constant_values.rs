@@ -1,12 +1,18 @@
-//! [CLONE-NOISE-CONSTANT-TABLE] Rust constant tables are compared by the
-//! values they bind, not by their names.
+//! [CLONE-NOISE-CONSTANT-TABLE] Rust constant tables are compared by what
+//! each declaration binds.
 //!
 //! The table rule hides two runs of literal constants that share only their
 //! shape. Its escape hatch keeps a copy visible, and a renamed constant is
 //! still a copy: `const USAGE: &str = "…"` duplicated as `const HELP` binds
-//! the same 1.5 KB of text twice. Comparing the full declaration bytes let
-//! the new name convict the copy as unrelated data and drop it from the
-//! report; comparing the AST-delimited initialisers does not.
+//! the same 1.5 KB of text twice, so a substantial initialiser is compared
+//! on its own bytes and the new name cannot convict the copy as unrelated.
+//!
+//! A bare scalar is not substance. `const MAX_RETRY_ATTEMPTS: u32 = 3` and
+//! `const WORKER_THREADS: u32 = 3` coincide by accident; only the name says
+//! what each means. A declaration bound to a lone scalar literal is
+//! therefore compared on its full bytes, name included.
+
+use tree_sitter::Node;
 
 use super::{node_intersects_range, parse_for, trimmed_snippet_range, Snippet};
 use crate::ast::named_children;
@@ -14,7 +20,18 @@ use crate::ast::named_children;
 /// Each table is compared with its immediate neighbour.
 const ADJACENT_TABLES: usize = 2;
 
-/// Whether any two neighbouring members bind different initialiser bytes.
+/// Literal kinds whose value alone cannot show that two constants are one.
+const SCALAR_LITERAL_KINDS: [&str; 4] = [
+    "integer_literal",
+    "float_literal",
+    "boolean_literal",
+    "char_literal",
+];
+
+/// The prefix operator kind that wraps a negative scalar (`-1`).
+const UNARY_EXPRESSION_KIND: &str = "unary_expression";
+
+/// Whether any two neighbouring members bind different declarations.
 /// A member that cannot be parsed keeps the cluster visible.
 pub(super) fn rust_table_values_differ(snippets: &[Snippet<'_>]) -> bool {
     let tables: Option<Vec<Vec<&[u8]>>> = snippets.iter().map(rust_table_values).collect();
@@ -25,8 +42,9 @@ pub(super) fn rust_table_values_differ(snippets: &[Snippet<'_>]) -> bool {
     })
 }
 
-/// The initialiser bytes of every top-level `const` / `static` the member
-/// covers, in source order.
+/// The comparison bytes of every top-level `const` / `static` the member
+/// covers, in source order: the initialiser, or the whole declaration when
+/// the initialiser is a lone scalar.
 fn rust_table_values<'a>(snippet: &Snippet<'a>) -> Option<Vec<&'a [u8]>> {
     let tree = parse_for(snippet)?;
     let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
@@ -35,8 +53,21 @@ fn rust_table_values<'a>(snippet: &Snippet<'a>) -> Option<Vec<&'a [u8]>> {
         named_children(tree.root_node())
             .into_iter()
             .filter(|item| node_intersects_range(*item, range))
-            .filter_map(|item| item.child_by_field_name("value"))
-            .filter_map(|value| source.get(value.byte_range()))
+            .filter_map(|item| {
+                let value = item.child_by_field_name("value")?;
+                let compared = if is_scalar(value) { item } else { value };
+                source.get(compared.byte_range())
+            })
             .collect(),
     )
+}
+
+/// Whether `value` is a scalar literal, optionally negated.
+fn is_scalar(value: Node<'_>) -> bool {
+    let literal = if value.kind() == UNARY_EXPRESSION_KIND {
+        named_children(value).into_iter().next()
+    } else {
+        Some(value)
+    };
+    literal.is_some_and(|node| SCALAR_LITERAL_KINDS.contains(&node.kind()))
 }
