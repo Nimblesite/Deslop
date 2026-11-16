@@ -114,11 +114,12 @@ fn an_edit_to_one_file_measures_only_that_files_pairs() -> Result<()> {
             "round {round}: a real edit publishes a generation"
         );
         assert_clone_pair_reported(&session.report(), "after edit");
-        for ((stage, edited), lone) in MEASURING_STAGES.iter().zip(edit).zip(alone) {
+        for (((stage, edited), lone), whole) in
+            MEASURING_STAGES.iter().zip(edit).zip(alone).zip(cold)
+        {
             assert!(
                 edited <= lone,
-                "round {round}: {stage} measured {edited} pairs for an edit to a file that holds {lone} alone; the cold workspace measured {}",
-                cold[MEASURING_STAGES.iter().position(|name| name == stage).unwrap_or(0)],
+                "round {round}: {stage} measured {edited} pairs for an edit to a file that holds {lone} alone; the cold workspace measured {whole}",
             );
         }
     }

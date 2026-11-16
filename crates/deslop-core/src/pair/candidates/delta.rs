@@ -113,11 +113,11 @@ impl<S: BuildHasher> EditedCorpus<'_, S> {
 /// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] The kept pairs after an edit, from `carried` —
 /// the previous kept pairs re-indexed into this corpus, sorted, none
 /// touching a changed file — and the dirty buckets alone. Returns the
-/// pairs and how many records were re-paired.
+/// pairs and the records that were re-paired, in index order.
 pub(crate) fn candidate_pairs_after_edit<S: BuildHasher>(
     corpus: &EditedCorpus<'_, S>,
     carried: Vec<SourcedKey>,
-) -> (SourcedPairs, usize) {
+) -> (SourcedPairs, Vec<usize>) {
     let builder = PairBuilder::new(
         corpus.fingerprints,
         corpus.signatures,
@@ -332,13 +332,14 @@ impl SourceBook {
         self,
         builder: &PairBuilder<'_, S>,
         structural_scanned: u64,
-    ) -> (SourcedPairs, usize) {
+    ) -> (SourcedPairs, Vec<usize>) {
         tracing::info!(
             re_paired = self.members.len(),
             structural_scanned,
             "pairs: re-paired after edit"
         );
-        let re_paired = self.members.len();
+        let mut re_paired: Vec<usize> = self.members.iter().copied().collect();
+        re_paired.sort_unstable();
         let lsh_scanned = self.scanned.saturating_sub(structural_scanned);
         let (pairs, sources): (Vec<CandidatePair>, Vec<u64>) = self
             .live_rows()

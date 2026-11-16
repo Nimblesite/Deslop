@@ -19,6 +19,7 @@ mod render;
 /// Where a snippet's code already lives ([MCP-TOOL-FINDSIMILAR-EXISTING]).
 mod snippet_matches;
 mod store;
+mod verdicts;
 
 use std::{
     collections::{BTreeMap, HashMap},

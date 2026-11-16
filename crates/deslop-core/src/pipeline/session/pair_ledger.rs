@@ -9,7 +9,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::PipelineSession;
+use super::{
+    verdicts::{CarriedVerdicts, Verdicts},
+    PipelineSession,
+};
 use crate::{
     fingerprint::Fingerprint,
     lsh::{BandCollisionSource, SignatureIndex},
@@ -60,6 +63,8 @@ pub(super) struct PairLedger {
     spans: Vec<FileSpan>,
     /// Kept pairs with their source bits, sorted.
     pairs: Vec<SourcedKey>,
+    /// Per-pair measurements of the render that kept these pairs.
+    verdicts: Verdicts,
 }
 
 impl PairLedger {
@@ -72,24 +77,38 @@ impl PairLedger {
                 .zip(sources)
                 .map(|(pair, source)| (pair.left, pair.right, *source))
                 .collect(),
+            verdicts: Verdicts::default(),
         }
     }
 
-    /// The pairs between unchanged files, re-indexed into layout `now`.
-    fn carry(self, now: &[FileSpan], changed: &HashSet<FileId>) -> Vec<SourcedKey> {
+    /// This ledger with the render's per-pair measurements; a render
+    /// that recorded none leaves the next pass nothing to reuse.
+    pub(super) fn with_verdicts(self, verdicts: Option<Verdicts>) -> Self {
+        Self {
+            verdicts: verdicts.unwrap_or_default(),
+            ..self
+        }
+    }
+
+    /// The pairs and per-pair measurements between unchanged files,
+    /// re-indexed into layout `now`.
+    fn carry(self, now: &[FileSpan], changed: &HashSet<FileId>) -> (Vec<SourcedKey>, Verdicts) {
         let offsets: HashMap<FileId, usize> =
             now.iter().map(|span| (span.file_id, span.offset)).collect();
-        let remap = |index: usize| {
-            let span = locate(&self.spans, index)?;
+        let spans = self.spans;
+        let remap = move |index: usize| {
+            let span = locate(&spans, index)?;
             let offset = offsets
                 .get(&span.file_id)
                 .filter(|_| !changed.contains(&span.file_id))?;
             Some(offset.saturating_add(index.saturating_sub(span.offset)))
         };
-        self.pairs
+        let pairs = self
+            .pairs
             .iter()
             .filter_map(|&(left, right, source)| Some((remap(left)?, remap(right)?, source)))
-            .collect()
+            .collect();
+        (pairs, self.verdicts.remapped(&remap))
     }
 }
 
@@ -108,6 +127,8 @@ pub(super) struct LivePairs {
     pub(super) ledger: PairLedger,
     /// Records whose pairs were (re)computed.
     pub(super) fed: usize,
+    /// The previous render's per-pair verdicts, when this pass may reuse them.
+    pub(super) carried: Option<CarriedVerdicts>,
 }
 
 impl PipelineSession {
@@ -120,17 +141,41 @@ impl PipelineSession {
         signatures: &SignatureIndex<'_>,
     ) -> LivePairs {
         let spans = self.store.spans();
-        let (sourced, fed) = previous.map_or_else(
-            || self.pairs_from_scratch(signatures),
-            |ledger| {
-                self.pairs_after_edit(ledger.carry(&spans, &changes.touched), changes, signatures)
-            },
+        let Some(previous) = previous else {
+            return self.live_pairs_from_scratch(spans, signatures);
+        };
+        let (carried_pairs, verdicts) = previous.carry(&spans, &changes.touched);
+        let (sourced, re_paired) = self.pairs_after_edit(carried_pairs, changes, signatures);
+        let ledger = PairLedger::new(spans, &sourced.pairs, &sourced.sources);
+        let fed = re_paired.len();
+        let carried = CarriedVerdicts::new(
+            verdicts,
+            changes.touched.clone(),
+            re_paired,
+            self.store.fingerprints(),
         );
+        LivePairs {
+            pairs: sourced.pairs,
+            ledger,
+            fed,
+            carried: Some(carried),
+        }
+    }
+
+    /// The cold build of a session that takes edits: every bucket
+    /// paired, nothing carried.
+    fn live_pairs_from_scratch(
+        &self,
+        spans: Vec<FileSpan>,
+        signatures: &SignatureIndex<'_>,
+    ) -> LivePairs {
+        let (sourced, fed) = self.pairs_from_scratch(signatures);
         let ledger = PairLedger::new(spans, &sourced.pairs, &sourced.sources);
         LivePairs {
             pairs: sourced.pairs,
             ledger,
             fed,
+            carried: None,
         }
     }
 
@@ -148,7 +193,7 @@ impl PipelineSession {
         carried: Vec<SourcedKey>,
         changes: &StoreChanges,
         signatures: &SignatureIndex<'_>,
-    ) -> (SourcedPairs, usize) {
+    ) -> (SourcedPairs, Vec<usize>) {
         let corpus = EditedCorpus {
             fingerprints: self.store.fingerprints(),
             signatures,

@@ -75,6 +75,7 @@ pub(crate) use bounds::endpoint_count_bound;
 use bounds::kind_shared_upper_bound;
 use bounds::{kind_bound_ratio, lossless_count};
 pub use rescue::apply_shared_subtree_rescue;
+pub(crate) use rescue::{apply_shared_subtree_rescue_to, RescueCorpus};
 use view::{build_view, EndpointView};
 
 /// Most endpoint views one measurer retains

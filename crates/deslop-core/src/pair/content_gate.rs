@@ -48,6 +48,8 @@ const EXACT_CONTENT_AGREEMENT: f64 = 1.0;
 /// measured `S` for rescue-eligible non-Merkle pairs, and before closure, so
 /// a rejected relation can never weld two component members together.
 /// Verdicts are dealt to workers in chunks and reassembled in input order.
+/// A pair `carried` answers keeps that verdict unmeasured
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
 pub(crate) fn apply_pair_content_gate<L>(
     pairs: &mut Vec<CandidatePair>,
     fingerprints: &[Fingerprint],
@@ -55,6 +57,7 @@ pub(crate) fn apply_pair_content_gate<L>(
     sources: &HashMap<FileId, Vec<u8>>,
     languages: &HashMap<FileId, &'static str, L>,
     cache: &ParseCache,
+    carried: &(dyn Fn(&CandidatePair) -> Option<bool> + Sync),
 ) where
     L: BuildHasher + Sync,
 {
@@ -67,7 +70,7 @@ pub(crate) fn apply_pair_content_gate<L>(
         |gate, chunk: &[CandidatePair]| {
             chunk
                 .iter()
-                .filter(|pair| gate.admits(pair, fingerprints))
+                .filter(|pair| carried(pair).unwrap_or_else(|| gate.admits(pair, fingerprints)))
                 .copied()
                 .collect::<Vec<CandidatePair>>()
         },
@@ -432,6 +435,7 @@ mod tests {
             &sources,
             &languages,
             &ParseCache::new(),
+            &|_| None,
         );
         pairs.len()
     }

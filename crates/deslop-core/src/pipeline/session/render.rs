@@ -19,13 +19,13 @@ use super::{
         embedding_pass::{run_embedding_pass, CorpusView},
     },
     pair_ledger::{PairLedger, StoreChanges},
+    verdicts::{CarriedVerdicts, VerdictPass},
     PipelineSession,
 };
 use crate::{
     cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
     error::CoreError,
-    overlap::apply_shared_subtree_rescue,
-    pair::{apply_pair_content_gate, cluster_by_transitive_closure},
+    pair::cluster_by_transitive_closure,
     report::{render_report, CacheStats, Report, ReportInputs},
     state::FileId,
 };
@@ -91,6 +91,7 @@ impl PipelineSession {
             embedding_outcome,
             pair_ledger,
             fed,
+            carried,
         } = self.build_candidate_pairs(config, &signatures, previous, changes)?;
         self.store.anchors().publish(&pairs, fingerprints);
         ledger.record("candidate_pairs", fed, pairs.len(), stage_started);
@@ -102,20 +103,14 @@ impl PipelineSession {
             None => self.materialize_trees()?,
         };
         // Rescue annotates exact high-overlap candidates before ranking
-        // builds its memoising pair measurer.
-        let rescue_input = pairs.len();
+        // builds its memoising pair measurer. A live edit measures only
+        // the pairs it could have changed ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
+        let mut verdicts = VerdictPass::new(carried, pair_ledger.is_some());
         let stage_started = Instant::now();
-        apply_shared_subtree_rescue(
-            &mut pairs,
-            fingerprints,
-            &trees,
-            &self.sources,
-            &self.file_languages,
-            usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
-        );
+        let measured = self.rescue_carrying(&mut pairs, &trees, &mut verdicts);
         ledger.record(
             "shared_subtree_rescue",
-            rescue_input,
+            measured,
             pairs.len(),
             stage_started,
         );
@@ -127,7 +122,8 @@ impl PipelineSession {
             &pairs,
         );
         let (fused_clusters, shape_families, informational_candidates) =
-            self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
+            self.partition_and_split(pairs, &trees, &parse_cache, &mut ledger, &mut verdicts);
+        let pair_ledger = pair_ledger.map(|ledger| ledger.with_verdicts(verdicts.finish()));
         let clusters = self.ranked_clusters(
             fingerprints,
             &fused_clusters,
@@ -179,16 +175,17 @@ impl PipelineSession {
     /// stays under the size bar.
     fn partition_and_split(
         &self,
-        fingerprints: &[crate::fingerprint::Fingerprint],
         mut pairs: Vec<crate::pair::CandidatePair>,
         trees: &[crate::ast::NormalizedNode],
         parse_cache: &ParseCache,
         ledger: &mut StageLedger,
+        verdicts: &mut VerdictPass,
     ) -> (
         Vec<crate::pair::FusedCluster>,
         Vec<Vec<crate::fingerprint::Fingerprint>>,
         Vec<crate::pair::FusedCluster>,
     ) {
+        let fingerprints = self.store.fingerprints();
         // [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] The shape family: every
         // member the saturated candidates connect *before* the content
         // gate decides which edges weld. Noise conviction reads this
@@ -203,28 +200,19 @@ impl PipelineSession {
             trees,
             parse_cache,
         );
+        verdicts.recovered(
+            pairs.get(recovery_input..).unwrap_or_default(),
+            fingerprints,
+        );
         ledger.record(
             "shape_families_and_copy_recovery",
             recovery_input,
             pairs.len(),
             stage_started,
         );
-        let content_input = pairs.len();
         let stage_started = Instant::now();
-        apply_pair_content_gate(
-            &mut pairs,
-            fingerprints,
-            trees,
-            &self.sources,
-            &self.file_languages,
-            parse_cache,
-        );
-        ledger.record(
-            "pair_content_gate",
-            content_input,
-            pairs.len(),
-            stage_started,
-        );
+        let judged = self.gate_carrying(&mut pairs, trees, parse_cache, verdicts);
+        ledger.record("pair_content_gate", judged, pairs.len(), stage_started);
         let rescue_output = pairs.len();
         let stage_started = Instant::now();
         let fused_clusters = cluster_by_transitive_closure(&pairs);
@@ -315,6 +303,7 @@ impl PipelineSession {
                 embedding_outcome,
                 pair_ledger: None,
                 fed: signatures.len(),
+                carried: None,
             });
         }
         let live = self.live_pairs(previous, changes, signatures);
@@ -324,6 +313,7 @@ impl PipelineSession {
             embedding_outcome,
             pair_ledger: Some(live.ledger),
             fed: live.fed,
+            carried: live.carried,
         })
     }
 
@@ -426,6 +416,8 @@ struct PairingOutcome {
     pair_ledger: Option<PairLedger>,
     /// Records whose pairs this pass computed.
     fed: usize,
+    /// The previous render's per-pair verdicts this pass may reuse.
+    carried: Option<CarriedVerdicts>,
 }
 
 /// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Stamps each admitted component
