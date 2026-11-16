@@ -108,8 +108,10 @@ fn add_copied_string(scan_root: &Path) -> Result<()> {
 
 /// The scalar settings declared beside the usage string, under the names the
 /// original and the renamed copy give them.
-const ORIGINAL_SCALARS: &str = "pub(crate) const MAX_ARGS: u32 = 3;\npub(crate) const STRICT: bool = true;\n\n";
-const RENAMED_SCALARS: &str = "pub(crate) const ARG_LIMIT: u32 = 3;\npub(crate) const PEDANTIC: bool = true;\n\n";
+const ORIGINAL_SCALARS: &str =
+    "pub(crate) const MAX_ARGS: u32 = 3;\npub(crate) const STRICT: bool = true;\n\n";
+const RENAMED_SCALARS: &str =
+    "pub(crate) const ARG_LIMIT: u32 = 3;\npub(crate) const PEDANTIC: bool = true;\n\n";
 
 /// Surrounds `usage.rs`'s string with scalar settings and writes `help.rs`, a
 /// copy of the whole table with every constant renamed. Scalars on both
@@ -216,7 +218,8 @@ fn a_renamed_copy_of_a_mixed_table_is_reported() -> Result<()> {
     assert!(
         occurrences(copy)
             .iter()
-            .all(|occurrence| field(occurrence, "end_line").as_u64() > field(occurrence, "start_line").as_u64()),
+            .all(|occurrence| field(occurrence, "end_line").as_u64()
+                > field(occurrence, "start_line").as_u64()),
         "each occurrence spans the copied table: {copy:#}"
     );
     assert_unrelated_strings_stay_out(&report, "with a renamed mixed table present");
