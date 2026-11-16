@@ -46,8 +46,8 @@
 //!
 //! **Is it a data table?** A table varies its literals by construction,
 //! so the substance test convicts every one of them. Its payload *is*
-//! its substance, and the `data_clones` policy already lets the user
-//! demote, drop or keep it ([RANK-CATEGORY]).
+//! its substance, so it ranks by its duplicated mass like any other
+//! finding ([RANK-MASS-SUM]).
 //!
 //! # What a count may never do
 //!

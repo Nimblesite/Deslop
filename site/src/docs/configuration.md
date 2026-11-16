@@ -108,8 +108,6 @@ max_average_line_bytes = 200
 [report]
 split_by_language = false
 
-[visibility]
-data_clones = "keep"             # "keep" | "ignore"
 ```
 
 ## `exclude` vs `report_hide`
@@ -163,7 +161,6 @@ Deslop exits `0` unless you opt into a gate. Any breached gate exits `3`, and th
 | `[analysis] include_dependencies` | `false` | Analyses dependency trees. Off, because their duplication would outrank code you can edit. |
 | `[analysis] incremental` | `true` | Reuses the on-disk parse cache on every surface. `false` forces a full re-parse. |
 | `[report] split_by_language` | `false` | One HTML section per language. `--split-by-language` also enables it. |
-| `[visibility] data_clones` | `"keep"` | `"ignore"` drops proven data-table findings before ranking. |
 
 </div>
 

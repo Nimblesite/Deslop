@@ -45,9 +45,9 @@ fn write_ranking_config(src: &Path, body: &str) -> Result<()> {
 }
 
 /// The byte-proven logic clone must head the report and the data-table
-/// family must publish nothing — the mass-only contract for every
-/// `data_clones` mode, since the content gate decides admission and no
-/// evidence factor may change rank ([RANK-MASS-SUM]).
+/// family must publish nothing — the mass-only contract, since the content
+/// gate decides admission and no evidence factor may change rank
+/// ([RANK-MASS-SUM]).
 fn assert_logic_clone_leads_and_table_is_absent(report: &Value, scan_root: &Path) -> Result<()> {
     let logic = clusters(report)
         .iter()
@@ -94,35 +94,6 @@ fn default_mode_ranks_logic_clone_first_and_publishes_no_data_table() -> Result<
     Ok(())
 }
 
-#[test]
-fn ignore_mode_drops_data_table_keeps_logic_clone() -> Result<()> {
-    let (tmp, src) = temp_scan_dir("src")?;
-    let scan_root = src.clone();
-    write_dart_data_table_fixture(&src)?;
-    write_ranking_config(&src, "[visibility]\ndata_clones = \"ignore\"\n")?;
-
-    // [RANK-CATEGORY] ignore mode: the data table appears nowhere and the
-    // byte-proven logic clone survives at the top.
-    let report = run_cli(&src, tmp.path(), "ignore", "30")?;
-    assert_logic_clone_leads_and_table_is_absent(&report, &scan_root)?;
-    Ok(())
-}
-
-#[test]
-fn keep_mode_keeps_logic_clone_first_and_publishes_no_data_table() -> Result<()> {
-    let (tmp, src) = temp_scan_dir("src")?;
-    let scan_root = src.clone();
-    write_dart_data_table_fixture(&src)?;
-    write_ranking_config(&src, "[visibility]\ndata_clones = \"keep\"\n")?;
-
-    // [RANK-CATEGORY] keep mode: the table's fate is admission's, and
-    // admission rejects it below the promote floor; the logic clone keeps
-    // rank one.
-    let report = run_cli(&src, tmp.path(), "keep", "30")?;
-    assert_logic_clone_leads_and_table_is_absent(&report, &scan_root)?;
-    Ok(())
-}
-
 /// [RANK-CATEGORY] The `[ranking]` section is retired. Whatever it holds,
 /// a valid multiplier or an invalid one, the load fails and says the
 /// section is gone, so no reader mistakes an ignored key for a working one.
@@ -158,20 +129,25 @@ fn the_retired_ranking_section_is_refused_whatever_it_holds() -> Result<()> {
     Ok(())
 }
 
-/// [EXCLUSION-CONFIG] `[visibility]` admits only `keep` and `ignore`:
-/// `demote` and any other key fail the load naming the offender.
+/// [EXCLUSION-CONFIG] The `[visibility]` section is retired: nothing proves a
+/// data table, so `data_clones` had nothing to drop. Every body fails the
+/// load naming the section.
 #[test]
-fn visibility_section_rejects_demote_and_unknown_keys() -> Result<()> {
+fn the_retired_visibility_section_is_refused_whatever_it_holds() -> Result<()> {
     let (tmp, src) = temp_scan_dir("src")?;
     fs::write(src.join("a.dart"), "class A { int x = 1; }\n")?;
     for (body, needle) in [
         (
             "[visibility]\ndata_clones = \"demote\"\n",
-            "visibility.data_clones",
+            "unknown field `visibility`",
+        ),
+        (
+            "[visibility]\ndata_clones = \"ignore\"\n",
+            "unknown field `visibility`",
         ),
         (
             "[visibility]\ndata_clone_weight = 0.5\n",
-            "unknown field `data_clone_weight`",
+            "unknown field `visibility`",
         ),
     ] {
         write_ranking_config(&src, body)?;

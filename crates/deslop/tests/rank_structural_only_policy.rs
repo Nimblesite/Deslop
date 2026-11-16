@@ -13,9 +13,8 @@
 //! [RANK-STRUCTURAL-ONLY] retired the `structural_only_weight`,
 //! `data_clone_weight` and `demote` ranking modes: weight means mass and
 //! nothing else. A `.deslop.toml` that still carries a `[ranking]` section
-//! fails the load and says why, rather than being read and ignored; the
-//! `[visibility]` choices that remain change no clone's rank, mass or
-//! percentage.
+//! fails the load and says why, rather than being read and ignored, and so
+//! does `[visibility]`, whose `data_clones` choice nothing read.
 //!
 //! Black-box E2E: drive the CLI against generated fixture repos and
 //! assert against the rendered JSON report only.
@@ -113,17 +112,6 @@ fn run_report(src: &Path, tmp: &Path) -> Result<Value> {
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
     Ok(serde_json::from_str(&body)?)
-}
-
-/// Builds the fixture (plus optional `.deslop.toml` body) and reports.
-fn report_for_config(config: Option<&str>) -> Result<Value> {
-    let (tmp, src) = temp_scan_dir("src")?;
-    write_fixture(&src)?;
-    if let Some(body) = config {
-        fs::write(src.join(".deslop.toml"), body)?;
-    }
-    let report = run_report(&src, tmp.path())?;
-    Ok(report)
 }
 
 fn cluster_touches(cluster: &Value, file_name: &str) -> bool {
@@ -273,50 +261,36 @@ fn retired_ranking_settings_fail_the_load_and_say_why() -> Result<()> {
     Ok(())
 }
 
-/// The clone-only figures a visibility choice must leave untouched.
-#[derive(Debug, PartialEq)]
-struct CloneFigures<'report> {
-    /// Every cluster's rank, id and mass.
-    ranked: Vec<(u64, &'report str, u64)>,
-    duplicated_loc: Option<u64>,
-    duplication_percent: Option<f64>,
-}
+/// What a config that still carries `[visibility]` is told: the engine
+/// proves no data tables, so `data_clones` had nothing to drop.
+const VISIBILITY_RETIRED: &str = "unknown field `visibility`";
+/// Every body the retired `[visibility]` section used to accept.
+const RETIRED_VISIBILITY_BODIES: [&str; 3] = [
+    "[visibility]\ndata_clones = \"keep\"\n",
+    "[visibility]\ndata_clones = \"ignore\"\n",
+    "[visibility]\n",
+];
 
-fn clone_figures(report: &Value) -> CloneFigures<'_> {
-    let metrics = field(report, "metrics");
-    CloneFigures {
-        ranked: rankable(report),
-        duplicated_loc: field(metrics, "duplicated_loc").as_u64(),
-        duplication_percent: field(metrics, "duplication_percent").as_f64(),
-    }
-}
-
-/// [EXCLUSION-CONFIG] Neither `[visibility]` choice moves a clone: the same
-/// ids, ranks, masses, duplicated lines and percentage as with no config.
+/// [EXCLUSION-CONFIG] `data_clones = "ignore"` promised to drop proven data
+/// tables, but nothing proves one, so the choice was accepted and ignored.
+/// The section is refused like `[ranking]`: the run fails, names the
+/// section and the file, and writes no report.
 #[test]
-fn visibility_choices_leave_clone_rank_mass_and_percentage_untouched() -> Result<()> {
-    let baseline = report_for_config(None)?;
-    let expected = clone_figures(&baseline);
-    assert!(
-        !expected.ranked.is_empty(),
-        "the mass-only ranking must be non-empty"
-    );
-    assert!(
-        expected.duplicated_loc > Some(0),
-        "the fixture holds real duplicated lines"
-    );
-    for choice in ["keep", "ignore"] {
-        let body = format!("[visibility]\ndata_clones = \"{choice}\"\n");
-        let report = report_for_config(Some(&body))?;
-        assert_eq!(
-            clone_figures(&report),
-            expected,
-            "data_clones = {choice}: no clone may change rank, mass or percentage: {report:#}"
-        );
-        assert_eq!(
-            field(&report, "clusters_hidden").as_u64(),
-            field(&baseline, "clusters_hidden").as_u64(),
-            "data_clones = {choice}: the family holds no data table to hide"
+fn retired_visibility_settings_fail_the_load_and_say_why() -> Result<()> {
+    for body in RETIRED_VISIBILITY_BODIES {
+        let (tmp, src) = temp_scan_dir("src")?;
+        write_fixture(&src)?;
+        fs::write(src.join(CONFIG_FILE), body)?;
+        let output = tmp.path().join("report");
+        let _assertion = deslop_cmd(&src, &output)?
+            .args(["--min-nodes", "30", "--embeddings", "off"])
+            .assert()
+            .failure()
+            .stderr(predicates::str::contains(VISIBILITY_RETIRED))
+            .stderr(predicates::str::contains(CONFIG_FILE));
+        assert!(
+            !output.with_extension("json").exists(),
+            "{body:?}: a refused config must not produce a report"
         );
     }
     Ok(())
