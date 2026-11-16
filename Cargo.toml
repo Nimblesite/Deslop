@@ -28,6 +28,8 @@ toml = "=1.1.6"
 assert_cmd = "=2.2.2"
 predicates = "=3.1.4"
 tempfile = "=3.27.0"
+# [TEST-MEMORY-BINARY] Counting global allocator for the heap-bound test target.
+peak_alloc = "=0.3.0"
 tree-sitter = "=0.26.12"
 tree-sitter-c-sharp = "=0.23.5"
 tree-sitter-rust = "=0.24.2"

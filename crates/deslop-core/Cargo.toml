@@ -68,6 +68,7 @@ deslop-core = { path = ".", features = ["test-support"] }
 deslop-test-support = { path = "../deslop-test-support" }
 tokio = { workspace = true, features = ["test-util"] }
 tempfile.workspace = true
+peak_alloc.workspace = true
 
 [lints]
 workspace = true
@@ -75,6 +76,12 @@ workspace = true
 [[test]]
 name = "suite"
 path = "tests/suite.rs"
+
+# [TEST-MEMORY-BINARY] Installs a counting global allocator, which is
+# process-wide, so it cannot share the suite binary.
+[[test]]
+name = "memory"
+path = "tests/memory/main.rs"
 
 # Both benches import the `benchmark`-gated measurement modules, so they only
 # build when that feature is on. Without this, `--all-targets` builds them

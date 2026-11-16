@@ -40,10 +40,21 @@ fn memo_entry<T>(
     cap: usize,
     compute: impl FnOnce() -> Option<T>,
 ) -> Option<Arc<T>> {
+    memo_shared(map, key, cap, || compute().map(Arc::new))
+}
+
+/// [`memo_entry`] for a value already shared: the cell holds the same
+/// allocation the compute returned, so cells of many keys can point at one.
+fn memo_shared<T>(
+    map: &Mutex<HashMap<SnippetKey, Option<Arc<T>>>>,
+    key: SnippetKey,
+    cap: usize,
+    compute: impl FnOnce() -> Option<Arc<T>>,
+) -> Option<Arc<T>> {
     if let Some(hit) = locked(map).get(&key) {
         return hit.clone();
     }
-    let computed = compute().map(Arc::new);
+    let computed = compute();
     let mut map = locked(map);
     if map.len() < cap {
         let _replaced = map.insert(key, computed.clone());
@@ -57,14 +68,28 @@ impl ParseCache {
     pub(crate) fn call_shape(
         &self,
         snippet: &Snippet<'_>,
-        compute: impl FnOnce() -> Option<CallShape>,
+        compute: impl FnOnce() -> Option<Arc<CallShape>>,
     ) -> Option<Arc<CallShape>> {
-        memo_entry(
+        memo_shared(
             &self.call_shapes,
             (snippet.file_id, snippet.range.start, snippet.range.end),
             CALL_SHAPE_MEMO_MAX,
             compute,
         )
+    }
+
+    /// [CLONE-NOISE-LITERAL-VARIATION-CALLS-BOUNDED-MEMO] The
+    /// [`CallShape`] of the call node spanning `key`, shared by every
+    /// member that call encloses. Members inside one immediately-invoked
+    /// wrapper all resolve to the wrapper's call, whose shape spans the
+    /// module; one cell per call keeps that cost once per module, not
+    /// once per member.
+    pub(crate) fn call_node_shape(
+        &self,
+        key: SnippetKey,
+        compute: impl FnOnce() -> Option<CallShape>,
+    ) -> Option<Arc<CallShape>> {
+        memo_entry(&self.call_node_shapes, key, CALL_SHAPE_MEMO_MAX, compute)
     }
 
     /// The fused call-sequence cell for `snippet`'s range, memoised

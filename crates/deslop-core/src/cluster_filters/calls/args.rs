@@ -7,7 +7,9 @@
 use tree_sitter::Node;
 
 use super::{
-    super::constant_table::is_literal_value, callee::canonical_callee, ArgShape, CalleePart,
+    super::constant_table::is_literal_value,
+    callee::{canonical_callee, CalleeDigest},
+    ArgShape,
 };
 use crate::ast::named_children;
 
@@ -124,7 +126,7 @@ fn literal_wrapper_parts(
     node: Node<'_>,
     source: &[u8],
     language: &str,
-) -> Option<(Vec<CalleePart>, Vec<u8>)> {
+) -> Option<(CalleeDigest, Vec<u8>)> {
     if !super::call_kinds(language).contains(&node.kind()) || subtree_is_interpolated(node) {
         return None;
     }

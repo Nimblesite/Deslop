@@ -99,6 +99,9 @@ pub struct ParseCache {
     /// once however many clusters share the member. Bounded: past the
     /// cap the value is recomputed rather than stored.
     call_shapes: Mutex<HashMap<SnippetKey, Option<Arc<CallShape>>>>,
+    /// Call shape per call node, which the member cells above share
+    /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-BOUNDED-MEMO]).
+    call_node_shapes: Mutex<HashMap<SnippetKey, Option<Arc<CallShape>>>>,
     /// Covered-statement flag plus in-range call sequence per member
     /// range — one cell because the literal-variation sequence rule
     /// always asks for both, and fusing them halves the memo lookups.

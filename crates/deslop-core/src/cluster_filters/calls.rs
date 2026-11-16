@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use callee::{call_shape_from_node, CalleePart};
+use callee::{call_shape_from_node, CalleeDigest};
 use tree_sitter::Node;
 
 use super::{enclosing_kind, node_search::KindSearch, parse_for, ParseCache, Snippet};
@@ -46,7 +46,7 @@ pub(super) fn is_literal_variation_call_cluster(
 ) -> bool {
     let calls: Option<Vec<Arc<CallShape>>> = snippets
         .iter()
-        .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
+        .map(|snippet| cache.call_shape(snippet, || call_shape(snippet, cache)))
         .collect();
     is_literal_variation_call_set(calls)
         || sequence::is_literal_variation_call_sequence(snippets, cache)
@@ -82,7 +82,7 @@ fn is_literal_variation_call_set(calls: Option<Vec<Arc<CallShape>>>) -> bool {
 pub(crate) struct CallShape {
     /// AST callee shape preserving called names and member selectors,
     /// with receiver names and nested string payloads normalised.
-    callee: Vec<CalleePart>,
+    callee: CalleeDigest,
     /// Number of argument slots, including nested callee invocations.
     arity: usize,
     /// Keyword each argument is passed under, positionally, `None` for
@@ -144,7 +144,7 @@ enum ArgShape {
     /// names are normalised away exactly as they are everywhere else, so
     /// `nav.locator("a")` and `page.locator("b")` remain one shape
     /// varying its payload, while `parse` against `resolve` does not.
-    LiteralWrapper(Vec<CalleePart>, Vec<u8>),
+    LiteralWrapper(CalleeDigest, Vec<u8>),
     /// Anything else — non-string literal, identifier, sub-expression.
     Other,
 }
@@ -152,13 +152,18 @@ enum ArgShape {
 /// Extracts the [`CallShape`] for the call `snippet` is
 /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL]). Returns `None`
 /// when no call is present.
-fn call_shape(snippet: &Snippet<'_>) -> Option<CallShape> {
+fn call_shape(snippet: &Snippet<'_>, cache: &ParseCache) -> Option<Arc<CallShape>> {
     let tree = parse_for(snippet)?;
     let kinds = call_kinds(snippet.language);
-    let enclosing = enclosing_kind(tree.root_node(), snippet.range, kinds)
-        .and_then(|call| call_shape_from_node(call, snippet.source, snippet.language));
+    let shape_of = |call: Node<'_>| {
+        cache.call_node_shape(
+            (snippet.file_id, call.start_byte(), call.end_byte()),
+            || call_shape_from_node(call, snippet.source, snippet.language),
+        )
+    };
+    let enclosing = enclosing_kind(tree.root_node(), snippet.range, kinds).and_then(shape_of);
     if let Some(shape) = enclosing.as_ref().filter(|shape| !shape.carries_body()) {
-        return Some(shape.clone());
+        return Some(Arc::clone(shape));
     }
     // Either no call encloses the member — an awaited check in a plain
     // function body — or the enclosing call only carries the member
@@ -169,7 +174,7 @@ fn call_shape(snippet: &Snippet<'_>) -> Option<CallShape> {
     // run is never judged by the one call it happens to contain
     // ([CLONE-NOISE-LITERAL-VARIATION-CALLS-MEMBER-CALL]).
     held_call(tree.root_node(), snippet, kinds)
-        .and_then(|call| call_shape_from_node(call, snippet.source, snippet.language))
+        .and_then(shape_of)
         .or(enclosing)
 }
 
@@ -377,7 +382,7 @@ fn literal_agreement(calls: &[&CallShape], index: usize) -> LiteralAgreement {
     match calls.first().and_then(|call| call.arguments.get(index)) {
         Some(ArgShape::StringLiteral(baseline, _)) => string_agreement(calls, index, baseline),
         Some(ArgShape::LiteralWrapper(callee, baseline)) => {
-            wrapper_agreement(calls, index, callee, baseline)
+            wrapper_agreement(calls, index, *callee, baseline)
         }
         _ => LiteralAgreement::NotAString,
     }
@@ -406,7 +411,7 @@ fn string_agreement(calls: &[&CallShape], index: usize, baseline: &[u8]) -> Lite
 fn wrapper_agreement(
     calls: &[&CallShape],
     index: usize,
-    callee: &[CalleePart],
+    callee: CalleeDigest,
     baseline: &[u8],
 ) -> LiteralAgreement {
     let mut agreement = LiteralAgreement::Same;
@@ -414,7 +419,7 @@ fn wrapper_agreement(
         let Some(ArgShape::LiteralWrapper(other_callee, bytes)) = call.arguments.get(index) else {
             return LiteralAgreement::Incomparable;
         };
-        if other_callee != callee {
+        if *other_callee != callee {
             return LiteralAgreement::Incomparable;
         }
         if bytes != baseline {
