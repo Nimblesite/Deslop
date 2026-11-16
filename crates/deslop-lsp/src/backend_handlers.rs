@@ -96,7 +96,14 @@ impl LspBackend {
         self.diagnostics.refresh(&self.client).await;
     }
 
-    /// `workspace/didChangeConfiguration`.
+    /// `workspace/didChangeConfiguration`, as it is read: the new settings
+    /// apply at once, ahead of any request read after them
+    /// ([LSP-TRANSPORT-DISPATCH]). An invalid update keeps the previous one.
+    pub(crate) fn configuration_read(&self, params: &DidChangeConfigurationParams) {
+        let _kept_previous = self.diagnostics.configure(&params.settings);
+    }
+
+    /// `workspace/didChangeConfiguration`, in its turn: publishes the change.
     pub(crate) async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
         self.diagnostics
             .update(&self.client, &params.settings)

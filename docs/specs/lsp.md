@@ -14,7 +14,7 @@ The read loop only reads. What it reads is handed on at once, so `exit`, a cance
 
 | Frame | What happens to it |
 |---|---|
-| Request | Registered for cancellation, then run on its own task once every notification read before it has been handled, so a report asked for after an edit is a report of that edit. The reads answered from the published snapshot — `textDocument/diagnostic`, `textDocument/codeAction`, `textDocument/codeLens` — do not wait for earlier notifications: they must never wait on analysis ([LSP-NON-INTERFERENCE-NONBLOCKING]). Four run at once; the rest wait their turn and can still be cancelled. |
+| Request | Registered for cancellation, then run on its own task once every notification read before it has been handled, so a report asked for after an edit is a report of that edit. The reads answered from the published snapshot — `textDocument/diagnostic`, `textDocument/codeAction`, `textDocument/codeLens` — do not wait for earlier notifications: they must never wait on analysis ([LSP-NON-INTERFERENCE-NONBLOCKING]). What they consult besides the report — the diagnostic settings of `workspace/didChangeConfiguration` — takes effect as the notification is read, so a pull after a settings change sees the new settings; publishing the change still waits its turn. Four run at once; the rest wait their turn and can still be cancelled. |
 | Notification | Queued for one worker that runs them in the order they were read, so `didOpen`, `didChange` and `didClose` for a file can never overtake each other. |
 | `$/cancelRequest` | Handled in the read loop. The cancelled request stops waiting on its work and is answered `-32800 Request cancelled`. |
 | Answer to a request the server sent | Delivered to whoever is waiting for it. |

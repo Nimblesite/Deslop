@@ -161,10 +161,12 @@ impl DiagnosticSession {
         }
     }
 
-    /// Applies a settings notification and refreshes both publication modes.
+    /// Publishes what a settings notification changed. The settings
+    /// themselves were applied when the notification was read
+    /// ([`Self::configure`]), so a pull read after it already sees them.
     pub(crate) async fn update(&self, client: &Client, settings: &serde_json::Value) {
-        match self.configure(settings) {
-            Ok(()) => self.refresh(client).await,
+        match DiagnosticSettings::from_settings(settings) {
+            Ok(_) => self.refresh(client).await,
             Err(error) => {
                 client
                     .show_message(

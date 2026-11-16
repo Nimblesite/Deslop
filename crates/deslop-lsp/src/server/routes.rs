@@ -177,6 +177,18 @@ fn register_session(dispatcher: &Dispatcher, backend: &Arc<LspBackend>) {
     route!(dispatcher, backend, custom::CPU_REPORT, custom::cpu_report);
 }
 
+/// Applies the part of a notification that must take effect as it is read,
+/// before any request read after it: settings, which snapshot reads consult.
+pub(super) fn observe(backend: &LspBackend, method: &str, params: &Value) {
+    if method != DidChangeConfiguration::METHOD {
+        return;
+    }
+    match serde_json::from_value(params.clone()) {
+        Ok(params) => backend.configuration_read(&params),
+        Err(error) => tracing::warn!(method, %error, "notification params not understood"),
+    }
+}
+
 /// Runs the handler for one notification; an unknown method is ignored, as
 /// the base protocol requires.
 pub(super) async fn notify(backend: &LspBackend, method: &str, params: Value) {

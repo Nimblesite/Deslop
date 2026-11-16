@@ -178,6 +178,7 @@ impl Link {
                 .cancel_request(&params),
             _ if !self.session.takes_notifications(&method) => (),
             _ => {
+                super::routes::observe(&self.session.backend, &method, &params);
                 self.queued = self.queued.saturating_add(1);
                 if self.notifications.send((method, params)).await.is_err() {
                     tracing::error!("notification worker stopped");
