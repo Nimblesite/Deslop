@@ -1,10 +1,13 @@
-//! [FUSED-CONTENT-GATE-LITERAL-BOUND] Per-scan memo of each endpoint's heaviest literal.
+//! [FUSED-CONTENT-GATE-LITERAL-BOUND] Per-scan memo of each endpoint's heaviest literal
+//! and of its text's shingles: an endpoint in a star is read once, not once per partner.
 
 use std::hash::BuildHasher;
 
 use super::GateShared;
 use crate::{
-    content::literal_bound::{carried_text_differs, heaviest_literal, HeaviestLiteral},
+    content::literal_bound::{
+        carried_texts, heaviest_literal, shingles, shingles_clear_floor, HeaviestLiteral,
+    },
     fingerprint::Fingerprint,
     pair::CandidatePair,
 };
@@ -22,6 +25,8 @@ enum Slot {
 pub(super) struct LiteralBoundMemo {
     /// The endpoint's heaviest literal, once resolved.
     heaviest: Vec<Slot>,
+    /// The carried endpoint's text shingles, once a pair needed them.
+    shingles: Vec<Option<Vec<u64>>>,
 }
 
 impl LiteralBoundMemo {
@@ -29,6 +34,7 @@ impl LiteralBoundMemo {
     pub(super) fn new(count: usize) -> Self {
         Self {
             heaviest: vec![Slot::Unresolved; count],
+            shingles: vec![None; count],
         }
     }
 
@@ -42,7 +48,31 @@ impl LiteralBoundMemo {
     ) -> bool {
         let left = self.resolve(pair.left, left, shared);
         let right = self.resolve(pair.right, right, shared);
-        carried_text_differs(left, right, shared.sources)
+        let Some((left, right)) = carried_texts(left, right, shared.sources) else {
+            return false;
+        };
+        left != right && !self.near_copies((pair.left, left), (pair.right, right))
+    }
+
+    /// Whether two differing endpoint texts share enough shingles.
+    fn near_copies(&mut self, left: (usize, &[u8]), right: (usize, &[u8])) -> bool {
+        self.remember(left);
+        self.remember(right);
+        self.known(left.0)
+            .zip(self.known(right.0))
+            .is_some_and(|(left, right)| shingles_clear_floor(left, right))
+    }
+
+    /// Shingles one endpoint's text the first time a pair needs it.
+    fn remember(&mut self, (index, text): (usize, &[u8])) {
+        if let Some(slot @ None) = self.shingles.get_mut(index) {
+            *slot = Some(shingles(text));
+        }
+    }
+
+    /// One endpoint's remembered shingles.
+    fn known(&self, index: usize) -> Option<&[u64]> {
+        self.shingles.get(index)?.as_deref()
     }
 
     /// Memoizes one endpoint's heaviest literal by fingerprint index.
