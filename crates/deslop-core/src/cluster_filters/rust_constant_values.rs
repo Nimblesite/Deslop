@@ -9,8 +9,9 @@
 //!
 //! A bare scalar is not substance. `const MAX_RETRY_ATTEMPTS: u32 = 3` and
 //! `const WORKER_THREADS: u32 = 3` coincide by accident; only the name says
-//! what each means. A declaration bound to a lone scalar literal is
-//! therefore compared on its full bytes, name included.
+//! what each means. So substance decides: members that bind any string or
+//! compound initialiser are compared on those alone, their scalars ignored,
+//! and names decide only when a member binds lone scalars and nothing else.
 
 use tree_sitter::Node;
 
@@ -42,24 +43,37 @@ pub(super) fn rust_table_values_differ(snippets: &[Snippet<'_>]) -> bool {
     })
 }
 
-/// The comparison bytes of every top-level `const` / `static` the member
-/// covers, in source order: the initialiser, or the whole declaration when
-/// the initialiser is a lone scalar.
+/// The comparison bytes of the top-level `const` / `static` items the member
+/// covers, in source order ([`compared_nodes`]).
 fn rust_table_values<'a>(snippet: &Snippet<'a>) -> Option<Vec<&'a [u8]>> {
     let tree = parse_for(snippet)?;
     let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
-    let source = snippet.source;
+    let bound: Vec<(Node<'_>, Node<'_>)> = named_children(tree.root_node())
+        .into_iter()
+        .filter(|item| node_intersects_range(*item, range))
+        .filter_map(|item| Some((item, item.child_by_field_name("value")?)))
+        .collect();
     Some(
-        named_children(tree.root_node())
+        compared_nodes(&bound)
             .into_iter()
-            .filter(|item| node_intersects_range(*item, range))
-            .filter_map(|item| {
-                let value = item.child_by_field_name("value")?;
-                let compared = if is_scalar(value) { item } else { value };
-                source.get(compared.byte_range())
-            })
+            .filter_map(|node| snippet.source.get(node.byte_range()))
             .collect(),
     )
+}
+
+/// Every substantial initialiser, or, when the member binds lone scalars
+/// only, every whole declaration.
+fn compared_nodes<'tree>(bound: &[(Node<'tree>, Node<'tree>)]) -> Vec<Node<'tree>> {
+    let substantial: Vec<Node<'tree>> = bound
+        .iter()
+        .map(|(_, value)| *value)
+        .filter(|value| !is_scalar(*value))
+        .collect();
+    if substantial.is_empty() {
+        bound.iter().map(|(item, _)| *item).collect()
+    } else {
+        substantial
+    }
 }
 
 /// Whether `value` is a scalar literal, optionally negated.
