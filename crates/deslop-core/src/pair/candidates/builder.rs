@@ -18,7 +18,10 @@ use super::{
     candidate_ranges_are_valid, endpoint_node_counts, jaccard_for, order, same_language_indexes,
 };
 use crate::{
-    embedding::EmbeddingPair, fingerprint::Fingerprint, lsh::SignatureLookup, state::FileId,
+    embedding::EmbeddingPair,
+    fingerprint::Fingerprint,
+    lsh::{SignatureLookup, BANDS},
+    state::FileId,
 };
 
 /// Bucket size from which [`PairBuilder::log_large_bucket`] reports the
@@ -26,6 +29,15 @@ use crate::{
 const LARGE_BUCKET_LOG_FLOOR: usize = 1000;
 /// Equal Merkle hashes supply complete structural evidence and no embedding evidence.
 const STRUCTURAL_COPY_EVIDENCE: (f64, f64) = (1.0, 0.0);
+
+/// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] The source bit of a pair the structural (Merkle)
+/// buckets emitted. Bits `0..BANDS` are the LSH bands.
+pub(crate) const STRUCTURAL_SOURCE: u64 = 1 << BANDS;
+
+/// The source bit of a pair LSH band `band` emitted.
+pub(crate) const fn band_source(band: usize) -> u64 {
+    1 << band
+}
 
 /// The ordered pair key packed as one `u64`: high half the lower
 /// index, low half the higher ([PERF-FLUTTER-TODO-MEMORY]).
@@ -77,6 +89,18 @@ pub(super) struct PairBuilder<'corpus, S: BuildHasher> {
     /// retained pair averages a dozen emissions on a corpus-scale run
     /// — pushing every one again is gigabytes of dead entries).
     kept_keys: std::collections::HashSet<u64>,
+    /// Which sources emitted each kept pair, when the caller asked
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]); `None` keeps the batch build as lean as before.
+    sources: Option<KeptSources>,
+}
+
+/// The source bits of every kept pair, by its position in `kept`.
+#[derive(Default)]
+struct KeptSources {
+    /// Position in `kept` of each kept key.
+    position: HashMap<u64, usize>,
+    /// Source bits, positionally 1:1 with `kept`.
+    masks: Vec<u64>,
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
@@ -108,7 +132,14 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             kept: Vec::new(),
             evidence: HashMap::new(),
             kept_keys: std::collections::HashSet::new(),
+            sources: None,
         }
+    }
+
+    /// Records which sources emit each kept pair, for the live session's
+    /// incremental pairing ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+    pub(super) fn track_sources(&mut self) {
+        self.sources = Some(KeptSources::default());
     }
 
     /// Adds the structural (Merkle) star pairs: the canonical member of
@@ -125,7 +156,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// because each bucket's star is (minimum index, each other) in
     /// index order either way.
     ///
-    /// Each bucket is then paired by [`Self::pair_bucket`], which adds
+    /// Each bucket is then paired by [`bucket_star`], which adds
     /// the cross-file candidate every member is owed
     /// ([FUSED-CANDIDATE-BUCKET-STAR]).
     pub(super) fn add_structural_pairs(&mut self) {
@@ -203,9 +234,19 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// with nobody — a run of string literals hashes the same in every
     /// grammar, so a C file's list once silenced an Osprey file's copies.
     fn pair_bucket_per_language(&mut self, run: &[usize]) {
+        let fingerprints = self.fingerprints;
+        for members in self.language_groups(run) {
+            bucket_star(&members, fingerprints, &mut |left, right| {
+                self.add_evidence(left, right, 1.0, 0.0);
+            });
+        }
+    }
+
+    /// The bucket's members split per language when the language policy
+    /// applies, else the bucket whole, each in index order.
+    pub(super) fn language_groups(&self, run: &[usize]) -> Vec<Vec<usize>> {
         let Some(languages) = self.file_languages.filter(|_| !self.allow_cross_language) else {
-            self.pair_bucket(run);
-            return;
+            return vec![run.to_vec()];
         };
         let mut by_language: BTreeMap<Option<&'static str>, Vec<usize>> = BTreeMap::new();
         for &index in run {
@@ -215,36 +256,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 .and_then(|entry| languages.get(&entry.file_id).copied());
             by_language.entry(language).or_default().push(index);
         }
-        for members in by_language.values() {
-            self.pair_bucket(members);
-        }
-    }
-
-    /// Pairs one structural-hash bucket ([FUSED-CANDIDATE-BUCKET-STAR]):
-    /// every member with the bucket's first member, and every member
-    /// that shares the first member's file with the bucket's first
-    /// member in another file, so no member of a bucket that spans files
-    /// is judged on a within-file pair alone. Members that share a file
-    /// are not paired with each other here: copy recovery
-    /// ([FUSED-CANDIDATE-BUCKET-RECOVERY]) adds the pairs an unrelated
-    /// first member hid, within a file as across files, at a cost that
-    /// grows with the copies found rather than with the bucket squared.
-    fn pair_bucket(&mut self, run: &[usize]) {
-        let Some(&canonical) = run.first() else {
-            return;
-        };
-        let file_of = |index: usize| self.fingerprints.get(index).map(|entry| entry.file_id);
-        let canonical_file = file_of(canonical);
-        let foreign = run
-            .iter()
-            .copied()
-            .find(|index| file_of(*index) != canonical_file);
-        for &other in run.iter().skip(1) {
-            self.add_evidence(canonical, other, 1.0, 0.0);
-            if let Some(foreign) = foreign.filter(|_| file_of(other) == canonical_file) {
-                self.add_evidence(other, foreign, 1.0, 0.0);
-            }
-        }
+        by_language.into_values().collect()
     }
 
     /// Merges the embedding ANN pairs, recording each measured cosine
@@ -260,13 +272,44 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     }
 
     /// Finishes the build: releases the key set and returns the kept
-    /// pairs in deterministic key order.
-    pub(super) fn finish(mut self) -> Vec<CandidatePair> {
+    /// pairs in deterministic key order, with their source bits when
+    /// they were tracked.
+    pub(super) fn finish(mut self) -> (Vec<CandidatePair>, Option<Vec<u64>>) {
         drop(std::mem::take(&mut self.kept_keys));
-        self.kept
-            .sort_unstable_by_key(|pair| (pair.left, pair.right));
-        self.kept.shrink_to_fit();
-        self.kept
+        let Some(sources) = self.sources.take() else {
+            self.kept
+                .sort_unstable_by_key(|pair| (pair.left, pair.right));
+            self.kept.shrink_to_fit();
+            return (self.kept, None);
+        };
+        let mut rows: Vec<(CandidatePair, u64)> =
+            self.kept.into_iter().zip(sources.masks).collect();
+        rows.sort_unstable_by_key(|(pair, _)| (pair.left, pair.right));
+        let (pairs, masks) = rows.into_iter().unzip();
+        (pairs, Some(masks))
+    }
+
+    /// Retains `pair` under `key`, noting its first source when tracked.
+    fn retain(&mut self, key: u64, pair: CandidatePair, source: u64) {
+        if let Some(sources) = self.sources.as_mut() {
+            let _previous = sources.position.insert(key, self.kept.len());
+            sources.masks.push(source);
+        }
+        self.kept.push(pair);
+    }
+
+    /// Adds `source` to an already-kept pair's bits, when tracked.
+    fn note_source(&mut self, key: u64, source: u64) {
+        let Some(sources) = self.sources.as_mut() else {
+            return;
+        };
+        if let Some(mask) = sources
+            .position
+            .get(&key)
+            .and_then(|position| sources.masks.get_mut(*position))
+        {
+            *mask |= source;
+        }
     }
 
     /// Records evidence-bearing discovery of `(left, right)`: the
@@ -290,24 +333,36 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 continue;
             };
             if self.gate(&pair) {
-                self.kept.push(pair);
+                let source = if structural > 0.0 {
+                    STRUCTURAL_SOURCE
+                } else {
+                    0
+                };
+                self.retain(key, pair, source);
             }
         }
     }
 
-    /// A zero-evidence (LSH band-collision) discovery: construct, gate,
-    /// and retain only if the key is not already carried.
-    pub(super) fn add_zero_evidence(&mut self, left: usize, right: usize) {
+    /// A zero-evidence (LSH band-collision) discovery from `band`, when
+    /// known: construct, gate, and retain only if the key is not already
+    /// carried; a carried pair gains the band's source bit.
+    pub(super) fn add_zero_evidence(&mut self, band: Option<usize>, left: usize, right: usize) {
         let key = packed_key(order(left, right));
+        let source = band.map_or(0, band_source);
         if !self.kept_keys.insert(key) {
+            self.note_source(key, source);
             return;
         }
-        let Some(pair) = self.construct_pair((left, right), 0.0, 0.0) else {
-            return;
-        };
-        if self.gate(&pair) {
-            self.kept.push(pair);
+        if let Some(pair) = self.admit(order(left, right)) {
+            self.retain(key, pair, source);
         }
+    }
+
+    /// The candidate for `key` when discovery would retain it: the pure
+    /// construction and gate every source shares, evidence aside.
+    pub(super) fn admit(&self, key: (usize, usize)) -> Option<CandidatePair> {
+        self.construct_pair(key, 0.0, 0.0)
+            .filter(|pair| self.gate(pair))
     }
 
     /// Builds the candidate for `key` with its score axes filled in, or
@@ -399,5 +454,36 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             return false;
         }
         construction_survives(pair) || rescue_eligible(pair)
+    }
+}
+
+/// [FUSED-CANDIDATE-BUCKET-STAR] The pairs one structural-hash bucket
+/// emits: every member with the bucket's first member, and every member
+/// that shares the first member's file with the bucket's first member in
+/// another file, so no member of a bucket that spans files is judged on a
+/// within-file pair alone. Members that share a file are not paired with
+/// each other here: copy recovery ([FUSED-CANDIDATE-BUCKET-RECOVERY])
+/// adds the pairs an unrelated first member hid, within a file as across
+/// files, at a cost that grows with the copies found rather than with the
+/// bucket squared.
+pub(super) fn bucket_star(
+    run: &[usize],
+    fingerprints: &[Fingerprint],
+    emit: &mut dyn FnMut(usize, usize),
+) {
+    let Some(&canonical) = run.first() else {
+        return;
+    };
+    let file_of = |index: usize| fingerprints.get(index).map(|entry| entry.file_id);
+    let canonical_file = file_of(canonical);
+    let foreign = run
+        .iter()
+        .copied()
+        .find(|index| file_of(*index) != canonical_file);
+    for &other in run.iter().skip(1) {
+        emit(canonical, other);
+        if let Some(foreign) = foreign.filter(|_| file_of(other) == canonical_file) {
+            emit(other, foreign);
+        }
     }
 }

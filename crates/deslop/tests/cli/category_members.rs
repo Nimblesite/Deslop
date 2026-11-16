@@ -40,6 +40,9 @@ const DEFAULT_MIN_NODES: u64 = 30;
 const MIN_NODES_FIELD: &str = "min_nodes";
 const WHITESPACE_VARIATION: &str = "  \t  ";
 const STRING_CONTENT_KIND: &str = "string_content";
+const SHORT_LITERAL: &str = "\"invoice\"";
+const LONG_LITERAL: &str =
+    "\"invoice header for the customer account, printed above every itemised line\"";
 const RANK_FIELD: &str = "rank";
 const MASS_FIELD: &str = "mass";
 const COUNT_FIELD: &str = "occurrence_count";
@@ -310,5 +313,33 @@ fn whitespace_inside_a_string_literal_is_a_near_copy_content_change() -> Result<
     assert_members(group, &[ORIGINAL_PATH, COPY_PATH], FUNCTION_SPAN)?;
     assert_mass_rank(group, FIRST_RANK);
     assert_metrics(&report, CLONE_LINES, FULL_PERCENT);
+    Ok(())
+}
+
+// [CLONE-BUCKETS-IDENTICAL] A long literal whose text is a near-copy is
+// still changed content: whitespace inside it never makes the pair
+// Identical, at the start of the literal or deeper inside it.
+#[test]
+fn whitespace_inside_a_long_string_literal_is_never_identical() -> Result<()> {
+    let long = function_source(SHAPE_ONLY_DISJOINT, ORIGINAL_FUNCTION)?.replacen(
+        SHORT_LITERAL,
+        LONG_LITERAL,
+        ONE_GROUP,
+    );
+    let spaced_once = change_literal_spacing(&long)?;
+    let spaced_twice = change_literal_spacing(&spaced_once)?;
+    for (original, changed) in [(&long, &spaced_once), (&spaced_once, &spaced_twice)] {
+        assert_ne!(original, changed, "the fixture must change literal bytes");
+        let report = scan_sources(&[(ORIGINAL_PATH, original), (COPY_PATH, changed)])?;
+        assert_eq!(clusters(&report).len(), ONE_GROUP, "{report:#}");
+        assert!(
+            group_of_kind(&report, IDENTICAL_KIND).is_err(),
+            "literal whitespace is content, never Identical: {report:#}"
+        );
+        let group = group_of_kind(&report, NEARLY_IDENTICAL_KIND)?;
+        assert_members(group, &[ORIGINAL_PATH, COPY_PATH], FUNCTION_SPAN)?;
+        assert_mass_rank(group, FIRST_RANK);
+        assert_metrics(&report, CLONE_LINES, FULL_PERCENT);
+    }
     Ok(())
 }

@@ -7,6 +7,14 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+#[path = "live/edit_cost.rs"]
+mod live_edit_cost;
+#[path = "live/edit_equivalence.rs"]
+mod live_edit_equivalence;
+#[path = "live/edit_fallbacks.rs"]
+mod live_edit_fallbacks;
+#[path = "live/edit_stage_cost.rs"]
+mod live_edit_stage_cost;
 #[path = "live/rescope.rs"]
 mod live_rescope;
 #[path = "live/scope.rs"]

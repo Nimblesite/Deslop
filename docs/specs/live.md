@@ -242,6 +242,10 @@ Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the b
 
 The scheduler waits for a watcher event while no file changes are pending, including after a completed pass. Debounce timers run only while changes are queued. Time spent idle never becomes a burst of overdue timer ticks when the next change arrives. Closing the watcher channel drains and dispatches accepted work before the scheduler stops ([LIVE-WATCHER-DELIVERY]).
 
+### [LIVE-SCHEDULER-REST] A pass earns a rest
+
+Live analysis never takes more than a quarter of the time on a workspace, however large it is and however fast files change. When a pass ends, the scheduler measures what it cost on its clock and starts no pass for the next `REST_FACTOR` (3) times that cost, up to `REST_CAP_MS` (5 minutes). Changes that arrive during the rest are kept, coalesced, and analysed together in one pass when the rest ends; none is dropped. A pass that cost a few milliseconds rests for a few milliseconds, so small workspaces and no-op passes behave as before. The final drain on a closed watcher ([LIVE-WATCHER-DELIVERY]) does not wait for a rest. Each pass logs `live pass complete` with `cost_ms` and `rest_ms`. `live/scheduler.rs` implements it; `live/scheduler/tests.rs` pins it with a stepping clock.
+
 ### [LIVE-SCHEDULER-REMOVAL-COST] Removed paths use the corpus index
 
 A removed path that matches no analysed file must be rejected through the corpus path index without scanning every analysed path. Matching leaves and whole subtrees are still evicted, while a component-prefix sibling such as `pkg_twin` survives removal of `pkg`. Lookup work grows with the matching files plus the logarithm of the analysed file count.

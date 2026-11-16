@@ -238,7 +238,7 @@ Pinned end-to-end by `crates/deslop/tests/cache_blob_integrity.rs` (tampered sig
 
 Zero-zero stats indicate the pass ran without the store (`--no-incremental` passed, the `[analysis] incremental = false` config opt-out ([CONFIG-INCREMENTAL-OPTOUT]) applied, or discovery yielded nothing). Any non-zero counter proves the store was consulted.
 
-**Scope.** [PIPELINE-INCREMENTAL] governs persistence for the parse stage and for the per-fingerprint MinHash signatures stored beside it ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) — the dominant cost of the LSH block. Everything further downstream — band collision enumeration, candidate pairing, clustering, ranking, metrics, rendering — recomputes in full on every pass regardless of how many files changed. Making that remaining cost track the size of the change is the rest of [PIPELINE-INCREMENTAL-ANALYSIS].
+**Scope.** [PIPELINE-INCREMENTAL] governs persistence for the parse stage and for the per-fingerprint MinHash signatures stored beside it ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) — the dominant cost of the LSH block. Everything further downstream recomputes in full on every pass regardless of how many files changed, except candidate pairing inside a live session ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]). Making that remaining cost track the size of the change is the rest of [PIPELINE-INCREMENTAL-ANALYSIS].
 
 ### [PIPELINE-INCREMENTAL-RETENTION] The store prunes itself after every full pass
 
@@ -264,11 +264,49 @@ An **incremental pass** is one that is given the set of files whose content chan
 
 *Implemented for per-language MinHash signatures.* Each file's signatures are built once at parse/load time and persisted in its parse-store blob, positionally 1:1 with its fingerprints ([PIPELINE-INCREMENTAL] Format); a warm pass attaches them instead of rebuilding, on both the batch and the live splice path. The reuse is observable as the `signatures_built` / `signatures_reused` structured fields on the `fingerprint corpus built` tracing event — a fully-warm pass reports `signatures_built=0` with `signatures_reused` equal to the fingerprint count. Cross-language signatures ([CONFIG-CROSS-LANGUAGE]) are opt-in audit state and stay render-time.
 
+**[PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] A live edit re-pairs only what it touched.** Before Deslop measures anything, it picks *candidate pairs*: pieces of code worth comparing. Two kinds of grouping propose them. Code with an identical structure lands in one group, and code with similar tokens lands in the same group in one of 32 similarity bands. Each group proposes its first member, in workspace path order, paired with every other member (a star), plus the cross-file pairs the structural rule owes a member that shares the first member's file ([FUSED-CANDIDATE-BUCKET-STAR]). Whether a proposed pair is kept depends only on its two pieces of code.
+
+So an edit can only change the pairs of the groups that held the edited files' code, before or after the edit. A live session (`deslop-lsp`, `deslop-mcp`, `AnalysisSession`) keeps the pairs it found last time, each marked with the groups that proposed it. On an edit it drops every pair touching an edited file, then redraws each affected group: the star the group's unedited members alone would draw loses the group's mark, and the group's full star sets it. A pair that no group marks any more is dropped. Every other group and its pairs are left as they were. The result is exactly the pair set a fresh scan finds ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]).
+
+- **When it applies.** Only to a session built to take edits. A one-shot CLI or CI run pairs the whole corpus once and keeps nothing.
+- **When the session pairs everything again.** When there is no previous pair set (the first scan, or the pass before failed), after a `.deslop.toml` or ignore-rule reload, while embeddings are on (their pairs come from a nearest-neighbour search, not from groups), and while the cross-language audit is on ([CONFIG-CROSS-LANGUAGE]).
+- **What `candidate_pairs` counts.** The `input` of the `candidate_pairs` stage record is the number of code pieces whose pairs this pass worked out: every piece on a full pass, and only the members of the affected groups after an edit. `pairs: post-lsh` keeps its fields on both paths (`rss_mib`, `kept`, `lsh_scanned`); after an edit `lsh_scanned` counts only the band pairs redrawn, and a `pairs: re-paired after edit` record adds `re_paired`.
+- **What still runs over everything.** Only pairing is incremental. The stages after it (shared-subtree rescue, copy recovery, the content gate, clustering, ranking, metrics and rendering) still run over the whole corpus on every edit.
+
+Pinned by `crates/deslop-core/tests/live/edit_cost.rs` (an edit to one file pairs only that file), `crates/deslop-core/tests/live/edit_equivalence.rs` (every edit that moves a star matches a fresh scan) and `crates/deslop-core/tests/live/edit_fallbacks.rs` (embeddings on, an edit after a failed pass, a byte change that leaves the code pieces unchanged).
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS] A live edit re-measures only the pairs it could have changed.** Two stages measure each candidate pair on its own: the shared-subtree rescue, which checks whether two near copies still share a copied core, and the content gate, which checks that the pair's actual code agrees. Each verdict reads the pair's two files and the exact copies that sit inside or around its two pieces of code.
+
+An exact copy between two files the edit did not touch can only appear or disappear when a group holding one of its pieces was redrawn ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]), or when copy recovery added or dropped a pair touching it. So a live session keeps each pair's rescue outcome and gate verdict. After an edit it reuses them for every pair whose two files are unchanged and whose pieces overlap none of the redrawn or recovery-touched pieces, and measures every other pair again. The report is exactly what a fresh scan produces ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]).
+
+- **What the stage records count.** The `input` of the `shared_subtree_rescue` and `pair_content_gate` stage records is the number of pairs the stage measured: every pair on a full pass, and only the re-measured pairs after an edit. `output` is still the stage's whole result.
+- **When nothing is reused.** Whenever the pass pairs from scratch ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]: no previous pairs, a configuration or ignore-rule reload, embeddings on, the cross-language audit on, or a one-shot run).
+- **What still runs over everything.** Shape-family closure, the noise and structural splits, naming, ranking, metrics and rendering, and the materialised syntax trees these stages read. The ranked build's per-group fold and copy recovery's per-family walk are reused under [PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS] and [PIPELINE-INCREMENTAL-ANALYSIS-RECOVERY].
+
+Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` (an unrelated one-file edit re-measures no more pairs than that file holds on its own) and by the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-CLUSTERS] A live edit re-folds only the clusters it could have changed.** Building the ranked report starts with a fold: each connected group of matching code is split into reportable clusters and given its clone kind, by comparing its members with each other. That comparison reads the members' own files and the same nearby exact copies the per-pair stages read ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
+
+So a live session keeps each group's fold, keyed by its exact member set and by whether it is a clone or an informational group. After an edit it reuses the fold of every group whose members are all unchanged and settled under the gate's rule, and folds every other group again. Naming the clusters, joining copied runs, cross-cluster subsumption and ranking still run over the whole set, so ids and ranks are exactly a fresh scan's.
+
+- **What the stage record counts.** The `input` of the `ranked_build` stage record is the number of groups folded: every group on a full pass, and only the re-folded ones after an edit.
+- **When nothing is reused.** Whenever the pass pairs from scratch ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+
+Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` and the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-RECOVERY] A live edit re-walks only the copy families it could have changed.** Pairing joins every copy of a piece of code to the first copy only, so copy recovery walks each family of near-identical code that is missing a pair between two copies, and adds the pairs the content gate accepts. A family's walk reads its members, the pairs already among them, and the exact copies around them: the same inputs the rescue reads ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
+
+So a live session keeps each family's recovered pairs, keyed by its exact member set. After an edit it reuses them for every family whose members are all unchanged and settled under the rescue's rule, and walks every other family again. The recovered pairs join the candidate list in the same order a fresh scan adds them.
+
+- **What the stage record counts.** The `input` of the `shape_families_and_copy_recovery` stage record is the number of families walked: every incomplete family on a full pass, and only the re-walked ones after an edit.
+
+Pinned by `crates/deslop-core/tests/live/edit_stage_cost.rs` (`an_edit_to_one_file_walks_only_the_copy_families_it_touches`) and the equality suites named under [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS].
+
 **[PIPELINE-INCREMENTAL-ANALYSIS-ADDRESSING] Reuse is addressed, not bookkept.** Reused artefacts follow [PIPELINE-INCREMENTAL-INVALIDATION]: each is stored under a key derived from the content that determines it, so a stale artefact is *unaddressable* rather than merely unused. No mtime heuristics, no watcher-maintained validity index, no invalidation step that could be skipped or drift. A key derived from anything other than that content — a version string, a path, a lossy transform of the bytes — does not satisfy this and is a defect, not an optimisation. The key's language component is load-bearing in the same way: two byte-identical files routed to different parsers must occupy two entries, or the second is served a tree built under a grammar it was never parsed with. `crates/deslop/tests/incremental_multilang_matrix.rs` pins that partition against a mixed six-language corpus.
 
 **Corpus membership never comes from reuse.** As with the parse cache, every pass performs a fresh discovery walk. Files added or removed while nothing was watching are picked up regardless of what state was carried forward.
 
-**What is left, and what it was measured against (gh #383).** Everything downstream of signatures — band collision enumeration, candidate pairing, clustering, ranking, metrics, rendering — still recomputes corpus-wide on every pass. The attribution that ordered this work, taken on the pinned tokio corpus (release, `--embeddings off`), is what any future phase should re-measure against rather than re-derive:
+**What is left, and what it was measured against (gh #383).** Everything downstream of signatures still recomputes corpus-wide on every pass, except live-session candidate pairing ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]). The attribution that ordered this work, taken on the pinned tokio corpus (release, `--embeddings off`), is what any future phase should re-measure against rather than re-derive:
 
 | stage, warm pass | share |
 |---|---|

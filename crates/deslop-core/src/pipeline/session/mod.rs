@@ -14,10 +14,12 @@ mod change;
 mod diff;
 mod initialise;
 mod pair_compare;
+mod pair_ledger;
 mod render;
 /// Where a snippet's code already lives ([MCP-TOOL-FINDSIMILAR-EXISTING]).
 mod snippet_matches;
 mod store;
+mod verdicts;
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -28,11 +30,7 @@ use std::{
 use change::CorpusEffect;
 use store::CorpusStore;
 
-use super::{
-    config::{EmbeddingSettings, PipelineConfig},
-    corpus::FingerprintCorpus,
-    open_buffers::OpenBuffers,
-};
+use super::{config::EmbeddingSettings, corpus::FingerprintCorpus, open_buffers::OpenBuffers};
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
@@ -94,6 +92,13 @@ pub struct PipelineSession {
     /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Private: session
     /// submodules reach it as descendants; nothing outside does.
     store: CorpusStore,
+    /// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] The pairs the last render kept, when a live
+    /// edit may re-pair incrementally from them.
+    pair_ledger: Option<pair_ledger::PairLedger>,
+    /// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] Whether this session takes
+    /// edits and so keeps a pair ledger. A one-shot run never reads one,
+    /// so it pairs on the lean batch path.
+    takes_edits: bool,
     /// Per-`FileId` source bytes so the embedding pass can read the
     /// exact snippet covered by a fingerprint without re-reading
     /// from disk.
@@ -124,55 +129,6 @@ pub struct PipelineSession {
 }
 
 impl PipelineSession {
-    /// Runs the first full analysis against `root` and returns the
-    /// session plus the initial [`Report`]. The session is then ready
-    /// to accept [`Self::update_files`] calls.
-    ///
-    /// # Errors
-    ///
-    /// Propagates every error variant the batch [`super::run::run`]
-    /// would produce: [`CoreError::Io`] on unreadable sources,
-    /// [`CoreError::ConfigParse`] / [`CoreError::ConfigPattern`] for
-    /// malformed exclusion configs, and parser errors from
-    /// [`crate::lang::LanguageParser::parse_and_normalize`].
-    pub fn initialise(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding: EmbeddingSettings<'_>,
-    ) -> Result<(Self, Report), CoreError> {
-        Self::initialise_with_diff(root, min_nodes, incremental, config_path, embedding, None)
-    }
-
-    /// [`Self::initialise`] with an optional parsed unified diff
-    /// ([CLI-ARG-DIFF]): the diff is byte-verified against the freshly
-    /// analysed corpus and, when clean, tags the initial report and
-    /// every later render ([OUTPUT-SCHEMA-DIFF-TAGS]).
-    ///
-    /// # Errors
-    ///
-    /// Everything [`Self::initialise`] produces, plus
-    /// [`CoreError::DiffStale`] when the diff does not match the
-    /// scanned tree.
-    pub fn initialise_with_diff(
-        root: PathBuf,
-        min_nodes: u32,
-        incremental: bool,
-        config_path: Option<PathBuf>,
-        embedding: EmbeddingSettings<'_>,
-        diff: Option<&crate::diff_scope::ParsedDiff>,
-    ) -> Result<(Self, Report), CoreError> {
-        let config = PipelineConfig {
-            root,
-            min_nodes,
-            config_path,
-            embedding,
-            incremental,
-        };
-        Self::initialise_from_sources(config, diff, &OpenBuffers::default())
-    }
-
     /// Re-parses (or drops) each path in `changed` and returns the
     /// refreshed [`Report`]. A `changed` entry that no longer exists
     /// on disk is treated as a deletion. Paths outside the workspace
@@ -223,7 +179,10 @@ impl PipelineSession {
         {
             effect = effect.merge(self.apply_one_change(path, &mut stats, &embedding, buffers)?);
         }
-        if effect == CorpusEffect::Untouched {
+        // A pass that failed after splicing some of its files left those
+        // changes unrendered: this pass owes them a report even when
+        // nothing it was handed moved ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+        if effect == CorpusEffect::Untouched && !self.store.has_pending_changes() {
             tracing::debug!(
                 changed_paths = changed.len(),
                 files_analysed = self.files_analysed,
@@ -356,6 +315,7 @@ impl PipelineSession {
         self.exclusion = exclusion;
         self.ignore_matcher = ignore_matcher;
         self.store.forget_anchors();
+        self.pair_ledger = None;
         Ok(())
     }
 }

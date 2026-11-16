@@ -30,12 +30,24 @@ pub fn for_each_band_collision(
     signatures: &SignatureIndex<'_>,
     emit: &mut dyn FnMut(usize, usize),
 ) {
+    for_each_band_collision_in_band(signatures, &mut |_band, left, right| emit(left, right));
+}
+
+/// [`for_each_band_collision`] with the band each pair collided in, so a
+/// caller can record which band emitted a retained pair
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-PAIRS]).
+pub fn for_each_band_collision_in_band(
+    signatures: &SignatureIndex<'_>,
+    emit: &mut dyn FnMut(usize, usize, usize),
+) {
     let mut tagged: Vec<(u64, u32)> = Vec::with_capacity(signatures.len());
     for band in 0..BANDS {
         tagged.clear();
         fill_band_tags(signatures, band, &mut tagged);
         tagged.sort_unstable();
-        emit_run_pairs(signatures, band, &tagged, emit);
+        emit_run_pairs(signatures, band, &tagged, &mut |left, right| {
+            emit(band, left, right);
+        });
     }
 }
 
@@ -165,7 +177,7 @@ fn emit_star_pairs(
 }
 
 /// Emits `(smallest, other)` for every member of a sorted group.
-fn emit_sorted_star(members: &[usize], emit: &mut dyn FnMut(usize, usize)) {
+pub(crate) fn emit_sorted_star(members: &[usize], emit: &mut dyn FnMut(usize, usize)) {
     let Some(canonical) = members.first().copied() else {
         return;
     };
@@ -205,7 +217,7 @@ fn index_as_usize(index: u32) -> usize {
 /// Encodes one band as its four little-endian rows for use as a `HashMap` key.
 /// The rows fill the 32-byte key, so key equality exactly preserves band
 /// equality without an additional hash.
-fn band_key(signature: &Signature, band: usize) -> [u8; 32] {
+pub(crate) fn band_key(signature: &Signature, band: usize) -> [u8; 32] {
     let mut key = [0; ROWS_PER_BAND * size_of::<u64>()];
     let start = band.saturating_mul(ROWS_PER_BAND);
     for (offset, key_row) in key.chunks_exact_mut(size_of::<u64>()).enumerate() {
@@ -240,6 +252,12 @@ impl<'a> BandCollisionSource<'a> {
 impl crate::pair::LshPairs for BandCollisionSource<'_> {
     fn for_each(&self, emit: &mut dyn FnMut(usize, usize)) {
         for_each_band_collision(self.signatures, emit);
+    }
+
+    fn for_each_in_band(&self, emit: &mut dyn FnMut(Option<usize>, usize, usize)) {
+        for_each_band_collision_in_band(self.signatures, &mut |band, left, right| {
+            emit(Some(band), left, right);
+        });
     }
 }
 

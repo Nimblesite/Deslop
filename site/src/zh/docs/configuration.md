@@ -115,8 +115,6 @@ max_average_line_bytes = 200
 [report]
 split_by_language = false
 
-[visibility]
-data_clones = "keep"             # "keep" | "ignore"
 ```
 
 <span id="exclude-vs-report_hide"></span>
@@ -178,7 +176,6 @@ data_clones = "keep"             # "keep" | "ignore"
 | `[analysis] include_dependencies` | `false` | 分析依赖目录。默认关闭，否则其重复会排在你能修改的代码之前。 |
 | `[analysis] incremental` | `true` | 在所有入口复用磁盘解析缓存。`false` 强制每次完整重新解析。 |
 | `[report] split_by_language` | `false` | HTML 报告按语言分节。`--split-by-language` 也可启用。 |
-| `[visibility] data_clones` | `"keep"` | `"ignore"` 在排名前丢弃已证实的数据表发现。 |
 
 </div>
 

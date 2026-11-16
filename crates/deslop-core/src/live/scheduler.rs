@@ -32,6 +32,13 @@ const BROADCAST_CAPACITY: usize = 64;
 /// Debounce checks run only while file changes are pending.
 const PENDING_TICK_INTERVAL: Duration = Duration::from_millis(50);
 
+/// [LIVE-SCHEDULER-REST] How many times its own cost a pass rests before
+/// the next one may start.
+pub const REST_FACTOR: u64 = 3;
+
+/// [LIVE-SCHEDULER-REST] The longest rest one pass can earn.
+pub const REST_CAP_MS: u64 = 300_000;
+
 /// Distinguishes queued seed changes from a completed analysis pass.
 enum PassOutcome {
     /// [LIVE-CACHE-SEED-READINESS] The cold pipeline still owns unfinished work.
@@ -135,6 +142,8 @@ struct SchedulerTaskState {
     /// the right one is "do subscribers already know about this
     /// generation" ([LIVE-SCHEDULER-NOOP]).
     last_announced_generation: Option<u64>,
+    /// [LIVE-SCHEDULER-REST] The clock time before which no pass starts.
+    rested_at_ms: u64,
 }
 
 impl SchedulerTaskState {
@@ -155,6 +164,7 @@ impl SchedulerTaskState {
             analysis_state,
             clock,
             last_announced_generation: None,
+            rested_at_ms: 0,
         }
     }
 
@@ -182,8 +192,12 @@ impl SchedulerTaskState {
     }
 
     /// Drains the debouncer and runs a re-analysis pass when due.
+    ///
+    /// [LIVE-SCHEDULER-REST] Changes that arrive while the last pass is
+    /// still resting stay queued and run together when the rest ends.
     async fn maybe_dispatch(&mut self) {
-        if !self.debouncer.has_pending() || !self.debouncer.ready_to_flush() {
+        let resting = self.clock.now_ms() < self.rested_at_ms;
+        if resting || !self.debouncer.has_pending() || !self.debouncer.ready_to_flush() {
             return;
         }
         self.dispatch_pending().await;
@@ -203,7 +217,17 @@ impl SchedulerTaskState {
             },
         );
         let outcome = self.run_pass(&changed).await;
+        self.rest_after(started_at, changed.len());
         self.broadcast_outcome(outcome);
+    }
+
+    /// [LIVE-SCHEDULER-REST] Books the rest the pass that just ended earned.
+    fn rest_after(&mut self, started_at: u64, paths: usize) {
+        let ended_at = self.clock.now_ms();
+        let cost_ms = ended_at.saturating_sub(started_at);
+        let rest_ms = cost_ms.saturating_mul(REST_FACTOR).min(REST_CAP_MS);
+        self.rested_at_ms = ended_at.saturating_add(rest_ms);
+        tracing::info!(paths, cost_ms, rest_ms, "live pass complete");
     }
 
     /// Completes the observable lifecycle of the dispatched pass.

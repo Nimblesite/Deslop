@@ -41,6 +41,10 @@ pub enum ContentContradiction {
 pub struct ContentEvidence {
     /// Fraction of authored collapsed positions whose raw bytes agree.
     pub agreement: f64,
+    /// Whether both frontiers hold the same raw bytes at every position:
+    /// a near-copy literal earns agreement but never exactness
+    /// ([CLONE-BUCKETS-IDENTICAL]).
+    pub exact: bool,
     /// Pair-specific Type-2 rename evidence.
     pub rename_consistency: f64,
     /// Whether the pair is a rename of the same code, whatever its
@@ -93,6 +97,7 @@ impl ContentEvidence {
     pub const fn unmeasured() -> Self {
         Self {
             agreement: 0.0,
+            exact: false,
             rename_consistency: 0.0,
             consistent_rename: false,
             literal_fraction: 0.0,
@@ -269,6 +274,7 @@ fn pair_gate_evidence<S: BuildHasher>(
         pair_contradiction(left, right, sources).unwrap_or(ContentContradiction::None);
     let mut evidence = ContentEvidence {
         agreement: pair_agreement(left, right, sources),
+        exact: left.keys == right.keys,
         measured: true,
         contradiction,
         ..ContentEvidence::unmeasured()
@@ -297,6 +303,7 @@ fn pair_evidence<S: BuildHasher>(
     let (rename_consistency, consistent) = rename::rename_axes(left, right, sources, scope);
     ContentEvidence {
         agreement: pair_agreement(left, right, sources),
+        exact: left.keys == right.keys,
         rename_consistency,
         consistent_rename: contradiction == ContentContradiction::None && consistent,
         literal_fraction: pair_literal_fraction(left, right),

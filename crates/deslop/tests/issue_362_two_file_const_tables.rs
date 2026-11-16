@@ -47,6 +47,10 @@ const MIN_NODES: u32 = 8;
 /// The two files whose constant runs share nothing but their shape.
 const CONST_TABLES: [&str; 2] = ["boilerplate_cases.rs", "defaults_cases.rs"];
 
+/// Two settings tables whose scalar values coincide (`3`, `5000`, `true`,
+/// `0.25`, `'w'`) under unrelated names.
+const SCALAR_SETTINGS: [&str; 2] = ["retry_settings.rs", "server_settings.rs"];
+
 /// The two files holding the authored byte-identical clone.
 const REAL_CLONE: [&str; 2] = ["alpha_report.rs", "beta_report.rs"];
 
@@ -82,6 +86,31 @@ fn unrelated_constant_tables_are_neither_reported_nor_counted() -> Result<()> {
             "{file} holds no duplicated line, so it must contribute none to \
              `duplicated_loc` — a demoted cluster still feeds the CI duplication \
              gate, which is the half of gh #362 that ranking cannot fix"
+        );
+    }
+    Ok(())
+}
+
+// [CLONE-NOISE-CONSTANT-TABLE] Coinciding scalars are not a copy: a retry
+// policy and a server's settings that both bind 3, 5000, true, 0.25 and
+// 'w' share values by accident, and only their names say what each is.
+#[test]
+fn settings_tables_that_share_scalar_values_are_not_reported() -> Result<()> {
+    let report = render()?;
+    assert!(
+        cluster_spanning(&report, &SCALAR_SETTINGS).is_none(),
+        "unrelated settings tables whose small literal values coincide are \
+         not duplication; no cluster may span {SCALAR_SETTINGS:?}: {found:#?}",
+        found = clusters(&report)
+            .iter()
+            .map(|cluster| (cluster_id(cluster), occurrence_files(cluster)))
+            .collect::<Vec<_>>(),
+    );
+    for file in SCALAR_SETTINGS {
+        assert_eq!(
+            duplicated_loc_for(&report, file),
+            0,
+            "{file} holds no duplicated line, so it must add none to `duplicated_loc`"
         );
     }
     Ok(())

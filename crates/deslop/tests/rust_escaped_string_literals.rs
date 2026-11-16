@@ -106,6 +106,25 @@ fn add_copied_string(scan_root: &Path) -> Result<()> {
     fs::write(scan_root.join(COPY_FILE), copy).context("write help.rs")
 }
 
+/// The scalar settings declared beside the usage string, under the names the
+/// original and the renamed copy give them.
+const ORIGINAL_SCALARS: &str =
+    "pub(crate) const MAX_ARGS: u32 = 3;\npub(crate) const STRICT: bool = true;\n\n";
+const RENAMED_SCALARS: &str =
+    "pub(crate) const ARG_LIMIT: u32 = 3;\npub(crate) const PEDANTIC: bool = true;\n\n";
+
+/// Surrounds `usage.rs`'s string with scalar settings and writes `help.rs`, a
+/// copy of the whole table with every constant renamed. Scalars on both
+/// sides put them inside the reported window.
+fn add_copied_mixed_table(scan_root: &Path) -> Result<()> {
+    let source = scan_root.join(USAGE_FILE);
+    let usage = fs::read_to_string(&source).context("read usage.rs")?;
+    let table = |scalars: &str, text: &str| format!("{scalars}{text}\n{scalars}");
+    fs::write(&source, table(ORIGINAL_SCALARS, &usage)).context("extend usage.rs")?;
+    let copy = table(RENAMED_SCALARS, &usage.replacen(USAGE_NAME, COPY_NAME, 1));
+    fs::write(scan_root.join(COPY_FILE), copy).context("write help.rs")
+}
+
 /// Three unrelated escape-heavy strings: nothing may be reported.
 #[test]
 fn unrelated_escaped_strings_are_never_grouped() -> Result<()> {
@@ -178,6 +197,32 @@ fn a_copied_string_is_reported_without_the_unrelated_ones() -> Result<()> {
         cluster_kind(copy),
     );
     assert_unrelated_strings_stay_out(&report, "with a real copy present");
+    Ok(())
+}
+
+/// [CLONE-NOISE-CONSTANT-TABLE] Substance decides: a renamed copy of a table
+/// whose string is copied stays visible even though the scalars beside it
+/// carry new names. Names decide only a table of scalars alone.
+#[test]
+fn a_renamed_copy_of_a_mixed_table_is_reported() -> Result<()> {
+    let (_tmp, scan_root) = seeded_fixture_root(FIXTURE)?;
+    add_copied_mixed_table(&scan_root)?;
+    let report = run_report(&scan_root, MIN_NODES)?;
+    let copy = cluster_spanning(&report, &[USAGE_FILE, COPY_FILE]).with_context(|| {
+        format!(
+            "the copied usage table must be reported despite renamed scalars: {:?}",
+            cluster_files(&report)
+        )
+    })?;
+    assert_eq!(occurrences(copy).len(), COPY_OCCURRENCES);
+    assert!(
+        occurrences(copy)
+            .iter()
+            .all(|occurrence| field(occurrence, "end_line").as_u64()
+                > field(occurrence, "start_line").as_u64()),
+        "each occurrence spans the copied table: {copy:#}"
+    );
+    assert_unrelated_strings_stay_out(&report, "with a renamed mixed table present");
     Ok(())
 }
 

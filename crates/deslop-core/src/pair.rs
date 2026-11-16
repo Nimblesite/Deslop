@@ -18,6 +18,10 @@ use crate::fingerprint::Fingerprint;
 mod candidates;
 pub(crate) use candidates::CopyProbe;
 pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
+pub(crate) use candidates::{
+    candidate_pairs_after_edit, sourced_candidate_pairs, EditedCorpus, RetiredKeys, SourcedKey,
+    SourcedPairs,
+};
 
 /// Pair-content admission guard applied before transitive closure.
 mod content_gate;
@@ -29,7 +33,7 @@ pub(crate) use echo::ExactClones;
 
 /// [FUSED-CANDIDATE-BUCKET-RECOVERY] The copy pairs a bucket's star hides.
 mod recovery;
-pub(crate) use recovery::{recover_copy_pairs, GatedCopyWeld};
+pub(crate) use recovery::{recover_copy_pairs_reusing, GatedCopyWeld, Recovery};
 
 /// Transitive-closure clustering over surviving pairs.
 mod closure;

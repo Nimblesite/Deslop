@@ -32,14 +32,7 @@ report_hide = ["**/target/**"]
 
 **`report_hide` membership is a rendering decision, not an analysis one.** Hidden files still participate in fingerprinting, LSH, and (later) embedding. The `hidden: bool` per occurrence is the only surface-level signal of the policy, so downstream consumers that want the unfiltered view can ignore `clusters_hidden` and inspect `occurrences[].hidden` directly.
 
-**`[visibility]` section.** Controls explicit pre-ranking exclusion without changing the mass of anything that survives:
-
-```toml
-[visibility]
-data_clones = "keep"        # "keep" (default) | "ignore"
-```
-
-`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted. There is no `[ranking]` section: a config that carries one fails to load as any unknown section does, naming the unknown field `ranking`, and the language server refuses `--ranking-structural-only` as it refuses every startup flag it does not define. A setting nothing reads is never accepted and ignored (`rank_structural_only_policy.rs`, `issue_190_data_table_demote.rs`).
+**Retired sections.** Every finding ranks at its full [RANK-MASS-SUM](pipeline.md#rank-mass-sum-rank-by-duplicated-mass-only) mass. There is no `[visibility]` section: nothing in the engine proves a data table, so `data_clones = "ignore"` had nothing to drop, and a config that carries the section fails to load naming the unknown field `visibility`. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted. There is no `[ranking]` section: a config that carries one fails to load as any unknown section does, naming the unknown field `ranking`, and the language server refuses `--ranking-structural-only` as it refuses every startup flag it does not define. A setting nothing reads is never accepted and ignored (`rank_structural_only_policy.rs`, `issue_190_data_table_demote.rs`).
 
 **`[tuning]` section.** Every detection, admission, category and suppression threshold is configurable here. Existing defaults are listed in [FUSED-TUNING-LEVERS]; the new category defaults are in [CLONE-BUCKETS-THRESHOLDS](taxonomy.md#clone-buckets-thresholds-defaults-and-toml-settings). No unnamed or hard-coded category cutoff is permitted. Omitted keys use their named defaults; all surfaces receive the same resolved settings.
 
@@ -124,7 +117,7 @@ The Dart predicate above ships per-grammar CST knowledge, so every other languag
 
 **Predicate.** A finding is recognized as a data table for detection-time visibility when the candidate member's collapsed leaves are at least 0.8 literal positions with at least eight literals and at least two members differ in raw bytes. The fraction is consumed before rendering and is not carried on a cluster.
 
-**Routing interaction.** A literal-dominated family that passes pair admission remains a closure component. `[visibility] data_clones = "ignore"` may drop the finding before ranking; `keep` leaves its membership and mass untouched. No pair classification or data-table predicate changes its mass.
+**Routing interaction.** A literal-dominated family that passes pair admission remains a closure component at its full membership and mass. No pair classification or data-table predicate changes its mass.
 
 ### [CONFIG-EXCLUDE-MINIFIED] Build artifacts are not source
 

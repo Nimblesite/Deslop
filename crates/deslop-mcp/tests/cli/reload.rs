@@ -12,7 +12,7 @@ use common::{
     mcp_wire::{
         BROAD_RESULT_LIMIT, CSHARP_LANGUAGE, DEFAULT_MIN_NODES, DUPLICATES_TOOL, ID_FIELD,
         LANGUAGES_POINTER, LIMIT_PARAM, OFFSET_PARAM, PATHS_FIELD, REPORT_URI, RESCAN_TOOL,
-        SESSION_TOOL, TOTAL_CLUSTERS_POINTER,
+        SCHEMA_URI, SESSION_TOOL, TOTAL_CLUSTERS_POINTER,
     },
     value_get,
 };
@@ -233,6 +233,31 @@ fn report_edits_send_standard_updates_only_while_subscribed() -> Result<()> {
         &json!({ (PATHS_FIELD): [source] }),
     )?;
     assert_report_changed(&child.read_frame()?);
+    finish_after_tools_list(child)
+}
+
+/// [MCP-RESOURCES-SUBSCRIPTIONS] The advertised `subscribe` capability holds
+/// for every listed resource. Subscribing to the fixed schema succeeds and
+/// pushes nothing, so a report edit still sends only the custom update; an
+/// unlisted URI is refused.
+#[test]
+fn every_listed_resource_accepts_a_subscription() -> Result<()> {
+    const UNLISTED_URI: &str = "deslop://unlisted";
+    const INVALID_PARAMS: i64 = -32602;
+    let (temp, mut child) = two_file_workspace_with_state()?;
+    let schema = json!({ "uri": SCHEMA_URI });
+    assert_subscription_response(&mut child, "resources/subscribe", &schema)?;
+    mutate_two_and_notify(&mut child, temp.path())?;
+    assert_report_changed(&child.read_frame()?);
+    assert_subscription_response(&mut child, "resources/unsubscribe", &schema)?;
+    for method in ["resources/subscribe", "resources/unsubscribe"] {
+        let refused = child.request(method, &json!({ "uri": UNLISTED_URI }))?;
+        assert_eq!(
+            refused.pointer("/error/code").and_then(Value::as_i64),
+            Some(INVALID_PARAMS),
+            "{method} {UNLISTED_URI}: {refused}"
+        );
+    }
     finish_after_tools_list(child)
 }
 

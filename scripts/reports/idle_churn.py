@@ -53,9 +53,9 @@ def send(stream, method, params, request_id=None):
     stream.flush()
 
 
-def wait_for(messages, predicate, observed):
+def wait_for(messages, predicate, observed, timeout=RESPONSE_TIMEOUT_SECONDS):
     """Consume notifications until the requested response or state arrives."""
-    deadline = time.monotonic() + RESPONSE_TIMEOUT_SECONDS
+    deadline = time.monotonic() + timeout
     while True:
         message = messages.get(timeout=max(deadline - time.monotonic(), 0))
         observed.append(message)
@@ -63,24 +63,29 @@ def wait_for(messages, predicate, observed):
             return message
 
 
-def request(child, messages, method, request_id, observed):
+def request(child, messages, method, request_id, observed, timeout=RESPONSE_TIMEOUT_SECONDS):
     """Issue a request and require a successful server response."""
     send(child.stdin, method, {}, request_id)
-    response = wait_for(messages, lambda item: item.get("id") == request_id, observed)
+    response = wait_for(messages, lambda item: item.get("id") == request_id, observed, timeout)
     if "error" in response:
         raise RuntimeError(response["error"])
     return response["result"]
 
 
-def boot(child, messages, observed):
+def is_idle(message):
+    """True for the notification that ends an analysis pass."""
+    return (message.get("method") == "deslop/analysisState"
+            and message.get("params", {}).get("state") == "idle")
+
+
+def boot(child, messages, observed, root=ROOT, timeout=RESPONSE_TIMEOUT_SECONDS):
     """Wait for the real startup terminal idle notification."""
-    params = {"processId": os.getpid(), "rootUri": ROOT.as_uri(), "capabilities": {}}
+    params = {"processId": os.getpid(), "rootUri": root.as_uri(), "capabilities": {}}
     send(child.stdin, "initialize", params, 1)
-    wait_for(messages, lambda item: item.get("id") == 1, observed)
+    wait_for(messages, lambda item: item.get("id") == 1, observed, timeout)
     send(child.stdin, "initialized", {})
-    wait_for(messages, lambda item: item.get("method") == "deslop/analysisState"
-             and item.get("params", {}).get("state") == "idle", observed)
-    return request(child, messages, "deslop/reportGet", 2, observed)
+    wait_for(messages, is_idle, observed, timeout)
+    return request(child, messages, "deslop/reportGet", 2, observed, timeout)
 
 
 def deletion_batch(directory, batch):

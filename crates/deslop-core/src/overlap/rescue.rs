@@ -186,6 +186,22 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
     // needs every exact function pair, both resolved once for the whole
     // pass; each measurement then reads through this context.
     let context = RescueContext::new(pairs, fingerprints, trees, sources, languages, min_nodes);
+    let fresh = pairs.len();
+    apply_shared_subtree_rescue_in(pairs, fresh, &context, fingerprints, trees);
+}
+
+/// [PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS] [`apply_shared_subtree_rescue`]
+/// over a `context` the caller built from every pair and keeps for later
+/// stages, measuring only the first `fresh` pairs; the rest carry
+/// outcomes the caller already holds.
+pub(crate) fn apply_shared_subtree_rescue_in<S: BuildHasher + Sync, L: BuildHasher + Sync>(
+    pairs: &mut [CandidatePair],
+    fresh: usize,
+    context: &RescueContext<'_, S, L>,
+    fingerprints: &[Fingerprint],
+    trees: &[NormalizedNode],
+) {
+    let pairs = pairs.get_mut(..fresh).unwrap_or_default();
     let workers = crate::shard::worker_count(pairs.len(), MIN_SHARD_WORK);
     if workers <= 1 {
         let mut measurer = OverlapMeasurer::new(trees);
@@ -196,7 +212,7 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
             measure_one(
                 pair,
                 fingerprints,
-                &context,
+                context,
                 &mut measurer,
                 &mut contents,
                 &mut tally,
@@ -223,7 +239,7 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
             )
         },
         |(tally, measurer, contents), chunk| {
-            measure_chunk(chunk, fingerprints, &context, measurer, contents, tally);
+            measure_chunk(chunk, fingerprints, context, measurer, contents, tally);
         },
     );
     report_shards(&shards);

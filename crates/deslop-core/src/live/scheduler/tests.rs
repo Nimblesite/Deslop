@@ -3,7 +3,7 @@
 use std::{
     future::Future,
     pin::Pin,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     task::{Context, Wake, Waker},
 };
 
@@ -13,7 +13,7 @@ use tokio::sync::{broadcast::error::TryRecvError, mpsc};
 use super::*;
 use crate::{
     embedding::{EmbeddingMode, NoopProvider},
-    live::CAP_MS,
+    live::{CAP_MS, QUIET_MS},
 };
 
 const CHANNEL_SIZE: usize = 4;
@@ -97,13 +97,21 @@ struct SchedulerInputs {
 
 /// Builds the real scheduler future without spawning it, exposing its waker.
 fn scheduler_fixture(root: tempfile::TempDir) -> Result<(SchedulerTaskState, SchedulerInputs)> {
+    scheduler_fixture_on(root, Arc::new(VirtualClock(time::Instant::now())))
+}
+
+/// The same fixture reading time from the clock the test controls.
+fn scheduler_fixture_on(
+    root: tempfile::TempDir,
+    clock: Arc<dyn Clock>,
+) -> Result<(SchedulerTaskState, SchedulerInputs)> {
     let (events, receiver) = mpsc::unbounded_channel();
     let (report_sender, reports) = broadcast::channel(CHANNEL_SIZE);
     let (state_sender, states) = broadcast::channel(CHANNEL_SIZE);
     let task = SchedulerTaskState::new(
         session(root.path())?,
         receiver,
-        Arc::new(VirtualClock(time::Instant::now())),
+        clock,
         report_sender,
         state_sender,
     );
@@ -233,5 +241,79 @@ async fn seed_only_scheduler_stays_running_after_queuing_changes() -> Result<()>
     task.dispatch_pending().await;
     assert_deferred_pass(&mut inputs)?;
     assert!(task.session.lock().await.is_seed_only());
+    Ok(())
+}
+
+/// What one pass costs on the stepping clock, in milliseconds.
+const PASS_COST_MS: u64 = 1_000;
+const ONE_MS: u64 = 1;
+const FROZEN: u64 = 0;
+
+/// A clock the test sets by hand that can also move by a fixed step on
+/// every read, so a pass takes a known time without any real waiting.
+#[derive(Debug, Default)]
+struct StepClock {
+    /// The time the next read returns.
+    now: AtomicU64,
+    /// How far each read moves the clock.
+    step: AtomicU64,
+}
+
+impl Clock for StepClock {
+    fn now_ms(&self) -> u64 {
+        self.now
+            .fetch_add(self.step.load(Ordering::SeqCst), Ordering::SeqCst)
+    }
+}
+
+/// Runs one pass that costs [`PASS_COST_MS`] and returns when it ended.
+async fn costly_pass(
+    task: &mut SchedulerTaskState,
+    clock: &StepClock,
+    inputs: &mut SchedulerInputs,
+) -> Result<u64> {
+    task.last_announced_generation = Some(task.session.lock().await.generation());
+    task.debouncer.push(inputs.root.path().join(UNTRACKED_PATH));
+    clock.now.store(QUIET_MS, Ordering::SeqCst);
+    clock.step.store(PASS_COST_MS, Ordering::SeqCst);
+    task.maybe_dispatch().await;
+    clock.step.store(FROZEN, Ordering::SeqCst);
+    assert_completed_pass(&mut inputs.states, &mut inputs.reports)?;
+    Ok(clock
+        .now
+        .load(Ordering::SeqCst)
+        .saturating_sub(PASS_COST_MS))
+}
+
+/// [LIVE-SCHEDULER-REST] A pass that cost a second holds the next one back
+/// for `REST_FACTOR` seconds, and the change that waited then runs.
+#[tokio::test]
+async fn a_costly_pass_holds_the_next_one_back_for_its_rest() -> Result<()> {
+    let clock = Arc::new(StepClock::default());
+    let shared: Arc<dyn Clock> = clock.clone();
+    let (mut task, mut inputs) = scheduler_fixture_on(tempfile::tempdir()?, shared)?;
+    let ended = costly_pass(&mut task, &clock, &mut inputs).await?;
+    let rested = ended.saturating_add(REST_FACTOR.saturating_mul(PASS_COST_MS));
+    let waits = [
+        QUIET_MS,
+        PASS_COST_MS,
+        rested.saturating_sub(ended).saturating_sub(ONE_MS),
+    ];
+    task.debouncer.push(inputs.root.path().join(UNTRACKED_PATH));
+    for waited in waits {
+        clock
+            .now
+            .store(ended.saturating_add(waited), Ordering::SeqCst);
+        task.maybe_dispatch().await;
+        assert!(
+            matches!(inputs.states.try_recv(), Err(TryRecvError::Empty)),
+            "a pass started {waited} ms into a rest of {REST_FACTOR} x {PASS_COST_MS} ms"
+        );
+        assert!(task.debouncer.has_pending(), "the waiting change is kept");
+    }
+    clock.now.store(rested, Ordering::SeqCst);
+    task.maybe_dispatch().await;
+    assert_completed_pass(&mut inputs.states, &mut inputs.reports)?;
+    assert!(!task.debouncer.has_pending(), "the waiting change ran");
     Ok(())
 }

@@ -17,18 +17,15 @@ use super::{
         config::PipelineConfig,
         corpus::parser_for_language,
         embedding_pass::{run_embedding_pass, CorpusView},
-        signatures::build_cross_language_signatures,
     },
+    pair_ledger::{PairLedger, StoreChanges},
+    verdicts::{CarriedVerdicts, VerdictPass},
     PipelineSession,
 };
 use crate::{
     cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
     error::CoreError,
-    lsh::BandCollisionSource,
-    overlap::apply_shared_subtree_rescue,
-    pair::{
-        apply_pair_content_gate, candidate_pairs_for_language_policy, cluster_by_transitive_closure,
-    },
+    pair::cluster_by_transitive_closure,
     report::{render_report, CacheStats, Report, ReportInputs},
     state::FileId,
 };
@@ -37,15 +34,39 @@ use crate::{
 mod copy_recovery;
 #[path = "information.rs"]
 mod information;
+#[path = "stage_ledger.rs"]
+mod stage_ledger;
+
+use stage_ledger::StageLedger;
 
 impl PipelineSession {
     /// Runs clustering + ranking + rendering over the current
     /// in-memory corpus. Returns a freshly rendered [`Report`].
+    ///
+    /// [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] The pass pairs from the previous render's
+    /// ledger and the store's changes since; a failed pass leaves no
+    /// ledger, so the next one pairs from scratch.
     pub(super) fn render(
-        &self,
+        &mut self,
         config: &PipelineConfig<'_>,
         last_pass_stats: CacheStats,
     ) -> Result<Report, CoreError> {
+        let previous = self.pair_ledger.take();
+        let changes = self.store.take_changes();
+        let (report, ledger) = self.render_pass(config, last_pass_stats, previous, &changes)?;
+        self.pair_ledger = ledger;
+        Ok(report)
+    }
+
+    /// One render over the current corpus, and the pair ledger the next
+    /// live pass carries.
+    fn render_pass(
+        &self,
+        config: &PipelineConfig<'_>,
+        last_pass_stats: CacheStats,
+        previous: Option<PairLedger>,
+        changes: &StoreChanges,
+    ) -> Result<(Report, Option<PairLedger>), CoreError> {
         // [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] Per-language signatures
         // arrive with the store — built at parse/load time, or attached
         // from the parse store on a cache hit — so the render pass
@@ -64,19 +85,16 @@ impl PipelineSession {
         // ([PERF-FLUTTER-TODO-CORPUS]).
         let parse_cache = ParseCache::new();
         let stage_started = Instant::now();
-        let lsh_source = BandCollisionSource::new(&signatures);
         let PairingOutcome {
             trees,
             mut pairs,
             embedding_outcome,
-        } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
+            pair_ledger,
+            fed,
+            carried,
+        } = self.build_candidate_pairs(config, &signatures, previous, changes)?;
         self.store.anchors().publish(&pairs, fingerprints);
-        ledger.record(
-            "candidate_pairs",
-            signatures.len(),
-            pairs.len(),
-            stage_started,
-        );
+        ledger.record("candidate_pairs", fed, pairs.len(), stage_started);
         // Trees for every measurement stage, materialised once, now that
         // the pair-construction allocations are behind us — unless the
         // cross-language audit already materialised them above.
@@ -85,20 +103,24 @@ impl PipelineSession {
             None => self.materialize_trees()?,
         };
         // Rescue annotates exact high-overlap candidates before ranking
-        // builds its memoising pair measurer.
-        let rescue_input = pairs.len();
+        // builds its memoising pair measurer. A live edit measures only
+        // the pairs it could have changed ([PIPELINE-INCREMENTAL-ANALYSIS-VERDICTS]).
+        let mut verdicts = VerdictPass::new(carried, pair_ledger.is_some());
         let stage_started = Instant::now();
-        apply_shared_subtree_rescue(
-            &mut pairs,
+        // One exact-clone context serves the rescue and, later, the
+        // cluster fold: both read the same candidate pairs.
+        let rescue_context = crate::overlap::RescueContext::new(
+            &pairs,
             fingerprints,
             &trees,
             &self.sources,
             &self.file_languages,
             usize::try_from(self.min_nodes).unwrap_or(usize::MAX),
         );
+        let measured = self.rescue_carrying(&mut pairs, &trees, &rescue_context, &mut verdicts);
         ledger.record(
             "shared_subtree_rescue",
-            rescue_input,
+            measured,
             pairs.len(),
             stage_started,
         );
@@ -108,24 +130,25 @@ impl PipelineSession {
             &trees,
             &embedding_outcome.pairs,
             &pairs,
+            rescue_context,
         );
         let (fused_clusters, shape_families, informational_candidates) =
-            self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
-        let clusters = self.ranked_clusters(
+            self.partition_and_split(pairs, &trees, &parse_cache, &mut ledger, &mut verdicts);
+        let ranked = information::RankedInputs {
             fingerprints,
-            &fused_clusters,
-            &informational_candidates,
-            &trees,
-            &judge,
-            &mut ledger,
-        );
+            clones: &fused_clusters,
+            information: &informational_candidates,
+            trees: &trees,
+        };
+        let clusters = self.ranked_clusters(&ranked, &judge, &mut ledger, &mut verdicts);
+        let pair_ledger = pair_ledger.map(|ledger| ledger.with_verdicts(verdicts.finish()));
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
             "render complete"
         );
         ledger.log_summary();
-        Ok(render_report(ReportInputs {
+        let report = render_report(ReportInputs {
             clusters: &clusters,
             shape_families: &shape_families,
             registry: &self.registry,
@@ -152,7 +175,8 @@ impl PipelineSession {
             boilerplate_ranges: &self.boilerplate_ranges,
             diff: self.diff_scope.as_ref(),
             parse_cache: &parse_cache,
-        }))
+        });
+        Ok((report, pair_ledger))
     }
 
     /// Runs the per-edge content gate, transitive closure and
@@ -161,16 +185,17 @@ impl PipelineSession {
     /// stays under the size bar.
     fn partition_and_split(
         &self,
-        fingerprints: &[crate::fingerprint::Fingerprint],
         mut pairs: Vec<crate::pair::CandidatePair>,
         trees: &[crate::ast::NormalizedNode],
         parse_cache: &ParseCache,
         ledger: &mut StageLedger,
+        verdicts: &mut VerdictPass,
     ) -> (
         Vec<crate::pair::FusedCluster>,
         Vec<Vec<crate::fingerprint::Fingerprint>>,
         Vec<crate::pair::FusedCluster>,
     ) {
+        let fingerprints = self.store.fingerprints();
         // [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] The shape family: every
         // member the saturated candidates connect *before* the content
         // gate decides which edges weld. Noise conviction reads this
@@ -178,35 +203,29 @@ impl PipelineSession {
         let stage_started = Instant::now();
         let recovery_input = pairs.len();
         let shape_families = cluster_by_transitive_closure(&pairs);
-        self.recover_copy_pairs(
+        let recovery = self.recover_copy_pairs(
             &mut pairs,
             &shape_families,
             fingerprints,
             trees,
             parse_cache,
+            verdicts,
+        );
+        let walked = recovery.walked;
+        verdicts.families_recovered(&shape_families, recovery);
+        verdicts.recovered(
+            pairs.get(recovery_input..).unwrap_or_default(),
+            fingerprints,
         );
         ledger.record(
             "shape_families_and_copy_recovery",
-            recovery_input,
+            walked,
             pairs.len(),
             stage_started,
         );
-        let content_input = pairs.len();
         let stage_started = Instant::now();
-        apply_pair_content_gate(
-            &mut pairs,
-            fingerprints,
-            trees,
-            &self.sources,
-            &self.file_languages,
-            parse_cache,
-        );
-        ledger.record(
-            "pair_content_gate",
-            content_input,
-            pairs.len(),
-            stage_started,
-        );
+        let judged = self.gate_carrying(&mut pairs, trees, parse_cache, verdicts);
+        ledger.record("pair_content_gate", judged, pairs.len(), stage_started);
         let rescue_output = pairs.len();
         let stage_started = Instant::now();
         let fused_clusters = cluster_by_transitive_closure(&pairs);
@@ -265,9 +284,9 @@ impl PipelineSession {
     fn build_candidate_pairs(
         &self,
         config: &PipelineConfig<'_>,
-        fingerprints: &[crate::fingerprint::Fingerprint],
         signatures: &crate::lsh::SignatureIndex<'_>,
-        lsh_source: &BandCollisionSource<'_>,
+        previous: Option<PairLedger>,
+        changes: &StoreChanges,
     ) -> Result<PairingOutcome, crate::CoreError> {
         // [PERF-FLUTTER-TODO-MEMORY] Trees are re-materialised from
         // sources only when a consumer needs them — after the LSH/pair
@@ -275,36 +294,39 @@ impl PipelineSession {
         // the tree population and the pair population never coincide.
         // The cross-language audit mode reads trees before pairing; the
         // default path defers to the rescue in `render`.
-        let trees = self
-            .exclusion
-            .allows_cross_language_comparison()
+        let fingerprints = self.store.fingerprints();
+        let cross_language = self.exclusion.allows_cross_language_comparison();
+        let trees = cross_language
             .then(|| self.materialize_trees())
             .transpose()?;
-        let cross_language_signatures = trees.as_ref().map(|trees| {
-            build_cross_language_signatures(fingerprints, trees.as_slice(), &self.file_languages)
-        });
-        tracing::debug!(
-            signatures = signatures.len(),
-            "streaming LSH band collisions"
-        );
         let view = CorpusView {
             fingerprints,
             sources: &self.sources,
         };
         let embedding_outcome = run_embedding_pass(config, &view)?;
-        let pairs = candidate_pairs_for_language_policy(
-            fingerprints,
-            signatures,
-            lsh_source,
-            &embedding_outcome.pairs,
-            cross_language_signatures.as_deref(),
-            &self.file_languages,
-            self.exclusion.allows_cross_language_comparison(),
-        );
+        // [PIPELINE-INCREMENTAL-ANALYSIS-PAIRS] Only a session that takes
+        // edits keeps a ledger, and only bucket-explained pairs can be
+        // re-paired per bucket: embedding and cross-language pairs, and
+        // every one-shot run, pair the whole corpus on the lean path.
+        if !self.takes_edits || cross_language || !embedding_outcome.pairs.is_empty() {
+            let pairs = self.whole_corpus_pairs(signatures, trees.as_deref(), &embedding_outcome);
+            return Ok(PairingOutcome {
+                trees,
+                pairs,
+                embedding_outcome,
+                pair_ledger: None,
+                fed: signatures.len(),
+                carried: None,
+            });
+        }
+        let live = self.live_pairs(previous, changes, signatures);
         Ok(PairingOutcome {
             trees,
-            pairs,
+            pairs: live.pairs,
             embedding_outcome,
+            pair_ledger: Some(live.ledger),
+            fed: live.fed,
+            carried: live.carried,
         })
     }
 
@@ -403,72 +425,12 @@ struct PairingOutcome {
     pairs: Vec<crate::pair::CandidatePair>,
     /// The embedding pass outcome (empty when embeddings are off).
     embedding_outcome: crate::pipeline::embedding_pass::EmbeddingOutcome,
-}
-
-/// One bounded cluster-stage boundary record
-/// ([PERF-FLUTTER-TODO-OBSERVABILITY]). A corpus-scale run spends
-/// minutes between candidate survival and ranked clusters; at most a
-/// handful of these per render, they make the running stage tellable
-/// from a hang at the default `info` level, with the elapsed time that
-/// attributes the gap.
-///
-/// The same rows are replayed as one `pipeline stage` event each after
-/// the render completes, so a finished run's log reads as a compact
-/// per-stage table instead of dense interleaved progress — the summary
-/// is the small chunks the full log is broken up into
-/// ([PERF-FLUTTER-TODO-OBSERVABILITY]).
-#[derive(Default)]
-struct StageLedger {
-    /// Completed stage boundaries, in run order.
-    rows: Vec<StageRow>,
-}
-
-/// One recorded stage boundary: name, elapsed time, input and output
-/// cardinality.
-struct StageRow {
-    /// Stage name.
-    stage: &'static str,
-    /// Wall time spent in the stage, milliseconds.
-    elapsed_ms: u64,
-    /// Items handed to the stage.
-    input: usize,
-    /// Items the stage produced.
-    output: usize,
-}
-
-impl StageLedger {
-    /// Records one completed stage boundary.
-    fn record(&mut self, stage: &'static str, input: usize, output: usize, started: Instant) {
-        let elapsed_ms = crate::observe::elapsed_ms(started);
-        tracing::info!(
-            stage,
-            input,
-            output,
-            elapsed_ms,
-            rss_mib = crate::observe::resident_mib(),
-            "cluster stage complete"
-        );
-        self.rows.push(StageRow {
-            stage,
-            elapsed_ms,
-            input,
-            output,
-        });
-    }
-
-    /// Replays every recorded row as one compact event per stage, in
-    /// run order, after the render completes.
-    fn log_summary(&self) {
-        for row in &self.rows {
-            tracing::info!(
-                stage = row.stage,
-                input = row.input,
-                output = row.output,
-                elapsed_ms = row.elapsed_ms,
-                "pipeline stage"
-            );
-        }
-    }
+    /// The ledger the next live pass carries, when this pass kept one.
+    pair_ledger: Option<PairLedger>,
+    /// Records whose pairs this pass computed.
+    fed: usize,
+    /// The previous render's per-pair verdicts this pass may reuse.
+    carried: Option<CarriedVerdicts>,
 }
 
 /// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Stamps each admitted component

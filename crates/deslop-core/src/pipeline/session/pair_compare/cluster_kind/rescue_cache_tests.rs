@@ -181,6 +181,25 @@ fn indexed_endpoints(
     Ok((left, right))
 }
 
+/// The render's fold judge over `pairs`, with the rescue context the
+/// render builds from the same pairs.
+fn judge_over<'corpus>(
+    session: &'corpus PipelineSession,
+    trees: &'corpus [NormalizedNode],
+    pairs: &[CandidatePair],
+) -> ClusterKindMeasurer<'corpus> {
+    let fingerprints = session.store.fingerprints();
+    let rescue = crate::overlap::RescueContext::new(
+        pairs,
+        fingerprints,
+        trees,
+        &session.sources,
+        &session.file_languages,
+        usize::try_from(session.min_nodes).unwrap_or(usize::MAX),
+    );
+    ClusterKindMeasurer::new(session, fingerprints, trees, &[], pairs, rescue)
+}
+
 /// [FUSED-SHARED-SUBTREE-MEMO] Only exact rescue scores can become
 /// ranked overlap cache hits; the rank pass must not repeat alignment.
 #[test]
@@ -188,7 +207,7 @@ fn ranked_fold_reuses_exact_rescue_alignment() -> Result<(), String> {
     let (session, trees, pair, exact) = ranked_fixture()?;
     let fingerprints = session.store.fingerprints();
     let (left, right) = pair_endpoints(fingerprints, &pair)?;
-    let judge = ClusterKindMeasurer::new(&session, fingerprints, &trees, &[], &[pair]);
+    let judge = judge_over(&session, &trees, &[pair]);
     let mut axes = judge.lease();
     assert_eq!(axes.overlap.overlap(left, right).to_bits(), exact.to_bits());
     assert_eq!(axes.overlap.stats().alignments, NO_ALIGNMENTS);
@@ -204,7 +223,7 @@ fn ranked_fold_does_not_promote_rescue_bound() -> Result<(), String> {
     pair.shared_subtree_overlap = BELOW_FLOOR;
     let fingerprints = session.store.fingerprints();
     let (left, right) = pair_endpoints(fingerprints, &pair)?;
-    let judge = ClusterKindMeasurer::new(&session, fingerprints, &trees, &[], &[pair]);
+    let judge = judge_over(&session, &trees, &[pair]);
     let mut axes = judge.lease();
     assert_eq!(axes.overlap.overlap(left, right).to_bits(), exact.to_bits());
     assert_eq!(axes.overlap.stats().alignments, ONE_ALIGNMENT);

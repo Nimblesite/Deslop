@@ -285,10 +285,12 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
     case "open/file": {
       // [VSIX-METRICS-REPORT-NAVIGATE] A Duplication panel file row opens
       // the file at its highest-ranked duplicate, through the same
-      // command every occurrence link uses.
+      // command every occurrence link uses. It resolves from the visible
+      // projection the panel renders, so an unsaved file's stale ranges
+      // are never a target ([VSIX-STATE-DIRTY]).
       const filePath = m["path"];
       if (typeof filePath !== "string" || filePath.length === 0) return;
-      const { report } = store.current;
+      const report = store.current.visibleReport;
       if (!report) return;
       const occurrence = topOccurrenceInFile(report.clusters, filePath) ?? fileStartOccurrence(report.metrics, filePath);
       if (!occurrence) return;

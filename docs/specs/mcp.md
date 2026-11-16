@@ -223,7 +223,7 @@ Deslop serves two fixed resources. `resources/templates/list` returns `{ "resour
 
 #### [MCP-RESOURCES-SUBSCRIPTIONS] Report subscriptions
 
-`resources/subscribe` and `resources/unsubscribe` accept `deslop://report` and return `{}`. Each connection starts unsubscribed. The report is the only resource that changes, so requests to subscribe to another URI return `InvalidParams`. After a successful unsubscribe response, the connection stops receiving standard resource updates.
+`resources/subscribe` and `resources/unsubscribe` accept every listed resource, `deslop://report` and `deslop://schema`, and return `{}`, so the advertised `subscribe` capability holds for each one. Each connection starts unsubscribed. The report is the only resource that changes: a schema subscription is accepted and never notified, and only a report subscription turns standard updates on or off. An unlisted URI returns `InvalidParams` (`every_listed_resource_accepts_a_subscription`). After a successful unsubscribe response, the connection stops receiving standard resource updates.
 
 ### [MCP-IPC-CLIENT] IPC client (single source of truth)
 

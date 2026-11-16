@@ -39,22 +39,9 @@ pub(super) struct RawConfig {
     /// Report-rendering toggles.
     #[serde(default)]
     pub(super) report: RawReport,
-    /// [EXCLUSION-CONFIG] Pre-ranking visibility of proven data tables.
-    #[serde(default)]
-    pub(super) visibility: RawVisibility,
     /// [CLONE-BUCKETS-THRESHOLDS] Validated category tuning.
     #[serde(default)]
     pub(super) tuning: super::tuning::Tuning,
-}
-
-/// Raw on-disk shape of the `[visibility]` section ([EXCLUSION-CONFIG]):
-/// `data_clones` is `keep` (default) or `ignore`; anything else is rejected.
-#[derive(Debug, Default, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct RawVisibility {
-    /// The `data_clones` choice as written, validated at load.
-    #[serde(default)]
-    pub(super) data_clones: Option<String>,
 }
 
 /// Raw on-disk shape of the `[analysis]` section.

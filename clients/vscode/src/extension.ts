@@ -3,7 +3,7 @@ export { buildServerArgs, currentInitializationOptions, syncEmbeddingSettingsToL
 // Deslop VSIX entry point. Per CLAUDE.md: < 500 lines, thin glue,
 // all UI logic split across bubble/, tree/, decorations/, commands/, webview/.
 
-import { effect } from "@preact/signals-core";
+import { computed, effect } from "@preact/signals-core";
 import * as vscode from "vscode";
 import { watchDiagnosticPresentation } from "./diagnosticPresentation";
 import {
@@ -116,7 +116,7 @@ export async function activate(
   // synchronously BEFORE the tree view is created so the title-bar
   // toggles have `when`-clause values to match against on cold start.
   syncTopOffendersContext();
-  context.subscriptions.push({ dispose: effect(() => syncReportReadyContext(reportStore)) });
+  context.subscriptions.push({ dispose: watchReportReadyContext(reportStore) });
   // [FACET-TOP-OFFENDERS-FILTER] Seed the store's facet-filter mirror so
   // the status bar and webviews slice correctly from the first render.
   reportStore.setFacetFilter(readTopOffendersFilter());
@@ -318,12 +318,21 @@ export function syncTopOffendersContext(): void {
   );
 }
 
-export function syncReportReadyContext(store: ReportStore): void {
-  void vscode.commands.executeCommand(
-    SET_CONTEXT_COMMAND,
-    REPORT_READY_CONTEXT,
-    store.current.report !== null,
-  );
+/** Writes the `deslop.reportReady` context key. */
+function setReportReadyContext(ready: boolean): void {
+  void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, REPORT_READY_CONTEXT, ready);
+}
+
+/** Keeps `deslop.reportReady` in step with the store; returns the disposer.
+ * Reads only the report signal through a `computed`, so the key is written
+ * when readiness changes, not on every keystroke or generation
+ * ([VSIX-STATE-DIRTY]). */
+export function watchReportReadyContext(
+  store: ReportStore,
+  setContext: (ready: boolean) => void = setReportReadyContext,
+): () => void {
+  const ready = computed(() => store.report.value !== null);
+  return effect(() => setContext(ready.value));
 }
 
 export function startLanguageClient(

@@ -15,10 +15,7 @@
 //! expected tables differ by colour escapes inside identical code; two
 //! different queries behind the same setup are not.
 
-use std::{
-    collections::{HashMap, HashSet},
-    hash::BuildHasher,
-};
+use std::{collections::HashMap, hash::BuildHasher};
 
 use super::frontier::{member_count, LiteralText};
 use crate::{
@@ -35,9 +32,10 @@ use crate::{
 const MAJORITY_DENOMINATOR: usize = 2;
 /// The literal node itself, counted beside its fragments.
 const LITERAL_NODE: usize = 1;
-/// Bytes per shingle when two literals' texts are compared. Long enough
-/// that indentation and punctuation alone do not make two texts alike.
-const SHINGLE_BYTES: usize = 8;
+/// Bytes per shingle when two literals' texts are compared: one `u64`.
+/// Long enough that indentation and punctuation alone do not make two
+/// texts alike.
+const SHINGLE_BYTES: usize = size_of::<u64>();
 /// The byte that makes a literal an embedded document: it spans lines.
 const NEWLINE: u8 = b'\n';
 
@@ -120,24 +118,31 @@ fn weigh_literals(node: &NormalizedNode, heaviest: &mut Option<Weighed>) {
     }
 }
 
-/// Whether two literal-carried endpoints hold different text: each side
-/// is carried by its heaviest literal and the two endpoints' texts, the
-/// literal with the code around it, are not near-copies. Identical code
-/// around two differing literals is shared text like any other; a side its
-/// literal does not carry has code of its own, and the content gate has
-/// compared it.
+/// The two endpoint texts a refusal is judged on: `Some` only when both
+/// sides are carried by their heaviest literal and both texts read back.
+/// A side its literal does not carry has code of its own, and the content
+/// gate has compared it; a text that cannot be read proves nothing, so it
+/// refuses nothing.
+pub(crate) fn carried_texts<S: BuildHasher>(
+    left: Option<HeaviestLiteral>,
+    right: Option<HeaviestLiteral>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> Option<(&[u8], &[u8])> {
+    let (left, right) = left
+        .zip(right)
+        .filter(|(left, right)| left.carries_endpoint && right.carries_endpoint)?;
+    endpoint_text(left, sources).zip(endpoint_text(right, sources))
+}
+
+/// Whether two literal-carried endpoints hold different text: the texts
+/// [`carried_texts`] returns are not near-copies. Identical code around
+/// two differing literals is shared text like any other.
 pub(crate) fn carried_text_differs<S: BuildHasher>(
     left: Option<HeaviestLiteral>,
     right: Option<HeaviestLiteral>,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> bool {
-    left.zip(right).is_some_and(|(left, right)| {
-        left.carries_endpoint
-            && right.carries_endpoint
-            && !endpoint_text(left, sources)
-                .zip(endpoint_text(right, sources))
-                .is_some_and(|(left, right)| near_copies(left, right))
-    })
+    carried_texts(left, right, sources).is_some_and(|(left, right)| !near_copies(left, right))
 }
 
 /// Raw source bytes of one carried endpoint.
@@ -166,15 +171,34 @@ pub(super) fn literal_text(left: &[u8], right: &[u8]) -> LiteralText {
 /// shared shingles to clear the pair-content floor every other content
 /// measure uses ([FUSED-CONTENT-GATE]).
 fn near_copies(left: &[u8], right: &[u8]) -> bool {
-    left == right || shingle_overlap(left, right) >= CONTENT_SUPPORT_FLOOR
+    left == right || shingles_clear_floor(&shingles(left), &shingles(right))
 }
 
-/// Jaccard overlap of the two texts' distinct byte shingles. A text
-/// shorter than one shingle has none, so it overlaps only an equal text.
-fn shingle_overlap(left: &[u8], right: &[u8]) -> f64 {
-    let left: HashSet<&[u8]> = left.windows(SHINGLE_BYTES).collect();
-    let right: HashSet<&[u8]> = right.windows(SHINGLE_BYTES).collect();
-    let shared = left.intersection(&right).count();
+/// A text's distinct byte shingles, sorted: each window read as one
+/// integer, so nothing is hashed and nothing collides. A text shorter
+/// than one shingle has none, so it is a near-copy only of an equal text.
+pub(crate) fn shingles(text: &[u8]) -> Vec<u64> {
+    let mut distinct: Vec<u64> = text
+        .windows(SHINGLE_BYTES)
+        .filter_map(|window| window.try_into().ok().map(u64::from_le_bytes))
+        .collect();
+    distinct.sort_unstable();
+    distinct.dedup();
+    distinct
+}
+
+/// Whether two shingle sets overlap enough for their texts to be
+/// near-copies ([FUSED-CONTENT-GATE]).
+pub(crate) fn shingles_clear_floor(left: &[u64], right: &[u64]) -> bool {
+    shingle_overlap(left, right) >= CONTENT_SUPPORT_FLOOR
+}
+
+/// Jaccard overlap of two sorted, distinct shingle sets.
+fn shingle_overlap(left: &[u64], right: &[u64]) -> f64 {
+    let shared = left
+        .iter()
+        .filter(|shingle| right.binary_search(shingle).is_ok())
+        .count();
     let union = left
         .len()
         .saturating_add(right.len())
@@ -187,13 +211,86 @@ fn shingle_overlap(left: &[u8], right: &[u8]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{near_copies, shingle_overlap};
+    use std::collections::HashMap;
+
+    use super::{carried_text_differs, near_copies, shingles, HeaviestLiteral};
+
+    fn shingle_overlap(left: &[u8], right: &[u8]) -> f64 {
+        super::shingle_overlap(&shingles(left), &shingles(right))
+    }
+
+    use crate::{
+        ast::ByteRange,
+        state::{FileId, FileRegistry},
+    };
 
     const PROGRAM: &[u8] = b"using Attributes;\npublic class BenchmarkClass\n{\n    [GlobalCleanup]\n    public async IAsyncEnumerable<int> Cleanup()\n    {\n        await Task.Yield();\n        yield return 1;\n    }\n}\n";
     const ONE_NAME_CHANGED: &[u8] = b"using Attributes;\npublic class BenchmarkClass\n{\n    [IterationCleanup]\n    public async IAsyncEnumerable<int> Cleanup()\n    {\n        await Task.Yield();\n        yield return 1;\n    }\n}\n";
     const OTHER_PROGRAM: &[u8] = b"SELECT i.relname AS index_name, ix.indisunique AS is_unique\nFROM pg_class t JOIN pg_index ix ON t.oid = ix.indrelid\nWHERE n.nspname = @schema ORDER BY i.relname\n";
     const SHORT: &[u8] = b"id";
     const OTHER_SHORT: &[u8] = b"ok";
+    const LEFT_PATH: &str = "left.cs";
+    const RIGHT_PATH: &str = "right.cs";
+
+    fn two_files() -> (FileId, FileId) {
+        let mut registry = FileRegistry::new();
+        (
+            registry.register(LEFT_PATH.into()),
+            registry.register(RIGHT_PATH.into()),
+        )
+    }
+
+    fn carried(file: FileId, text: &[u8]) -> HeaviestLiteral {
+        HeaviestLiteral {
+            file,
+            carries_endpoint: true,
+            endpoint: ByteRange {
+                start: 0,
+                end: text.len(),
+            },
+        }
+    }
+
+    fn sources(texts: &[(FileId, &[u8])]) -> HashMap<FileId, Vec<u8>> {
+        texts
+            .iter()
+            .map(|(file, text)| (*file, text.to_vec()))
+            .collect()
+    }
+
+    // [FUSED-CONTENT-GATE-LITERAL-BOUND] A refusal needs both texts read:
+    // a missing or shortened source proves nothing and refuses nothing.
+    #[test]
+    fn only_two_read_and_different_carried_texts_are_refused() {
+        let (left_file, right_file) = two_files();
+        let left = Some(carried(left_file, PROGRAM));
+        let right = Some(carried(right_file, OTHER_PROGRAM));
+        let both = sources(&[(left_file, PROGRAM), (right_file, OTHER_PROGRAM)]);
+        assert!(carried_text_differs(left, right, &both), "different texts");
+        let edited = sources(&[(left_file, PROGRAM), (right_file, ONE_NAME_CHANGED)]);
+        let near = Some(carried(right_file, ONE_NAME_CHANGED));
+        assert!(!carried_text_differs(left, near, &edited), "a near-copy");
+        let missing = sources(&[(left_file, PROGRAM)]);
+        assert!(
+            !carried_text_differs(left, right, &missing),
+            "missing source"
+        );
+        assert!(!carried_text_differs(right, left, &missing), "either side");
+        let shortened = sources(&[(left_file, PROGRAM), (right_file, SHORT)]);
+        assert!(
+            !carried_text_differs(left, right, &shortened),
+            "stale range"
+        );
+        assert!(!carried_text_differs(left, None, &both), "no literal");
+        let uncarried = right.map(|literal| HeaviestLiteral {
+            carries_endpoint: false,
+            ..literal
+        });
+        assert!(
+            !carried_text_differs(left, uncarried, &both),
+            "one side carried"
+        );
+    }
 
     #[test]
     fn the_same_text_and_a_one_name_edit_are_near_copies() {

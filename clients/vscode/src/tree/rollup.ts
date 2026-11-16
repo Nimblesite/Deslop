@@ -78,8 +78,9 @@ function rollupFolder(
 }
 
 /** [VSIX-METRICS-REPORT-NAVIGATE] The occurrence a file row opens: the
- * file's first occurrence in the highest-ranked cluster that touches it.
- * Reads the engine's `rank` off each cluster; nothing is ranked here. */
+ * file's first visible occurrence in the highest-ranked cluster that
+ * touches it. A `report_hide` occurrence is never a target. Reads the
+ * engine's `rank` off each cluster; nothing is ranked here. */
 export function topOccurrenceInFile(
   clusters: readonly ReportCluster[],
   filePath: string,
@@ -88,7 +89,7 @@ export function topOccurrenceInFile(
   let best: { rank: number; occurrence: ReportOccurrence } | undefined;
   for (const cluster of clusters) {
     if (best && cluster.rank >= best.rank) continue;
-    const occurrence = cluster.occurrences.find((item) => normalizePath(item.path) === wanted);
+    const occurrence = cluster.occurrences.find((item) => !item.hidden && normalizePath(item.path) === wanted);
     if (occurrence) best = { rank: cluster.rank, occurrence };
   }
   return best?.occurrence;

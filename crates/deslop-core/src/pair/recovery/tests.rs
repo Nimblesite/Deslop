@@ -181,7 +181,17 @@ fn recovered<W: CopyWeld + Send>(
     open: &(impl Fn() -> W + Sync),
     existing: &[CandidatePair],
 ) -> Vec<CandidatePair> {
-    recovered_pairs(families, fingerprints, open, existing, &Probed::default())
+    recovered_pairs(
+        families,
+        fingerprints,
+        open,
+        existing,
+        &Probed::default(),
+        &|_| None,
+    )
+    .into_iter()
+    .flat_map(|walk| walk.pairs)
+    .collect()
 }
 
 // A complete shape family cannot contain a missing copy edge, while a

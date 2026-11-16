@@ -36,7 +36,6 @@ use raw::{
 };
 use serde::Deserialize;
 use tree_sitter_output::is_tree_sitter_output;
-use visibility::validate_visibility;
 
 use crate::{
     buckets::{ClusterKind, TotalInclude},
@@ -52,7 +51,6 @@ pub use kind_thresholds::KindThresholds;
 mod paths;
 mod raw;
 mod tuning;
-mod visibility;
 pub use tuning::RoutingTuning;
 
 /// Default configuration file name searched for next to the scan root.
@@ -246,7 +244,6 @@ impl ExclusionConfig {
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
         let total_include = resolve_total_include(path, raw.total.as_ref())?;
         let kind_thresholds = resolve_kind_thresholds(path, raw.threshold.as_ref())?;
-        validate_visibility(path, &raw.visibility)?;
         Ok(Self {
             source: path.to_path_buf(),
             scan_root: scan_root.map(Path::to_path_buf),
@@ -401,6 +398,12 @@ impl ExclusionConfig {
 
 /// Matches the file and its directories within the matcher root. A file
 /// exception cannot reopen an excluded parent directory ([EXCLUSION-CONFIG]).
+///
+/// `Gitignore::matched_path_or_any_parents` is not a substitute: it returns
+/// the file's own `!` whitelist before looking at the parents, so it reopens
+/// an excluded directory, and it panics on an absolute path outside the
+/// root. `trailing_slash_patterns_apply_to_directory_contents` pins the
+/// first.
 fn matches(matcher: &Gitignore, path: &Path) -> bool {
     if matcher.is_empty() {
         return false;

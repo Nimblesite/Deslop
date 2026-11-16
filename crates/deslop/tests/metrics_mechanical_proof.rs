@@ -401,7 +401,7 @@ fn assert_unmoved(run: &Run, expected: &[&Value], kind: &str, change: &str) -> R
 /// [METRICS-REPO-WEIGHTED] Pair evidence and presentation cannot move a
 /// figure: a renamed copy is a different kind over the same lines, a
 /// shape-only pair with other literals is still information, and no
-/// visibility or rendering choice reaches the metrics.
+/// rendering choice reaches the metrics.
 #[test]
 fn evidence_and_presentation_changes_leave_every_figure_alone() -> Result<()> {
     let (tmp, scan_root) = mixed_corpus()?;
@@ -411,13 +411,6 @@ fn evidence_and_presentation_changes_leave_every_figure_alone() -> Result<()> {
         let run = scan(tmp.path(), "rendered", flags)?;
         assert_unmoved(&run, &expected, IDENTICAL_KIND, "a rendering flag")?;
     }
-    for choice in ["keep", "ignore"] {
-        let config = format!("[visibility]\ndata_clones = \"{choice}\"\n");
-        fs::write(scan_root.join(".deslop.toml"), config)?;
-        let run = scan(tmp.path(), "visibility", &[])?;
-        assert_unmoved(&run, &expected, IDENTICAL_KIND, "a visibility choice")?;
-    }
-    fs::remove_file(scan_root.join(".deslop.toml"))?;
     rewrite(&scan_root, SHAPES_FILE, &SHAPE_LITERAL_SWAPS)?;
     let reworded = scan(tmp.path(), "reworded", &[])?;
     assert_unmoved(
