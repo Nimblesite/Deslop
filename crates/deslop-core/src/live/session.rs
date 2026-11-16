@@ -10,7 +10,7 @@ mod init;
 mod queries;
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -50,9 +50,10 @@ pub struct AnalysisSession {
     /// Underlying analysis state. `None` between cache-seed
     /// construction and the background full-pass install.
     pipeline: Option<PipelineSession>,
-    /// File-change paths queued while `pipeline` was `None`. Replayed
-    /// in [`Self::install_pipeline`] when the background pass commits.
-    pending_changes: Vec<PathBuf>,
+    /// File-change paths queued while `pipeline` was `None`, each once
+    /// however often it changed. Replayed in [`Self::install_pipeline`]
+    /// when the background pass commits.
+    pending_changes: BTreeSet<PathBuf>,
     /// Atomic snapshot of the current report.
     latest_report: Arc<Report>,
     /// Lock-free mirror of [`Self::latest_report`] ([LSP-NON-INTERFERENCE]).
@@ -468,8 +469,11 @@ fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
         .iter()
         .flat_map(|cluster| &cluster.occurrences)
         .map(|occurrence| occurrence.language.as_str())
-        .collect::<std::collections::BTreeSet<_>>()
+        .collect::<BTreeSet<_>>()
         .into_iter()
         .map(str::to_owned)
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

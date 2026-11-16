@@ -1,7 +1,7 @@
 //! [LIVE-STATE] Construction, cache-seed install and full refresh of [`AnalysisSession`].
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -177,6 +177,7 @@ impl AnalysisSession {
         // served as the answer.
         let mut replay = std::mem::take(&mut self.pending_changes);
         replay.extend(self.buffers.paths().map(Path::to_path_buf));
+        let replay: Vec<PathBuf> = replay.into_iter().collect();
         if !replay.is_empty() {
             let _delta = self.apply_changes(&replay)?;
         }
@@ -254,7 +255,7 @@ impl AnalysisSession {
             root: init.root,
             min_nodes: init.min_nodes,
             pipeline: init.pipeline,
-            pending_changes: Vec::new(),
+            pending_changes: BTreeSet::new(),
             report_snapshot: Arc::new(RwLock::new(Arc::clone(&latest_report))),
             latest_report,
             generation: 1,
