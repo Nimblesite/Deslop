@@ -32,6 +32,10 @@ const BROADCAST_CAPACITY: usize = 64;
 /// Debounce checks run only while file changes are pending.
 const PENDING_TICK_INTERVAL: Duration = Duration::from_millis(50);
 
+/// [LIVE-SCHEDULER-REST] How many times its own cost a pass rests before
+/// the next one may start.
+pub const REST_FACTOR: u64 = 3;
+
 /// Distinguishes queued seed changes from a completed analysis pass.
 enum PassOutcome {
     /// [LIVE-CACHE-SEED-READINESS] The cold pipeline still owns unfinished work.
