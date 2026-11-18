@@ -82,6 +82,13 @@ path = "tests/suite.rs"
 name = "memory"
 path = "tests/memory/main.rs"
 
+# [LIVE-SCHEDULER-HEAP-STEADY] The live session's heap bound, in its own process for the
+# same reason as `memory`.
+[[test]]
+name = "memory_live"
+path = "tests/memory_live/main.rs"
+required-features = ["live"]
+
 # Both benches import the `benchmark`-gated measurement modules, so they only
 # build when that feature is on. Without this, `--all-targets` builds them
 # unconditionally and fails E0432.
