@@ -18,6 +18,7 @@ The read loop only reads. What it reads is handed on at once, so `exit`, a cance
 | Notification | Queued for one worker that runs them in the order they were read, so `didOpen`, `didChange` and `didClose` for a file can never overtake each other. |
 | `$/cancelRequest` | Handled in the read loop. The cancelled request stops waiting on its work and is answered `-32800 Request cancelled`. |
 | Answer to a request the server sent | Delivered to whoever is waiting for it. |
+| Malformed or oversized frame | Logged at `warn` and skipped; the session keeps serving. A body over lspkit's 64 MiB `MAX_FRAME_BYTES` is discarded unread, never held in memory, so the next frame is readable ([JSONRPC-FRAME-LIMIT]). A header block over 8 KiB has no known end, so it ends the session as a vanished client. |
 
 Everything the server writes — responses, notifications, its own requests — goes through one queue of 16 frames, and the notification worker has a queue of 16 as well. Both are bounded on purpose: an editor that stops reading its pipe stops being read, instead of the server queueing output without limit ([LIVE-OPEN-BUFFERS]).
 

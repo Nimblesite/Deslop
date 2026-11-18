@@ -116,7 +116,13 @@ impl Link {
                         return end;
                     }
                 }
-                Err(error @ (FramingError::BadJson(_) | FramingError::BadHeader(..))) => {
+                // [LSP-TRANSPORT-DISPATCH] An oversized body was discarded, so
+                // the next frame is readable and the session keeps serving.
+                Err(
+                    error @ (FramingError::BadJson(_)
+                    | FramingError::BadHeader(..)
+                    | FramingError::FrameTooLarge { .. }),
+                ) => {
                     tracing::warn!(%error, "malformed frame ignored");
                 }
                 Err(error) => return closed(&error),

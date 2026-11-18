@@ -1,5 +1,6 @@
 //! [LSP-LIFECYCLE] The endings the serve loop must recognise, and what a
-//! session holds once its work is over ([LSPKIT-ADOPT-LEAKS]).
+//! session holds once its work is over ([LSPKIT-ADOPT-LEAKS]), and how the
+//! read loop dispatches each frame ([LSP-TRANSPORT-DISPATCH]).
 //!
 //! The integration pin lives in `tests/lifecycle.rs`, which drives the real
 //! binary. It caught the original defect only on a slow instrumented runner,
@@ -11,7 +12,7 @@ use std::{future::pending, sync::Arc};
 use lspkit_server::{jsonrpc::read_message, Message, MessageWriter, RequestId};
 use serde_json::{json, Value};
 use tokio::{
-    io::{duplex, split, BufReader, DuplexStream, ReadHalf, WriteHalf},
+    io::{duplex, split, AsyncWrite, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf},
     task::JoinHandle,
     time::{timeout, Duration},
 };
@@ -29,6 +30,8 @@ const NEVER: Duration = Duration::from_secs(5);
 const PIPE_BYTES: usize = 1 << 16;
 /// A request whose handler never finishes: the unbounded analysis pass.
 const ENDLESS_METHOD: &str = "test/endless";
+/// A method no route answers.
+const UNKNOWN_METHOD: &str = "test/unknown";
 const MIN_NODES: u32 = 30;
 const FIRST_ID: i64 = 1;
 const SECOND_ID: i64 = 2;
@@ -107,6 +110,20 @@ impl Editor {
     async fn ending(self) -> TestResult<ServeEnd> {
         Ok(timeout(NEVER, self.serving).await??)
     }
+
+    /// Sends `shutdown` as request `id` and returns the frame answering it.
+    async fn shut_down(&mut self, id: i64) -> TestResult<Message> {
+        let request = Message::request(RequestId::Number(id), SHUTDOWN_METHOD, Value::Null);
+        self.writer.write_message(&request).await?;
+        Ok(timeout(NEVER, read_message(&mut self.reader)).await??)
+    }
+}
+
+/// The error code `session` answers request `id` for `method` with, if any.
+async fn error_code(session: &Session, id: i64, method: &str) -> Option<i32> {
+    let request = Message::request(RequestId::Number(id), method, Value::Null);
+    let answer = session.call(request).await?;
+    answer.error.map(|error| error.code)
 }
 
 #[tokio::test]
@@ -136,10 +153,7 @@ async fn a_closed_stream_ends_the_session_while_work_is_still_running() -> TestR
 #[tokio::test]
 async fn traffic_before_the_stream_closes_is_answered() -> TestResult {
     let mut editor = editor()?;
-    let request = Message::request(RequestId::Number(SECOND_ID), SHUTDOWN_METHOD, Value::Null);
-    editor.writer.write_message(&request).await?;
-
-    let answer = timeout(NEVER, read_message(&mut editor.reader)).await??;
+    let answer = editor.shut_down(SECOND_ID).await?;
 
     assert_eq!(answer.id, Some(RequestId::Number(SECOND_ID)));
     assert!(
@@ -173,9 +187,7 @@ async fn exit_ends_the_loop_while_work_is_still_running() -> TestResult {
 #[tokio::test]
 async fn exit_after_shutdown_is_the_orderly_ending() -> TestResult {
     let mut editor = editor()?;
-    let request = Message::request(RequestId::Number(FIRST_ID), SHUTDOWN_METHOD, Value::Null);
-    editor.writer.write_message(&request).await?;
-    let _answer = timeout(NEVER, read_message(&mut editor.reader)).await??;
+    let _answer = editor.shut_down(FIRST_ID).await?;
     editor.notify(EXIT_METHOD).await?;
 
     assert_eq!(editor.ending().await?, ServeEnd::ExitAfterShutdown);
@@ -204,20 +216,16 @@ async fn a_cancelled_request_is_answered_as_cancelled() -> TestResult {
 async fn a_request_before_initialize_is_refused_and_one_after_shutdown_is_invalid() -> TestResult {
     let (session, _socket, _workspace) = session()?;
     session.phase.set(Phase::Uninitialized);
-    let early = Message::request(RequestId::Number(FIRST_ID), ENDLESS_METHOD, Value::Null);
-
-    let refused = session.call(early).await.and_then(|answer| answer.error);
-
     assert_eq!(
-        refused.map(|error| error.code),
-        Some(crate::jsonrpc::SERVER_NOT_INITIALIZED)
+        error_code(&session, FIRST_ID, ENDLESS_METHOD).await,
+        Some(crate::jsonrpc::SERVER_NOT_INITIALIZED),
+        "a request before `initialize` is refused"
     );
     session.phase.set(Phase::ShutDown);
-    let late = Message::request(RequestId::Number(SECOND_ID), ENDLESS_METHOD, Value::Null);
-    let invalid = session.call(late).await.and_then(|answer| answer.error);
     assert_eq!(
-        invalid.map(|error| error.code),
-        Some(crate::jsonrpc::INVALID_REQUEST)
+        error_code(&session, SECOND_ID, ENDLESS_METHOD).await,
+        Some(crate::jsonrpc::INVALID_REQUEST),
+        "a request after `shutdown` is invalid"
     );
     Ok(())
 }
@@ -225,13 +233,10 @@ async fn a_request_before_initialize_is_refused_and_one_after_shutdown_is_invali
 #[tokio::test]
 async fn an_unknown_request_is_method_not_found() -> TestResult {
     let (session, _socket, _workspace) = session()?;
-    let unknown = Message::request(RequestId::Number(FIRST_ID), "test/unknown", Value::Null);
-
-    let answer = session.call(unknown).await.and_then(|answer| answer.error);
-
     assert_eq!(
-        answer.map(|error| error.code),
-        Some(crate::jsonrpc::METHOD_NOT_FOUND)
+        error_code(&session, FIRST_ID, UNKNOWN_METHOD).await,
+        Some(crate::jsonrpc::METHOD_NOT_FOUND),
+        "a method the server does not route is not found"
     );
     Ok(())
 }
@@ -330,6 +335,65 @@ async fn an_editor_read_is_answered_while_an_edit_is_still_being_analysed() -> T
         answer.result,
         Some(json!([])),
         "an empty workspace has no clone badges to show"
+    );
+    Ok(())
+}
+
+/// Bytes of filler written per chunk while streaming an oversized body.
+const FILLER_CHUNK: usize = 1 << 16;
+
+/// One past the largest body lspkit accepts ([LSP-TRANSPORT-DISPATCH]).
+const OVERSIZED_BODY: usize = lspkit_server::jsonrpc::MAX_FRAME_BYTES + 1;
+
+/// Writes a frame claiming, and carrying, `OVERSIZED_BODY` bytes of filler.
+async fn write_oversized_frame<W: AsyncWrite + Unpin>(writer: &mut W) -> TestResult {
+    let header = format!("Content-Length: {OVERSIZED_BODY}\r\n\r\n");
+    writer.write_all(header.as_bytes()).await?;
+    let chunk = vec![b' '; FILLER_CHUNK];
+    let mut left = OVERSIZED_BODY;
+    while left > 0 {
+        let take = left.min(FILLER_CHUNK);
+        writer
+            .write_all(chunk.get(..take).ok_or("chunk slice")?)
+            .await?;
+        left = left.saturating_sub(take);
+    }
+    Ok(())
+}
+
+/// Writes `message` with its `Content-Length` header.
+async fn write_frame<W: AsyncWrite + Unpin>(writer: &mut W, message: &Message) -> TestResult {
+    let body = serde_json::to_vec(message)?;
+    let header = format!("Content-Length: {}\r\n\r\n", body.len());
+    writer.write_all(header.as_bytes()).await?;
+    Ok(writer.write_all(&body).await?)
+}
+
+#[tokio::test]
+async fn a_refused_oversized_frame_leaves_the_session_serving_the_next_request() -> TestResult {
+    let (session, socket, _workspace) = session()?;
+    let (ours, theirs) = duplex(PIPE_BYTES);
+    let (server_reader, server_writer) = split(theirs);
+    let (reader, mut writer) = split(ours);
+    let serving = tokio::spawn(stdio::serve(session, socket, server_reader, server_writer));
+    let shutdown = Message::request(RequestId::Number(SECOND_ID), SHUTDOWN_METHOD, Value::Null);
+
+    write_oversized_frame(&mut writer).await?;
+    write_frame(&mut writer, &shutdown).await?;
+    let answer = timeout(NEVER, read_message(&mut BufReader::new(reader))).await?;
+
+    let answer = answer.map_err(|error| {
+        format!("one refused frame must not end the session, but the stream closed: {error}")
+    })?;
+    assert_eq!(
+        answer.id,
+        Some(RequestId::Number(SECOND_ID)),
+        "the request after the refused frame is the one answered"
+    );
+    assert!(answer.error.is_none(), "shutdown must not fail: {answer:?}");
+    assert!(
+        !serving.is_finished(),
+        "a client that sent one oversized frame is still there: the session keeps serving"
     );
     Ok(())
 }
