@@ -11,7 +11,7 @@ use std::{future::pending, sync::Arc};
 use lspkit_server::{jsonrpc::read_message, Message, MessageWriter, RequestId};
 use serde_json::{json, Value};
 use tokio::{
-    io::{duplex, split, BufReader, DuplexStream, ReadHalf, WriteHalf},
+    io::{duplex, split, AsyncWrite, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf},
     task::JoinHandle,
     time::{timeout, Duration},
 };
@@ -330,6 +330,65 @@ async fn an_editor_read_is_answered_while_an_edit_is_still_being_analysed() -> T
         answer.result,
         Some(json!([])),
         "an empty workspace has no clone badges to show"
+    );
+    Ok(())
+}
+
+/// Bytes of filler written per chunk while streaming an oversized body.
+const FILLER_CHUNK: usize = 1 << 16;
+
+/// One past the largest body the reader accepts ([JSONRPC-FRAME-LIMIT]).
+const OVERSIZED_BODY: usize = lspkit_server::jsonrpc::MAX_FRAME_BYTES + 1;
+
+/// Writes a frame claiming, and carrying, `OVERSIZED_BODY` bytes of filler.
+async fn write_oversized_frame<W: AsyncWrite + Unpin>(writer: &mut W) -> TestResult {
+    let header = format!("Content-Length: {OVERSIZED_BODY}\r\n\r\n");
+    writer.write_all(header.as_bytes()).await?;
+    let chunk = [b' '; FILLER_CHUNK];
+    let mut left = OVERSIZED_BODY;
+    while left > 0 {
+        let take = left.min(FILLER_CHUNK);
+        writer
+            .write_all(chunk.get(..take).ok_or("chunk slice")?)
+            .await?;
+        left -= take;
+    }
+    Ok(())
+}
+
+/// Writes `message` with its `Content-Length` header.
+async fn write_frame<W: AsyncWrite + Unpin>(writer: &mut W, message: &Message) -> TestResult {
+    let body = serde_json::to_vec(message)?;
+    let header = format!("Content-Length: {}\r\n\r\n", body.len());
+    writer.write_all(header.as_bytes()).await?;
+    Ok(writer.write_all(&body).await?)
+}
+
+#[tokio::test]
+async fn a_refused_oversized_frame_leaves_the_session_serving_the_next_request() -> TestResult {
+    let (session, socket, _workspace) = session()?;
+    let (ours, theirs) = duplex(PIPE_BYTES);
+    let (server_reader, server_writer) = split(theirs);
+    let (reader, mut writer) = split(ours);
+    let serving = tokio::spawn(stdio::serve(session, socket, server_reader, server_writer));
+    let shutdown = Message::request(RequestId::Number(SECOND_ID), SHUTDOWN_METHOD, Value::Null);
+
+    write_oversized_frame(&mut writer).await?;
+    write_frame(&mut writer, &shutdown).await?;
+    let answer = timeout(NEVER, read_message(&mut BufReader::new(reader))).await?;
+
+    let answer = answer.map_err(|error| {
+        format!("one refused frame must not end the session, but the stream closed: {error}")
+    })?;
+    assert_eq!(
+        answer.id,
+        Some(RequestId::Number(SECOND_ID)),
+        "the request after the refused frame is the one answered"
+    );
+    assert!(answer.error.is_none(), "shutdown must not fail: {answer:?}");
+    assert!(
+        !serving.is_finished(),
+        "a client that sent one oversized frame is still there: the session keeps serving"
     );
     Ok(())
 }
