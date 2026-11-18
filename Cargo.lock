@@ -456,7 +456,6 @@ version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
- "async-trait",
  "deslop-core",
  "deslop-test-support",
  "futures",
@@ -478,13 +477,11 @@ name = "deslop-mcp"
 version = "0.0.0-dev"
 dependencies = [
  "anyhow",
- "assert_cmd",
  "clap",
  "deslop-core",
  "deslop-test-support",
  "nix 0.31.3",
  "notify",
- "predicates",
  "serde",
  "serde_json",
  "tempfile",
