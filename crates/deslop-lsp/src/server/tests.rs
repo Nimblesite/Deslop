@@ -344,14 +344,14 @@ const OVERSIZED_BODY: usize = lspkit_server::jsonrpc::MAX_FRAME_BYTES + 1;
 async fn write_oversized_frame<W: AsyncWrite + Unpin>(writer: &mut W) -> TestResult {
     let header = format!("Content-Length: {OVERSIZED_BODY}\r\n\r\n");
     writer.write_all(header.as_bytes()).await?;
-    let chunk = [b' '; FILLER_CHUNK];
+    let chunk = vec![b' '; FILLER_CHUNK];
     let mut left = OVERSIZED_BODY;
     while left > 0 {
         let take = left.min(FILLER_CHUNK);
         writer
             .write_all(chunk.get(..take).ok_or("chunk slice")?)
             .await?;
-        left -= take;
+        left = left.saturating_sub(take);
     }
     Ok(())
 }
