@@ -30,6 +30,8 @@ const NEVER: Duration = Duration::from_secs(5);
 const PIPE_BYTES: usize = 1 << 16;
 /// A request whose handler never finishes: the unbounded analysis pass.
 const ENDLESS_METHOD: &str = "test/endless";
+/// A method no route answers.
+const UNKNOWN_METHOD: &str = "test/unknown";
 const MIN_NODES: u32 = 30;
 const FIRST_ID: i64 = 1;
 const SECOND_ID: i64 = 2;
@@ -108,6 +110,20 @@ impl Editor {
     async fn ending(self) -> TestResult<ServeEnd> {
         Ok(timeout(NEVER, self.serving).await??)
     }
+
+    /// Sends `shutdown` as request `id` and returns the frame answering it.
+    async fn shut_down(&mut self, id: i64) -> TestResult<Message> {
+        let request = Message::request(RequestId::Number(id), SHUTDOWN_METHOD, Value::Null);
+        self.writer.write_message(&request).await?;
+        Ok(timeout(NEVER, read_message(&mut self.reader)).await??)
+    }
+}
+
+/// The error code `session` answers request `id` for `method` with, if any.
+async fn error_code(session: &Session, id: i64, method: &str) -> Option<i32> {
+    let request = Message::request(RequestId::Number(id), method, Value::Null);
+    let answer = session.call(request).await?;
+    answer.error.map(|error| error.code)
 }
 
 #[tokio::test]
@@ -137,10 +153,7 @@ async fn a_closed_stream_ends_the_session_while_work_is_still_running() -> TestR
 #[tokio::test]
 async fn traffic_before_the_stream_closes_is_answered() -> TestResult {
     let mut editor = editor()?;
-    let request = Message::request(RequestId::Number(SECOND_ID), SHUTDOWN_METHOD, Value::Null);
-    editor.writer.write_message(&request).await?;
-
-    let answer = timeout(NEVER, read_message(&mut editor.reader)).await??;
+    let answer = editor.shut_down(SECOND_ID).await?;
 
     assert_eq!(answer.id, Some(RequestId::Number(SECOND_ID)));
     assert!(
@@ -174,9 +187,7 @@ async fn exit_ends_the_loop_while_work_is_still_running() -> TestResult {
 #[tokio::test]
 async fn exit_after_shutdown_is_the_orderly_ending() -> TestResult {
     let mut editor = editor()?;
-    let request = Message::request(RequestId::Number(FIRST_ID), SHUTDOWN_METHOD, Value::Null);
-    editor.writer.write_message(&request).await?;
-    let _answer = timeout(NEVER, read_message(&mut editor.reader)).await??;
+    let _answer = editor.shut_down(FIRST_ID).await?;
     editor.notify(EXIT_METHOD).await?;
 
     assert_eq!(editor.ending().await?, ServeEnd::ExitAfterShutdown);
@@ -205,20 +216,16 @@ async fn a_cancelled_request_is_answered_as_cancelled() -> TestResult {
 async fn a_request_before_initialize_is_refused_and_one_after_shutdown_is_invalid() -> TestResult {
     let (session, _socket, _workspace) = session()?;
     session.phase.set(Phase::Uninitialized);
-    let early = Message::request(RequestId::Number(FIRST_ID), ENDLESS_METHOD, Value::Null);
-
-    let refused = session.call(early).await.and_then(|answer| answer.error);
-
     assert_eq!(
-        refused.map(|error| error.code),
-        Some(crate::jsonrpc::SERVER_NOT_INITIALIZED)
+        error_code(&session, FIRST_ID, ENDLESS_METHOD).await,
+        Some(crate::jsonrpc::SERVER_NOT_INITIALIZED),
+        "a request before `initialize` is refused"
     );
     session.phase.set(Phase::ShutDown);
-    let late = Message::request(RequestId::Number(SECOND_ID), ENDLESS_METHOD, Value::Null);
-    let invalid = session.call(late).await.and_then(|answer| answer.error);
     assert_eq!(
-        invalid.map(|error| error.code),
-        Some(crate::jsonrpc::INVALID_REQUEST)
+        error_code(&session, SECOND_ID, ENDLESS_METHOD).await,
+        Some(crate::jsonrpc::INVALID_REQUEST),
+        "a request after `shutdown` is invalid"
     );
     Ok(())
 }
@@ -226,13 +233,10 @@ async fn a_request_before_initialize_is_refused_and_one_after_shutdown_is_invali
 #[tokio::test]
 async fn an_unknown_request_is_method_not_found() -> TestResult {
     let (session, _socket, _workspace) = session()?;
-    let unknown = Message::request(RequestId::Number(FIRST_ID), "test/unknown", Value::Null);
-
-    let answer = session.call(unknown).await.and_then(|answer| answer.error);
-
     assert_eq!(
-        answer.map(|error| error.code),
-        Some(crate::jsonrpc::METHOD_NOT_FOUND)
+        error_code(&session, FIRST_ID, UNKNOWN_METHOD).await,
+        Some(crate::jsonrpc::METHOD_NOT_FOUND),
+        "a method the server does not route is not found"
     );
     Ok(())
 }
