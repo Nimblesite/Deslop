@@ -61,3 +61,5 @@ Related growth already found in Deslop and tracked with this work: `FileRegistry
 | Handlers capture their own dispatcher | Routes hold the backend, the session holds the routes, nothing holds the session | `server::tests::dropping_the_session_releases_the_backend` |
 
 Still Deslop's own, in migration-table order: the live watcher and scheduler, the MCP server and tool registry, the config loader, tracing setup.
+
+2026-11-19: a heap-counting live test found a Deslop leak outside the lspkit classes ([LIVE-SCHEDULER-HEAP-STEADY]). Node-kind names were interned per worker thread with `Box::leak`, and each render spawns fresh parse threads, so every edit kept a new copy of every kind name, about 4.9 KB per round on a four-file C# workspace and unbounded. Names are now stored once per process in `state.rs`; `tests/memory_live/main.rs` holds the heap flat across 24 restoring rounds.

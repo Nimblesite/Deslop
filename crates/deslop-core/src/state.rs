@@ -7,10 +7,10 @@
 //! permitted to hold mutable state shared across pipeline stages.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     num::NonZeroUsize,
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{Mutex, OnceLock, PoisonError},
 };
 
 #[cfg(test)]
@@ -183,4 +183,24 @@ pub fn worker_budget() -> usize {
         || std::thread::available_parallelism().map_or(1, NonZeroUsize::get),
         NonZeroUsize::get,
     )
+}
+
+/// [LIVE-SCHEDULER-HEAP-STEADY] Every node-kind name the process has
+/// interned, each stored once. The grammars fix the set of names, so this
+/// stops growing once each kind has been seen, however many worker threads
+/// parse and however many passes run.
+static KIND_NAMES: Mutex<BTreeSet<&'static str>> = Mutex::new(BTreeSet::new());
+
+/// The process's one `&'static str` for the node-kind name `raw`, stored
+/// on first sight. A poisoned lock still holds only whole entries, so it is
+/// read through.
+#[must_use]
+pub fn kind_name(raw: &str) -> &'static str {
+    let mut names = KIND_NAMES.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(existing) = names.get(raw) {
+        return existing;
+    }
+    let stored: &'static str = Box::leak(raw.to_owned().into_boxed_str());
+    let _new = names.insert(stored);
+    stored
 }

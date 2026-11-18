@@ -53,7 +53,10 @@ fn write(root: &Path, name: &str, body: &str) -> Result<()> {
 /// Feeds `names` through one pass, as a watcher flush would.
 fn apply(session: &mut AnalysisSession, root: &Path, names: &[&str]) -> Result<()> {
     let paths: Vec<_> = names.iter().map(|name| root.join(name)).collect();
-    session.apply_changes(&paths).map(drop).context("apply changes")
+    session
+        .apply_changes(&paths)
+        .map(drop)
+        .context("apply changes")
 }
 
 /// One round that leaves the workspace exactly as it found it.
@@ -78,9 +81,15 @@ fn rounds(session: &mut AnalysisSession, root: &Path, count: u32) -> Result<()> 
 
 /// Files analysed, file handles held and clusters reported.
 fn shape(session: &AnalysisSession) -> Result<(usize, usize, usize)> {
-    let pipeline = session.pipeline().ok_or_else(|| anyhow!("no installed pipeline"))?;
+    let pipeline = session
+        .pipeline()
+        .ok_or_else(|| anyhow!("no installed pipeline"))?;
     let report = session.report();
-    Ok((report.files_analysed, pipeline.registry().len(), report.clusters.len()))
+    Ok((
+        report.files_analysed,
+        pipeline.registry().len(),
+        report.clusters.len(),
+    ))
 }
 
 #[test]
@@ -98,14 +107,25 @@ fn edit_delete_and_rename_save_rounds_return_the_heap_to_where_it_was() -> Resul
     let cold = shape(&session)?;
     assert_eq!(cold.0, all_files, "cold: every file is analysed");
     assert_eq!(cold.1, all_files, "cold: one handle per file");
-    assert!(cold.2 >= 1, "cold: the identical classes form a cluster, or the rounds analyse nothing");
+    assert!(
+        cold.2 >= 1,
+        "cold: the identical classes form a cluster, or the rounds analyse nothing"
+    );
 
     rounds(&mut session, root, WARM_ROUNDS)?;
-    assert_eq!(shape(&session)?, cold, "warm: the same workspace gives the same report");
+    assert_eq!(
+        shape(&session)?,
+        cold,
+        "warm: the same workspace gives the same report"
+    );
     let warm_heap = ALLOCATOR.current_usage();
 
     rounds(&mut session, root, MEASURED_ROUNDS)?;
-    assert_eq!(shape(&session)?, cold, "measured: the same workspace gives the same report");
+    assert_eq!(
+        shape(&session)?,
+        cold,
+        "measured: the same workspace gives the same report"
+    );
     let grown = ALLOCATOR.current_usage().saturating_sub(warm_heap);
     assert!(
         grown <= MAX_GROWTH_BYTES,
