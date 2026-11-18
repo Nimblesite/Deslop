@@ -116,7 +116,7 @@ impl Link {
                         return end;
                     }
                 }
-                // [JSONRPC-FRAME-LIMIT] An oversized body was discarded, so
+                // [LSP-TRANSPORT-DISPATCH] An oversized body was discarded, so
                 // the next frame is readable and the session keeps serving.
                 Err(
                     error @ (FramingError::BadJson(_)

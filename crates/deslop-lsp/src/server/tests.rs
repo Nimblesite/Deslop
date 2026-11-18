@@ -338,7 +338,7 @@ async fn an_editor_read_is_answered_while_an_edit_is_still_being_analysed() -> T
 /// Bytes of filler written per chunk while streaming an oversized body.
 const FILLER_CHUNK: usize = 1 << 16;
 
-/// One past the largest body the reader accepts ([JSONRPC-FRAME-LIMIT]).
+/// One past the largest body lspkit accepts ([LSP-TRANSPORT-DISPATCH]).
 const OVERSIZED_BODY: usize = lspkit_server::jsonrpc::MAX_FRAME_BYTES + 1;
 
 /// Writes a frame claiming, and carrying, `OVERSIZED_BODY` bytes of filler.
