@@ -1,5 +1,6 @@
 //! [LSP-LIFECYCLE] The endings the serve loop must recognise, and what a
-//! session holds once its work is over ([LSPKIT-ADOPT-LEAKS]).
+//! session holds once its work is over ([LSPKIT-ADOPT-LEAKS]), and how the
+//! read loop dispatches each frame ([LSP-TRANSPORT-DISPATCH]).
 //!
 //! The integration pin lives in `tests/lifecycle.rs`, which drives the real
 //! binary. It caught the original defect only on a slow instrumented runner,

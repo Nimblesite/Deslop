@@ -4,7 +4,7 @@
 
 The sibling `lspkit` repository proved five ownership leaks on 2026-11-16 and is repairing them (its `docs/plans/memory-leak-audit.md` and `docs/plans/memory-leak-fixes.md`). The fixes shipped in lspkit v0.5.0 (crates.io, 2026-11-16).
 
-`deslop-lsp` now runs on `lspkit-server` 0.5.0 in place of `tower-lsp` ([LSP-TRANSPORT-DISPATCH]); the MCP, watcher and scheduler scaffolding is still Deslop's own; [the repository index](../repo-index.md) maps each piece to the lspkit crate meant to replace it. So the fixes reach Deslop in two ways, and this plan does both:
+`deslop-lsp` now runs on `lspkit-server`, at the exact release pinned in `Cargo.toml`, in place of `tower-lsp` ([LSP-TRANSPORT-DISPATCH]); the MCP, watcher and scheduler scaffolding is still Deslop's own; [the repository index](../repo-index.md) maps each piece to the lspkit crate meant to replace it. So the fixes reach Deslop in two ways, and this plan does both:
 
 1. Each leak class lspkit proved is checked against Deslop's own scaffolding now, test-first, because the same shape of code exists here.
 2. Once lspkit publishes a release that contains the repairs, Deslop adopts the lspkit crates for those pieces, pinned to that release.
@@ -49,6 +49,8 @@ Related growth already found in Deslop and tracked with this work: `FileRegistry
 2026-11-16: plan written; lspkit v0.5.0 published the same day.
 
 2026-11-16: first replacement landed. `deslop-lsp` dropped `tower-lsp` and `tower` for `lspkit-server` 0.5.0: framing, request dispatch and cancellation are lspkit's, so its repaired dispatcher (a rejected request releases its registration) is the code Deslop runs. `lsp-types` moved from 0.94 to 0.97 with it, so one version is compiled.
+
+2026-11-19: pin moved to `=0.10.1`. Its reader discards an oversized body instead of reading it as header text, so the session skips that frame and keeps serving ([JSONRPC-FRAME-LIMIT]); `server::tests::a_refused_oversized_frame_leaves_the_session_serving_the_next_request` is red on 0.10.0 and green on 0.10.1.
 
 | lspkit finding | Deslop state after this change | Proof |
 |---|---|---|

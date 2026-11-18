@@ -45,7 +45,7 @@ The LSP+MCP scaffolding here is the "one engine, two surfaces" pattern being dis
 | `live/session.rs` `AnalysisSession` + `LiveService` | `lspkit-live::Session` + consumer `Analyzer` |
 | `live/watcher.rs` | `lspkit-live::watcher::FileWatcher` |
 | `live/scheduler.rs` | `lspkit-live::scheduler::spawn` |
-| `deslop-lsp/src/server.rs` + `server/` + `client.rs` | **Done:** `lspkit-server` 0.5.0 framing, `Dispatcher` and cancellation ([LSP-TRANSPORT-DISPATCH]) |
+| `deslop-lsp/src/server.rs` + `server/` + `client.rs` | **Done:** `lspkit-server` framing, `Dispatcher` and cancellation ([LSP-TRANSPORT-DISPATCH]) |
 | `deslop-mcp/src/server.rs` + `protocol.rs` | `lspkit-mcp` (rmcp behind a newtype wall) |
 | `deslop-mcp/src/tools/mod.rs` | `lspkit-mcp::tools::ToolRegistry` |
 | `config.rs` `.deslop.toml` loader | `lspkit-config::load_from_ancestor` |
