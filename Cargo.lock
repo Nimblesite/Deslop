@@ -420,7 +420,6 @@ dependencies = [
  "blake3",
  "deslop-core",
  "deslop-test-support",
- "futures",
  "getrandom 0.4.3",
  "ignore",
  "instant-distance",

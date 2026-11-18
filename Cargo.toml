@@ -59,6 +59,10 @@ lsp-types = "=0.97.0"
 futures = "=0.3.34"
 async-trait = "=0.1.92"
 
+[workspace.lints.cargo]
+unused_dependencies = "deny"
+unused_workspace_dependencies = "deny"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "deny"
