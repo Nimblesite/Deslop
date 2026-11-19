@@ -261,10 +261,10 @@ where
     Some(intern_kind(raw))
 }
 
-/// Interns `raw` into a `&'static str` backed by a thread-local cache.
-/// Tree-sitter returns grammar kind strings that live for the duration
-/// of the loaded grammar, but we promote them to `&'static` via an
-/// explicit leak so ownership is independent of any grammar instance.
+/// Interns `raw` into the process's one `&'static str` for it
+/// ([LIVE-SCHEDULER-HEAP-STEADY]). A thread-local cache answers repeat
+/// kinds without the shared lock; it holds borrowed names only, so a
+/// worker thread that exits frees it and leaves no copy behind.
 #[must_use]
 pub fn intern_kind(raw: &str) -> &'static str {
     KIND_INTERNER.with(|cache| intern(&mut cache.borrow_mut(), raw))
@@ -275,13 +275,13 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Returns the canonical `&'static str` for `raw`, allocating once
-/// per previously unseen kind and caching it for reuse.
+/// Returns the canonical `&'static str` for `raw`, asking the
+/// process-wide table once per kind this thread has not seen.
 fn intern(entries: &mut Vec<&'static str>, raw: &str) -> &'static str {
     if let Some(existing) = entries.iter().find(|stored| **stored == raw) {
         return existing;
     }
-    let leaked: &'static str = Box::leak(raw.to_owned().into_boxed_str());
-    entries.push(leaked);
-    leaked
+    let shared = crate::state::kind_name(raw);
+    entries.push(shared);
+    shared
 }

@@ -256,6 +256,10 @@ A path already known to be missing resolves its nearest surviving ancestor direc
 
 A long-running session holds one file handle per file it currently analyses, no more. A file that cannot be analysed is skipped and holds none, whether it was found at startup or broke later; once repaired it gets a fresh handle. Deleting a file releases its handle; saving a file by writing a temporary copy and renaming it over the original, as many editors do, leaves the handle count where it was. A path that comes back after removal gets a fresh handle, so nothing cached under the old handle can attach to the new file. `tests/live/file_handles.rs` drives delete, recreate and rename cycles through a live session and asserts the handle count equals the analysed file count after every step.
 
+### [LIVE-SCHEDULER-HEAP-STEADY] Heap returns to where it was
+
+A live session that is edited and then put back holds the same heap it held before. Each edit runs a fresh analysis pass, so anything a pass keeps for good (a cache keyed on a thread that has exited, a copy of every node-kind name per worker, a report generation nobody reads) grows with every keystroke and has no ceiling. Node-kind names are kept once for the whole process, never once per worker thread: the set of names is fixed by the grammars, so it stops growing once each kind has been seen. The `memory_live` test target ([TEST-MEMORY-BINARY]) edits, restores, deletes, recreates and rename-saves files through a live session, then counts live heap bytes across rounds that each return the workspace to the same bytes, and requires the count to stay put.
+
 ### [LIVE-SCHEDULER-NOOP] No-op pass early-out
 
 A changeset whose every path is rejected before it can touch the corpus — an unsupported extension, an `exclude` match, an ignore-rule match ([LIVE-WATCHER]), a removal naming a file the corpus never held, or **an analysed file whose bytes on disk are identical to the bytes already ingested** — leaves the fingerprint set byte-identical. The report is therefore provably identical too, so `update_files` returns `None` and the scheduler:

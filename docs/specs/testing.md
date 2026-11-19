@@ -8,7 +8,7 @@ The four crate manifests and suite entry points implement this build contract. `
 
 ## [TEST-MEMORY-BINARY] Heap bounds run in their own test binary
 
-`deslop-core` registers one more test target, `memory`, beside its suite. Its tests measure live heap bytes exactly with a counting global allocator (`peak_alloc`). A global allocator counts the whole process, so inside the shared suite every concurrently running test would count too; the separate binary is the only way the figure means one scan. The tests compare heap between two inputs in one process, so the bound holds on any machine, with no sampling and no sleeps. Only heap-bound tests belong in it.
+`deslop-core` registers two more test targets beside its suite: `memory` for one scan's heap, and `memory_live` for a live session's heap across edits ([LIVE-SCHEDULER-HEAP-STEADY]). Its tests measure live heap bytes exactly with a counting global allocator (`peak_alloc`). A global allocator counts the whole process, so inside the shared suite every concurrently running test would count too; a separate binary is the only way the figure means one scan or one session. The tests compare heap between two inputs in one process, so the bound holds on any machine, with no sampling and no sleeps. Only heap-bound tests belong in it.
 
 ## [SPEC-ID-GATE] A cited rule identifier must resolve to a written rule
 
