@@ -1,0 +1,41 @@
+fn renderOpen(invoices, index, acc) = match index == listLength(invoices) {
+    true => acc
+    false => match listGet(invoices, index) {
+        Error _ => acc
+        Success { value } => {
+            let chunk = match isSettled(value) {
+                true => ""
+                false => renderInvoice(value)
+            }
+            renderOpen(invoices, satAdd(index, 1), nl(acc, chunk))
+        }
+    }
+}
+
+fn renderOpenRefunds(refunds, index, acc) = match index == listLength(refunds) {
+    true => acc
+    false => match listGet(refunds, index) {
+        Error _ => acc
+        Success { value } => {
+            let chunk = match isClosedRefund(value) {
+                true => ""
+                false => renderRefund(value)
+            }
+            renderOpenRefunds(refunds, satAdd(index, 1), nl(acc, chunk))
+        }
+    }
+}
+
+fn renderOpenCredits(credits, index, acc) = match index == listLength(credits) {
+    true => acc
+    false => match listGet(credits, index) {
+        Error _ => acc
+        Success { value } => {
+            let chunk = match isAppliedCredit(value) {
+                true => ""
+                false => renderCredit(value)
+            }
+            renderOpenCredits(credits, satAdd(index, 1), nl(acc, chunk))
+        }
+    }
+}

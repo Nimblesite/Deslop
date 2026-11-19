@@ -1,0 +1,13 @@
+fn unshelvedFrom(crates, labels, index, acc) = match index == listLength(crates) {
+    true => acc
+    false => match listGet(crates, index) {
+        Error _ => acc
+        Success { value } => {
+            let next = match shelfClaimed(labels, value.aisle, 0) {
+                true => acc
+                false => listAppend(acc, value)
+            }
+            unshelvedFrom(crates, labels, satAdd(index, 1), next)
+        }
+    }
+}

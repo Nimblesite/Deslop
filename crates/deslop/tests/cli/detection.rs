@@ -21,6 +21,9 @@ mod osprey;
 #[path = "detection/osprey_flavors.rs"]
 mod osprey_flavors;
 
+#[path = "detection/osprey_fold.rs"]
+mod osprey_fold;
+
 #[path = "detection/osprey_recovery.rs"]
 mod osprey_recovery;
 
